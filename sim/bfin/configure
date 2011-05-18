@@ -13844,6 +13844,7 @@ else
 fi
 hardware="$hardware \
 	bfin_cec \
+	bfin_cgu \
 	bfin_ctimer \
 	bfin_dma \
 	bfin_dmac \

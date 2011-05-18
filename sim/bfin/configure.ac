@@ -11,6 +11,7 @@ SIM_AC_OPTION_DEFAULT_MODEL(bf537)
 SIM_AC_OPTION_WARNINGS
 SIM_AC_OPTION_HARDWARE(yes,,\
 	bfin_cec \
+	bfin_cgu \
 	bfin_ctimer \
 	bfin_dma \
 	bfin_dmac \
