@@ -18,6 +18,7 @@ SIM_AC_OPTION_HARDWARE(yes,,\
 	bfin_ebiu_amc \
 	bfin_ebiu_ddrc \
 	bfin_ebiu_sdc \
+	bfin_efs \
 	bfin_emac \
 	bfin_eppi \
 	bfin_evt \
