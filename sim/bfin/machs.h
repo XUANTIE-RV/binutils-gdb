@@ -81,5 +81,6 @@ bu32 bfin_model_get_dspid (SIM_DESC);
 #define BFIN_MMR_WDOG_SIZE		(4 * 3)
 #define BFIN_MMR_UART_SIZE		0x30
 #define BFIN_MMR_UART2_SIZE		0x30
+#define BFIN_MMR_UART4_SIZE		0x30
 
 #endif

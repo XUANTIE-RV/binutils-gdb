@@ -38,6 +38,7 @@ SIM_AC_OPTION_HARDWARE(yes,,\
 	bfin_twi \
 	bfin_uart \
 	bfin_uart2 \
+	bfin_uart4 \
 	bfin_wdog \
 	bfin_wp \
 	eth_phy \
