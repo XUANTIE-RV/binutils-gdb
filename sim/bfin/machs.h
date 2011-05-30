@@ -80,6 +80,7 @@ bu32 bfin_model_get_dspid (SIM_DESC);
 #define BFIN_MMR_SEC_SIZE		0x100
 #define BFIN_MMR_SIC_BASE		0xFFC00100
 #define BFIN_MMR_SIC_SIZE		0x100
+#define BFIN_MMR_SMC_SIZE		0x50
 #define BFIN_MMR_SPI_SIZE		(4 * 7)
 #define BFIN_MMR_SPU_SIZE		0x600
 #define BFIN_MMR_TWI_SIZE		0x90
