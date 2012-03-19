@@ -100,7 +100,8 @@ cb_get_string (host_callback *cb, CB_SYSCALL *sc, char *buf, int buflen,
    If an error occurs, no buffer is left malloc'd.  */
 
 static int
-get_path (host_callback *cb, CB_SYSCALL *sc, TADDR addr, char **bufp)
+get_path (host_callback *cb, CB_SYSCALL *sc, TADDR addr, char **bufp,
+	  int use_sysroot)
 {
   char *buf = xmalloc (MAX_PATH_LEN);
   int result;
@@ -112,7 +113,7 @@ get_path (host_callback *cb, CB_SYSCALL *sc, TADDR addr, char **bufp)
       /* Prepend absolute paths with simulator_sysroot.  Relative paths
 	 are supposed to be relative to a chdir within that path, but at
 	 this point unknown where.  */
-      if (simulator_sysroot[0] != '\0' && *buf == '/')
+      if (use_sysroot && simulator_sysroot[0] != '\0' && *buf == '/')
 	{
 	  /* Considering expected rareness of syscalls with absolute
 	     file paths (compared to relative file paths and insn
@@ -241,7 +242,22 @@ cb_syscall (host_callback *cb, CB_SYSCALL *sc)
       {
 	char *path;
 
-	errcode = get_path (cb, sc, sc->arg1, &path);
+	/* Try sysroot only if opening read-only.  */
+	if (!(sc->arg2 & 3))
+	  {
+	    errcode = get_path (cb, sc, sc->arg1, &path, 1);
+	    if (errcode != 0)
+	      {
+		result = -1;
+		goto FinishSyscall;
+	      }
+	    result = (*cb->open) (cb, path, sc->arg2 /*, sc->arg3*/);
+	    free (path);
+	    if (result >= 0)
+	      break;
+	  }
+
+	errcode = get_path (cb, sc, sc->arg1, &path, 0);
 	if (errcode != 0)
 	  {
 	    result = -1;
@@ -251,6 +267,12 @@ cb_syscall (host_callback *cb, CB_SYSCALL *sc)
 	free (path);
 	if (result < 0)
 	  goto ErrorFinish;
+
+	{
+	struct timespec t[2];
+	memset(&t, 0, sizeof(t));
+	futimens(cb->fdmap[result], t);
+	}
       }
       break;
 
@@ -366,7 +388,7 @@ cb_syscall (host_callback *cb, CB_SYSCALL *sc)
       {
 	char *path;
 
-	errcode = get_path (cb, sc, sc->arg1, &path);
+	errcode = get_path (cb, sc, sc->arg1, &path, 0);
 	if (errcode != 0)
 	  {
 	    result = -1;
@@ -384,7 +406,7 @@ cb_syscall (host_callback *cb, CB_SYSCALL *sc)
 	char *path;
 	long len = sc->arg2;
 
-	errcode = get_path (cb, sc, sc->arg1, &path);
+	errcode = get_path (cb, sc, sc->arg1, &path, 0);
 	if (errcode != 0)
 	  {
 	    result = -1;
@@ -413,14 +435,14 @@ cb_syscall (host_callback *cb, CB_SYSCALL *sc)
       {
 	char *path1, *path2;
 
-	errcode = get_path (cb, sc, sc->arg1, &path1);
+	errcode = get_path (cb, sc, sc->arg1, &path1, 0);
 	if (errcode != 0)
 	  {
 	    result = -1;
 	    errcode = EFAULT;
 	    goto FinishSyscall;
 	  }
-	errcode = get_path (cb, sc, sc->arg2, &path2);
+	errcode = get_path (cb, sc, sc->arg2, &path2, 0);
 	if (errcode != 0)
 	  {
 	    result = -1;
@@ -443,7 +465,7 @@ cb_syscall (host_callback *cb, CB_SYSCALL *sc)
 	struct stat statbuf;
 	TADDR addr = sc->arg2;
 
-	errcode = get_path (cb, sc, sc->arg1, &path);
+	errcode = get_path (cb, sc, sc->arg1, &path, 1);
 	if (errcode != 0)
 	  {
 	    result = -1;
@@ -514,7 +536,7 @@ cb_syscall (host_callback *cb, CB_SYSCALL *sc)
 	struct stat statbuf;
 	TADDR addr = sc->arg2;
 
-	errcode = get_path (cb, sc, sc->arg1, &path);
+	errcode = get_path (cb, sc, sc->arg1, &path, 1);
 	if (errcode != 0)
 	  {
 	    result = -1;
