@@ -227,6 +227,18 @@ CODE_FRAGMENT
 .  {* Set if this is a plugin output file.  *}
 .  unsigned int lto_output : 1;
 .
+.  {* Set if symbol table is needed.  *}
+.  unsigned int need_symtab : 1;
+.
+.  {* Set if .shstrtab, instead of .strtab, setion is used.  *}
+.  unsigned int use_shstrtab : 1;
+.
+.  {* Set if group sections should be handled.  *}
+.  unsigned int handle_group_sections : 1;
+.
+.  {* Set if debug and strtab sections are done.  *}
+.  unsigned int debug_and_strtab_done : 1;
+.
 .  {* Set to dummy BFD created when claimed by a compiler plug-in
 .     library.  *}
 .  bfd *plugin_dummy_bfd;

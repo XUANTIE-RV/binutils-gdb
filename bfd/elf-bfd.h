@@ -1595,7 +1595,7 @@ struct core_elf_obj_tdata
 struct output_elf_obj_tdata
 {
   struct elf_segment_map *seg_map;
-  struct elf_strtab_hash *strtab_ptr;
+  struct elf_strtab_hash *shstrtab_ptr;
 
   /* STT_SECTION symbols for each section */
   asymbol **section_syms;
@@ -1766,7 +1766,7 @@ struct elf_obj_tdata
 #define elf_eh_frame_hdr(bfd)	(elf_tdata(bfd) -> o->eh_frame_hdr)
 #define elf_linker(bfd)		(elf_tdata(bfd) -> o->linker)
 #define elf_stack_flags(bfd)	(elf_tdata(bfd) -> o->stack_flags)
-#define elf_shstrtab(bfd)	(elf_tdata(bfd) -> o->strtab_ptr)
+#define elf_shstrtab(bfd)	(elf_tdata(bfd) -> o->shstrtab_ptr)
 #define elf_onesymtab(bfd)	(elf_tdata(bfd) -> symtab_section)
 #define elf_symtab_shndx(bfd)	(elf_tdata(bfd) -> symtab_shndx_section)
 #define elf_strtab_sec(bfd)	(elf_tdata(bfd) -> o->strtab_section)
@@ -1903,8 +1903,6 @@ extern bfd_boolean bfd_elf_is_group_section
   (bfd *, const struct bfd_section *);
 extern bfd_boolean _bfd_elf_section_already_linked
   (bfd *, asection *, struct bfd_link_info *);
-extern void bfd_elf_set_group_contents
-  (bfd *, asection *, void *);
 extern asection *_bfd_elf_check_kept_section
   (asection *, struct bfd_link_info *);
 #define _bfd_elf_link_just_syms _bfd_generic_link_just_syms
@@ -2062,6 +2060,8 @@ extern bfd_boolean _bfd_elf_compute_section_file_positions
   (bfd *, struct bfd_link_info *);
 extern file_ptr _bfd_elf_assign_file_position_for_section
   (Elf_Internal_Shdr *, file_ptr, bfd_boolean);
+extern bfd_boolean _bfd_elf_assign_file_positions_for_debug_and_strtab
+  (bfd *);
 
 extern bfd_boolean _bfd_elf_validate_reloc
   (bfd *, arelent *);
