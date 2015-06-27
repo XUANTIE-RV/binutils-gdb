@@ -1,4 +1,4 @@
-There are 18 section headers, starting at offset .*:
+There are [0-9]+ section headers, starting at offset .*:
 
 Section Headers:
   \[Nr\] Name              Type            Addr     Off    Size   ES Flg Lk Inf Al
@@ -17,9 +17,8 @@ Section Headers:
   \[12\] \.neardata         PROGBITS        10000128 002128 000008 00  WA  0   0  4
   \[13\] \.bss              NOBITS          10000130 002130 000004 00  WA  0   0  4
   \[14\] \.c6xabi\.attributes C6000_ATTRIBUTES 00000000 002130 000019 00      0   0  1
-  \[15\] \.shstrtab         STRTAB          00000000 [0-9a-f]+ 000080 00      0   0  1
-  \[16\] \.symtab           SYMTAB          00000000 [0-9a-f]+ [0-9a-f]+ 10     17  [0-9]+  4
-  \[17\] \.strtab           STRTAB          00000000 [0-9a-f]+ [0-9a-f]+ 00      0   0  1
+  \[15\] \.strtab           STRTAB          00000000 [0-9a-f]+ [0-9a-f]+ 00      0   0  1
+  \[16\] \.symtab           SYMTAB          00000000 [0-9a-f]+ [0-9a-f]+ 10     15  [0-9]+  4
 Key to Flags:
   W \(write\), A \(alloc\), X \(execute\), M \(merge\), S \(strings\)
   I \(info\), L \(link order\), G \(group\), T \(TLS\), E \(exclude\), x \(unknown\)

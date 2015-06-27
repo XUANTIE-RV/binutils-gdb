@@ -10,7 +10,7 @@
 # entries.  This formerly SEGV:ed because .rela.got was created
 # too late to have it mapped to an output section.
 
-There are 13 section headers.*
+There are [0-9]+ section headers.*
 #...
  +\[ 1\] \.hash +HASH +.*
  +\[ 2\] \.dynsym +DYNSYM +.*
@@ -21,9 +21,8 @@ There are 13 section headers.*
  +\[ 7\] \.text +PROGBITS .*
  +\[ 8\] \.dynamic +DYNAMIC +.*
  +\[ 9\] \.got +PROGBITS .*
- +\[10\] \.shstrtab +STRTAB +.*
+ +\[10\] \.strtab +STRTAB +.*
  +\[11\] \.symtab +SYMTAB +.*
- +\[12\] \.strtab +STRTAB +.*
 #...
 Relocation section '\.rela\.dyn' at offset 0x[0-9a-f]+ contains 1 entries:
 #...

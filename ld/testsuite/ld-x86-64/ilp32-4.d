@@ -3,7 +3,7 @@
 #readelf: -d -S --wide
 #target: x86_64-*-linux*
 
-There are 9 section headers, starting at offset .*:
+There are 8 section headers, starting at offset .*:
 
 Section Headers:
   \[Nr\] Name              Type            Addr     Off    Size   ES Flg Lk Inf Al
@@ -13,9 +13,8 @@ Section Headers:
   \[ 3\] .dynstr           STRTAB          00000120 000120 000019 00   A  0   0  1
   \[ 4\] .text             PROGBITS        00000139 000139 000001 00  AX  0   0  1
   \[ 5\] .dynamic          DYNAMIC         0020013c 00013c 000058 08  WA  3   0  4
-  \[ 6\] .shstrtab         STRTAB          00000000 [0-9a-f]+ 000040 00      0   0  1
-  \[ 7\] .symtab           SYMTAB          00000000 [0-9a-f]+ [0-9a-f]+ 10      8   [0-9]  4
-  \[ 8\] .strtab           STRTAB          00000000 [0-9a-f]+ [0-9a-f]+ 00      0   0  1
+  \[ 6\] .strtab           STRTAB          00000000 [0-9a-f]+ [0-9a-f]+ 00      0   0  1
+  \[ 7\] .symtab           SYMTAB          00000000 [0-9a-f]+ [0-9a-f]+ 10      6   [0-9]  4
 Key to Flags:
   W \(write\), A \(alloc\), X \(execute\), M \(merge\), S \(strings\), l \(large\)
   I \(info\), L \(link order\), G \(group\), T \(TLS\), E \(exclude\), x \(unknown\)

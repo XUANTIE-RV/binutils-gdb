@@ -23,9 +23,8 @@ Section Headers:
  +\[[ 0-9]+\] \.opd .*
  +\[[ 0-9]+\] \.got +PROGBITS .* 0+30 08 +WA +0 +0 +256
  +\[[ 0-9]+\] \.plt +.*
- +\[[ 0-9]+\] \.shstrtab +.*
- +\[[ 0-9]+\] \.symtab +.*
  +\[[ 0-9]+\] \.strtab +.*
+ +\[[ 0-9]+\] \.symtab +.*
 #...
 
 Elf file type is EXEC \(Executable file\)

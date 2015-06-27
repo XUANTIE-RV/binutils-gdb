@@ -23,9 +23,8 @@ Section Headers:
 #...
  +\[[0-9a-f]+\] \.got +PROGBITS .*
 #...
- +\[[0-9a-f]+\] \.shstrtab .*
- +\[[0-9a-f]+\] \.symtab .*
  +\[[0-9a-f]+\] \.strtab .*
+ +\[[0-9a-f]+\] \.symtab .*
 Key to Flags:
 .*
 .*

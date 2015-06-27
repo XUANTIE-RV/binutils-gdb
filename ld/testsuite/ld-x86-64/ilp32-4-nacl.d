@@ -4,7 +4,7 @@
 #readelf: -d -S --wide
 #target: x86_64-*-nacl*
 
-There are 9 section headers, starting at offset 0x[0-9a-f]+:
+There are 8 section headers, starting at offset 0x[0-9a-f]+:
 
 Section Headers:
  +\[Nr\] Name +Type +Addr +Off +Size +ES +Flg +Lk +Inf +Al
@@ -14,9 +14,8 @@ Section Headers:
  +\[ 3\] \.dynsym +DYNSYM +100000e0 +0+e0 +0+60 +10 +A +4 +2 +4
  +\[ 4\] \.dynstr +STRTAB +10000140 +0+140 +0+19 +00 +A +0 +0 +1
  +\[ 5\] \.dynamic +DYNAMIC +1001015c +0+15c +0+58 +08 +WA +4 +0 +4
- +\[ 6\] \.shstrtab +STRTAB +0+ +[0-9a-f]+ +0+40 +00 +0 +0 +1
- +\[ 7\] \.symtab +SYMTAB +0+0 +[0-9a-f]+ +[0-9a-f]+ +10 +8 +[0-9] +4
- +\[ 8\] \.strtab +STRTAB +0+ +[0-9a-f]+ +[0-9a-f]+ +00 +0 +0 +1
+ +\[ 6\] \.strtab +STRTAB +0+ +[0-9a-f]+ +[0-9a-f]+ +00 +0 +0 +1
+ +\[ 7\] \.symtab +SYMTAB +0+0 +[0-9a-f]+ +[0-9a-f]+ +10 +6 +[0-9] +4
 Key to Flags:
   W \(write\), A \(alloc\), X \(execute\), M \(merge\), S \(strings\), l \(large\)
   I \(info\), L \(link order\), G \(group\), T \(TLS\), E \(exclude\), x \(unknown\)

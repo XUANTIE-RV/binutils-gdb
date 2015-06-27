@@ -8,7 +8,7 @@
 
 # Like local1, but ext1 is here a constant, not a global register.
 
-There are 6 section headers, starting at offset .*:
+There are [0-9]+ section headers, starting at offset .*:
 
 Section Headers:
  +\[Nr\] Name +Type +Address +Offset
@@ -19,12 +19,10 @@ Section Headers:
  +0+8 +0+ +AX +0 +0 +4
  +\[ 2\] \.MMIX\.reg_content PROGBITS +0+7e8 +0+80
  +0+10 +0+ +W +0 +0 +1
- +\[ 3\] \.shstrtab +STRTAB +0+ +[0-9a-f]+
- +0+34 +0+ +0 +0 +1
- +\[ 4\] \.symtab +SYMTAB +0+ +[0-9a-f]+
- +[0-9a-f]+ +0+18 +5 +[0-9] +8
- +\[ 5\] \.strtab +STRTAB +0+ +[0-9a-f]+
+ +\[ 3\] \.strtab +STRTAB +0+ +[0-9a-f]+
  +[0-9a-f]+ +0+ +0 +0 +1
+ +\[ 4\] \.symtab +SYMTAB +0+ +[0-9a-f]+
+ +[0-9a-f]+ +0+18 +3 +[0-9] +8
 Key to Flags:
 #...
 

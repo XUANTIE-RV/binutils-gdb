@@ -3,7 +3,7 @@
 #ld: -m elf64mmix
 #readelf: -Ssr -x1 -x2
 
-There are 6 section headers, starting at offset .*:
+There are [0-9]+ section headers, starting at offset .*:
 
 Section Headers:
  +\[Nr\] Name +Type +Address +Offset
@@ -14,12 +14,10 @@ Section Headers:
  +0+4 +0+ +AX +0 +0 +4
  +\[ 2\] \.MMIX\.spec_data\.2 PROGBITS +0+ +0+7c
  +0+4 +0+ +0 +0 +4
- +\[ 3\] \.shstrtab +STRTAB +0+ +[0-9a-f]+
- +0+33 +0+ +0 +0 +1
+ +\[ 3\] \.strtab +STRTAB +0+ .*
+ +0+4e +0+ +0 +0 +1
  +\[ 4\] \.symtab +SYMTAB +0+ .*
- +0+d8 +0+18 +5 +3 +8
- +\[ 5\] \.strtab +STRTAB +0+ .*
- +0+26 +0+ +0 +0 +1
+ +0+d8 +0+18 +3 +3 +8
 Key to Flags:
 #...
 
