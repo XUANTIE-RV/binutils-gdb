@@ -1,7 +1,7 @@
 #readelf: -S
 #name: ia64 xdata
 
-There are 19 section headers, starting at offset 0x[[:xdigit:]]+:
+There are [0-9]+ section headers, starting at offset 0x[[:xdigit:]]+:
 
 Section Headers:
   \[Nr\] Name              Type             Address           Offset
@@ -38,10 +38,8 @@ Section Headers:
        0000000000000003  0000000000000000   A       0     0     1
   \[15\] \.xstr\{2\}          PROGBITS         0000000000000000  [[:xdigit:]]+
        0000000000000004  0000000000000000   A       0     0     1
-  \[16\] \.shstrtab         STRTAB           0000000000000000  [[:xdigit:]]+
+  \[16\] \.strtab           STRTAB           0000000000000000  [[:xdigit:]]+
        [[:xdigit:]]+  0000000000000000           0     0     1
   \[17\] \.symtab           SYMTAB           0000000000000000  [[:xdigit:]]+
-       [[:xdigit:]]+  0000000000000018          18    15     8
-  \[18\] \.strtab           STRTAB           0000000000000000  [[:xdigit:]]+
-       [[:xdigit:]]+  0000000000000000           0     0     1
+       [[:xdigit:]]+  0000000000000018          16    15     8
 #pass

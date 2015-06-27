@@ -2,7 +2,7 @@
 #as: -x
 #name: ia64 unwind group
 
-There are 12 section headers, starting at offset .*:
+There are [0-9]+ section headers, starting at offset .*:
 
 Section Headers:
   \[Nr\] Name              Type             Address           Offset
@@ -25,12 +25,10 @@ Section Headers:
        0000000000000018  0000000000000000 ALG       5     5     8
   \[ 8\] \.rela\.gnu\.linkonc RELA             0000000000000000  .*
        0000000000000048  0000000000000018   I      10     7     8
-  \[ 9\] \.shstrtab         STRTAB           0000000000000000  [0-9a-f]+
-       0000000000000081  0000000000000000           0     0     1
+  \[ 9\] \.strtab           STRTAB           0000000000000000  .*
+       0000000000000077  0000000000000000           0     0     1
   \[10\] \.symtab           SYMTAB           0000000000000000  .*
-       00000000000000d8  0000000000000018          11     9     8
-  \[11\] \.strtab           STRTAB           0000000000000000  .*
-       0000000000000005  0000000000000000           0     0     1
+       00000000000000d8  0000000000000018           9     9     8
 Key to Flags:
 #...
 

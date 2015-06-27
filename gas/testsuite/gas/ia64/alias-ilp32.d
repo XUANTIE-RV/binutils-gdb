@@ -3,7 +3,7 @@
 #as: -milp32
 #source: alias.s
 
-There are 8 section headers, starting at offset .*:
+There are [0-9]+ section headers, starting at offset .*:
 
 Section Headers:
  +\[Nr\] +Name +Type +Addr +Off +Size +ES +Flg +Lk +Inf +Al
@@ -12,9 +12,8 @@ Section Headers:
  +\[ 2\] .data +PROGBITS +00000000 000040 000000 00 +WA +0 +0 +1
  +\[ 3\] .bss +NOBITS +00000000 000040 000000 00 +WA +0 +0 +1
  +\[ 4\] 1234 +PROGBITS +00000000 000040 000005 00 +WA +0 +0 +1
- +\[ 5\] .shstrtab +STRTAB +00000000 [0-9a-f]+ 000031 00 +0 +0 +1
- +\[ 6\] .symtab +SYMTAB +00000000 [0-9a-f]+ 000060 10 +7 +6 +4
- +\[ 7\] .strtab +STRTAB +00000000 [0-9a-f]+ 000006 00 +0 +0 +1
+ +\[ 5\] .strtab +STRTAB +00000000 [0-9a-f]+ 00002c 00 +0 +0 +1
+ +\[ 6\] .symtab +SYMTAB +00000000 [0-9a-f]+ 000060 10 +5 +6 +4
 Key to Flags:
 #...
 

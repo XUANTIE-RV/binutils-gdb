@@ -1,5 +1,5 @@
 #readelf: -Ssrx1 -x2
-There are 7 section headers, starting at offset .*:
+There are [0-9]+ section headers, starting at offset .*:
 
 Section Headers:
  +\[Nr\] +Name +Type +Address +Offset
@@ -12,12 +12,10 @@ Section Headers:
  +0000000000000008 +0000000000000000 +WA +0 +0 +4
  +\[ 3\] \.bss +NOBITS +0000000000000000 +00000054
  +0000000000000000 +0000000000000000 +WA +0 +0 +1
- +\[ 4\] \.shstrtab +STRTAB +0000000000000000 +[0-9a-f]+
- +000000000000002c +0000000000000000 +0 +0 +1
+ +\[ 4\] \.strtab +STRTAB +0000000000000000 .*
+ +0000000000000043 +0000000000000000 +0 +0 +1
  +\[ 5\] \.symtab +SYMTAB +0000000000000000 .*
- +00000000000000c0 +0000000000000018 +6 +5 +8
- +\[ 6\] \.strtab +STRTAB +0000000000000000 .*
- +000000000000002e +0000000000000000 +0 +0 +1
+ +00000000000000c0 +0000000000000018 +4 +5 +8
 Key to Flags:
 #...
 

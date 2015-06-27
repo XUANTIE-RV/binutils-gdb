@@ -3,7 +3,7 @@
 #as: -milp32
 #source: xdata.s
 
-There are 19 section headers, starting at offset 0x[[:xdigit:]]+:
+There are [0-9]+ section headers, starting at offset 0x[[:xdigit:]]+:
 
 Section Headers:
   \[Nr\] Name              Type            Addr     Off    Size   ES Flg Lk Inf Al
@@ -23,7 +23,6 @@ Section Headers:
   \[13\] \.xreal\[4\]         PROGBITS        00000000 [[:xdigit:]]+ 000020 00   A  0   0 16
   \[14\] \.xstr<1>          PROGBITS        00000000 [[:xdigit:]]+ 000003 00   A  0   0  1
   \[15\] \.xstr\{2\}          PROGBITS        00000000 [[:xdigit:]]+ 000004 00   A  0   0  1
-  \[16\] .shstrtab         STRTAB          00000000 [[:xdigit:]]+ [[:xdigit:]]+ 00      0   0  1
-  \[17\] .symtab           SYMTAB          00000000 [[:xdigit:]]+ [[:xdigit:]]+ 10     18  15  4
-  \[18\] .strtab           STRTAB          00000000 [[:xdigit:]]+ [[:xdigit:]]+ 00      0   0  1
+  \[16\] .strtab           STRTAB          00000000 [[:xdigit:]]+ [[:xdigit:]]+ 00      0   0  1
+  \[17\] .symtab           SYMTAB          00000000 [[:xdigit:]]+ [[:xdigit:]]+ 10     16  15  4
 #pass
