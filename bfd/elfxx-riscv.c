@@ -1075,6 +1075,8 @@ static struct riscv_implicit_subset riscv_implicit_subsets[] =
   {"q", "d",		check_implicit_always},
   {"d", "f",		check_implicit_always},
   {"f", "zicsr",	check_implicit_always},
+  {"zfh", "f",		check_implicit_always},
+  {"zfh", "zicsr",	check_implicit_always},
   {NULL, NULL, NULL}
 };
 
@@ -1147,6 +1149,7 @@ static struct riscv_supported_ext riscv_supported_std_z_ext[] =
   {"zbc",		ISA_SPEC_CLASS_DRAFT,		0, 93, 0 },
   {"zvamo",		ISA_SPEC_CLASS_DRAFT,		0, 10, 0 },	/* draft.  */
   {"zvlsseg",		ISA_SPEC_CLASS_DRAFT,		0, 10, 0 },	/* draft.  */
+  {"zfh",		ISA_SPEC_CLASS_DRAFT,		0, 1,  0 },	/* draft.  */
   {NULL, 0, 0, 0, 0}
 };
 

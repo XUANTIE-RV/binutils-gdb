@@ -500,6 +500,9 @@ enum riscv_extended_insn_class
   INSN_CLASS_V_AND_F,
   INSN_CLASS_V_OR_ZVAMO,
   INSN_CLASS_V_OR_ZVLSSEG,
+  INSN_CLASS_ZFH,
+  INSN_CLASS_D_AND_ZFH,
+  INSN_CLASS_Q_AND_ZFH,
 };
 
 /* This is a list of macro expanded instructions for extended
@@ -508,6 +511,8 @@ enum
 {
   M_VMSGE = M_EXTENDED,
   M_VMSGEU,
+  M_FLH,
+  M_FSH,
 };
 
 /* RVV */
