@@ -1,3 +1,15 @@
+2021-06-22  Nick Alcock  <nick.alcock@oracle.com>
+
+	PR libctf/27482
+	* configure.ac (VERSION_FLAGS): Replace with...
+	(ac_cv_libctf_version_script): ... this multiple test.
+	(VERSION_FLAGS_NOBFD): Substitute this too.
+	* Makefile.am (libctf_nobfd_la_LDFLAGS): Use it.  Split out...
+	(libctf_ldflags_nover): ... non-versioning flags here.
+	(libctf_la_LDFLAGS): Use it.
+	* libctf.ver: Give every symbol not in libctf-nobfd a comment on
+	the same line noting as much.
+
 2021-06-16  Nick Alcock  <nick.alcock@oracle.com>
 
 	* testsuite/libctf-lookup/enum-symbol.c: Remove unused label.
