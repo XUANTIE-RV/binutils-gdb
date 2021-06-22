@@ -1,3 +1,9 @@
+2021-06-22  Nick Alcock  <nick.alcock@oracle.com>
+
+	PR libctf/27967
+	* libtool.m4 (lt_cv_sys_global_symbol_pipe): Augment symcode for
+	Solaris 11.
+
 2021-05-29  Mike Frysinger  <vapier@gentoo.org>
 
 	* configure.ac: Add gnulib to configdirs for sim.
