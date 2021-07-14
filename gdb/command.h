@@ -125,6 +125,159 @@ typedef enum var_types
   }
 var_types;
 
+/* Return true if a setting of type VAR_TYPE is backed with type T.
+
+   This function is left without definition intentionally.  This template is
+   specialized for all valid types that are used to back var_types.  Therefore
+   if one tries to instantiate this un-specialized template it means the T
+   parameter is not a type used to back a var_type and it is most likely a
+   programming error.  */
+template<typename T>
+inline bool var_type_uses (var_types var_type);
+
+/* Return true if a setting of type T is backed by a bool variable.  */
+template<>
+inline bool var_type_uses<bool> (var_types t)
+{
+  return t == var_boolean;
+};
+
+/* Return true if a setting of type T is backed by a auto_boolean variable.
+*/
+template<>
+inline bool var_type_uses<enum auto_boolean> (var_types t)
+{
+  return t == var_auto_boolean;
+}
+
+/* Return true if a setting of type T is backed by an unsigned int variable.
+*/
+template<>
+inline bool var_type_uses<unsigned int> (var_types t)
+{
+  return (t == var_uinteger || t == var_zinteger || t == var_zuinteger);
+}
+
+/* Return true if a setting of type T is backed by an int variable.  */
+template<>
+inline bool var_type_uses<int> (var_types t)
+{
+  return (t == var_integer || t == var_zinteger
+	  || t == var_zuinteger_unlimited);
+}
+
+/* Return true if a setting of type T is backed by a char * variable.  */
+template<>
+inline bool var_type_uses<char *> (var_types t)
+{
+  return (t == var_string || t == var_string_noescape
+	  || t == var_optional_filename || t == var_filename);
+}
+
+/* Return true if a setting of type T is backed by a const char * variable.
+*/
+template<>
+inline bool var_type_uses<const char *> (var_types t)
+{
+  return t == var_enum;
+}
+
+/* Abstraction that contains access to data that can be set or shown.
+
+   The underlying data can be of any VAR_TYPES type.  */
+struct base_setting
+{
+  /* Access the type of the current var.  */
+  var_types type () const
+  {
+    return m_var_type;
+  }
+
+  /* Return the current value (by pointer).
+
+     The template parameter T is the type of the variable used to store the
+     setting.
+
+     The returned value cannot be NULL (this is checked at runtime).  */
+  template<typename T>
+  T const *
+  get_p () const
+  {
+    gdb_assert (var_type_uses<T> (this->m_var_type));
+    gdb_assert (this->m_var != nullptr);
+
+    return static_cast<T const *> (this->m_var);
+  }
+
+  /* Return the current value.
+
+     See get_p for discussion on the return type and template parameters.  */
+  template<typename T>
+  T get () const
+  {
+    return *get_p<T> ();
+  }
+
+  /* Sets the value V to the underlying buffer.
+
+     The template parameter T indicates the type of the variable used to store
+     the setting.
+
+     The var_type of the setting must match T.  */
+  template<typename T>
+  void set (T v)
+  {
+    /* Check that the current instance is of one of the supported types for
+       this instantiation.  */
+    gdb_assert (var_type_uses<T> (this->m_var_type));
+    gdb_assert (this->m_var != nullptr);
+
+    *static_cast<T *> (this->m_var) = v;
+  }
+
+  /* A setting is valid if it contains a non null pointer to a memory buffer.
+
+     On an instance which is not valid, any call to get, get_p or set is
+     guaranteed to generate a runtime error (using gdb_assert).
+   */
+  bool valid () const
+  {
+    return this->m_var != nullptr;
+  }
+
+protected:
+  /* The type of the variable M_VAR is pointing to.  If M_VAR is nullptr,
+     M_VAR_TYPE is ignored.  */
+  var_types m_var_type { var_boolean };
+
+  /* Pointer to the enclosed variable.  The type of the variable is encoded
+     in M_VAR_TYPE.  Can be nullptr.  */
+  void *m_var { nullptr };
+};
+
+/* A base_setting with additional methods to set the underlying buffer and
+   declare the var_type.  */
+struct setting final: base_setting
+{
+  /* Set the type of the current variable.  */
+  void set_type (var_types type)
+  {
+    gdb_assert (this->m_var == nullptr);
+    this->m_var_type = type;
+  }
+
+  /* Update the pointer to the underlying variable referenced by this
+     instance.  */
+  template<typename T>
+  void set_p (var_types var_type, T *v)
+  {
+    gdb_assert (v != nullptr);
+    gdb_assert (var_type_uses<T> (var_type));
+    this->set_type (var_type);
+    this->m_var = static_cast<void *> (v);
+  }
+};
+
 /* This structure records one command'd definition.  */
 struct cmd_list_element;
 

@@ -133,7 +133,7 @@ deprecated_show_value_hack (struct ui_file *ignore_file,
   /* Print doc minus "Show " at start.  Tell print_doc_line that
      this is for a 'show value' prefix.  */
   print_doc_line (gdb_stdout, c->doc + 5, true);
-  switch (c->var_type)
+  switch (c->var.type ())
     {
     case var_string:
     case var_string_noescape:
@@ -312,7 +312,7 @@ do_set_command (const char *arg, int from_tty, struct cmd_list_element *c)
   if (arg == NULL)
     arg = "";
 
-  switch (c->var_type)
+  switch (c->var.type ())
     {
     case var_string:
       {
@@ -353,11 +353,12 @@ do_set_command (const char *arg, int from_tty, struct cmd_list_element *c)
 	*q++ = '\0';
 	newobj = (char *) xrealloc (newobj, q - newobj);
 
-	if (*(char **) c->var == NULL
-	    || strcmp (*(char **) c->var, newobj) != 0)
+	char * const var = c->var.get<char *> ();
+	if (var == nullptr
+	    || strcmp (var, newobj) != 0)
 	  {
-	    xfree (*(char **) c->var);
-	    *(char **) c->var = newobj;
+	    xfree (var);
+	    c->var.set<char *> (newobj);
 
 	    option_changed = 1;
 	  }
@@ -366,13 +367,17 @@ do_set_command (const char *arg, int from_tty, struct cmd_list_element *c)
       }
       break;
     case var_string_noescape:
-      if (*(char **) c->var == NULL || strcmp (*(char **) c->var, arg) != 0)
-	{
-	  xfree (*(char **) c->var);
-	  *(char **) c->var = xstrdup (arg);
+      {
+	char * const var = c->var.get<char *> ();
+	if (var == nullptr
+	    || strcmp (var, arg) != 0)
+	  {
+	    xfree (var);
+	    c->var.set<char *> (xstrdup (arg));
 
-	  option_changed = 1;
-	}
+	    option_changed = 1;
+	  }
+      }
       break;
     case var_filename:
       if (*arg == '\0')
@@ -398,11 +403,12 @@ do_set_command (const char *arg, int from_tty, struct cmd_list_element *c)
 	else
 	  val = xstrdup ("");
 
-	if (*(char **) c->var == NULL
-	    || strcmp (*(char **) c->var, val) != 0)
+	char * const var = c->var.get<char *> ();
+	if (var == nullptr
+	    || strcmp (var, val) != 0)
 	  {
-	    xfree (*(char **) c->var);
-	    *(char **) c->var = val;
+	    xfree (var);
+	    c->var.set<char *> (val);
 
 	    option_changed = 1;
 	  }
@@ -416,9 +422,9 @@ do_set_command (const char *arg, int from_tty, struct cmd_list_element *c)
 
 	if (val < 0)
 	  error (_("\"on\" or \"off\" expected."));
-	if (val != *(bool *) c->var)
+	if (val != c->var.get<bool> ())
 	  {
-	    *(bool *) c->var = val;
+	    c->var.set<bool> (val);
 
 	    option_changed = 1;
 	  }
@@ -428,9 +434,9 @@ do_set_command (const char *arg, int from_tty, struct cmd_list_element *c)
       {
 	enum auto_boolean val = parse_auto_binary_operation (arg);
 
-	if (*(enum auto_boolean *) c->var != val)
+	if (c->var.get<enum auto_boolean> () != val)
 	  {
-	    *(enum auto_boolean *) c->var = val;
+	    c->var.set<enum auto_boolean> (val);
 
 	    option_changed = 1;
 	  }
@@ -439,11 +445,11 @@ do_set_command (const char *arg, int from_tty, struct cmd_list_element *c)
     case var_uinteger:
     case var_zuinteger:
       {
-	unsigned int val = parse_cli_var_uinteger (c->var_type, &arg, true);
+	unsigned int val = parse_cli_var_uinteger (c->var.type (), &arg, true);
 
-	if (*(unsigned int *) c->var != val)
+	if (c->var.get<unsigned int> () != val)
 	  {
-	    *(unsigned int *) c->var = val;
+	    c->var.set<unsigned int> (val);
 
 	    option_changed = 1;
 	  }
@@ -456,35 +462,35 @@ do_set_command (const char *arg, int from_tty, struct cmd_list_element *c)
 
 	if (*arg == '\0')
 	  {
-	    if (c->var_type == var_integer)
+	    if (c->var.type () == var_integer)
 	      error_no_arg (_("integer to set it to, or \"unlimited\"."));
 	    else
 	      error_no_arg (_("integer to set it to."));
 	  }
 
-	if (c->var_type == var_integer && is_unlimited_literal (&arg, true))
+	if (c->var.type () == var_integer && is_unlimited_literal (&arg, true))
 	  val = 0;
 	else
 	  val = parse_and_eval_long (arg);
 
-	if (val == 0 && c->var_type == var_integer)
+	if (val == 0 && c->var.type () == var_integer)
 	  val = INT_MAX;
 	else if (val < INT_MIN
 		 /* For var_integer, don't let the user set the value
 		    to INT_MAX directly, as that exposes an
 		    implementation detail to the user interface.  */
-		 || (c->var_type == var_integer && val >= INT_MAX)
-		 || (c->var_type == var_zinteger && val > INT_MAX))
+		 || (c->var.type () == var_integer && val >= INT_MAX)
+		 || (c->var.type () == var_zinteger && val > INT_MAX))
 	  error (_("integer %s out of range"), plongest (val));
 
-	if (*(int *) c->var != val)
+	if (c->var.get<int> () != val)
 	  {
-	    *(int *) c->var = val;
+	    c->var.set<int> (val);
 
 	    option_changed = 1;
 	  }
-	break;
       }
+      break;
     case var_enum:
       {
 	const char *end_arg = arg;
@@ -495,9 +501,9 @@ do_set_command (const char *arg, int from_tty, struct cmd_list_element *c)
 	if (*after != '\0')
 	  error (_("Junk after item \"%.*s\": %s"), len, arg, after);
 
-	if (*(const char **) c->var != match)
+	if (c->var.get<const char *> () != match)
 	  {
-	    *(const char **) c->var = match;
+	    c->var.set<const char *> (match);
 
 	    option_changed = 1;
 	  }
@@ -507,9 +513,9 @@ do_set_command (const char *arg, int from_tty, struct cmd_list_element *c)
       {
 	int val = parse_cli_var_zuinteger_unlimited (&arg, true);
 
-	if (*(int *) c->var != val)
+	if (c->var.get<int> () != val)
 	  {
-	    *(int *) c->var = val;
+	    c->var.set<int> (val);
 	    option_changed = 1;
 	  }
       }
@@ -578,25 +584,33 @@ do_set_command (const char *arg, int from_tty, struct cmd_list_element *c)
 
       xfree (cmds);
 
-      switch (c->var_type)
+      switch (c->var.type ())
 	{
 	case var_string:
 	case var_string_noescape:
 	case var_filename:
 	case var_optional_filename:
 	case var_enum:
-	  gdb::observers::command_param_changed.notify (name, *(char **) c->var);
+	  {
+	    const char *var;
+	    if (c->var.type () == var_enum)
+	      var = c->var.get<const char *> ();
+	    else
+	      var = c->var.get<char *> ();
+	    gdb::observers::command_param_changed.notify (name, var);
+	  }
 	  break;
 	case var_boolean:
 	  {
-	    const char *opt = *(bool *) c->var ? "on" : "off";
+	    const char *opt = c->var.get<bool> () ? "on" : "off";
 
 	    gdb::observers::command_param_changed.notify (name, opt);
 	  }
 	  break;
 	case var_auto_boolean:
 	  {
-	    const char *s = auto_boolean_enums[*(enum auto_boolean *) c->var];
+	    const char *s
+	      = auto_boolean_enums[c->var.get<enum auto_boolean> ()];
 
 	    gdb::observers::command_param_changed.notify (name, s);
 	  }
@@ -606,7 +620,7 @@ do_set_command (const char *arg, int from_tty, struct cmd_list_element *c)
 	  {
 	    char s[64];
 
-	    xsnprintf (s, sizeof s, "%u", *(unsigned int *) c->var);
+	    xsnprintf (s, sizeof s, "%u", c->var.get<unsigned int> ());
 	    gdb::observers::command_param_changed.notify (name, s);
 	  }
 	  break;
@@ -616,7 +630,7 @@ do_set_command (const char *arg, int from_tty, struct cmd_list_element *c)
 	  {
 	    char s[64];
 
-	    xsnprintf (s, sizeof s, "%d", *(int *) c->var);
+	    xsnprintf (s, sizeof s, "%d", c->var.get<int> ());
 	    gdb::observers::command_param_changed.notify (name, s);
 	  }
 	  break;
@@ -632,24 +646,34 @@ get_setshow_command_value_string (const cmd_list_element *c)
 {
   string_file stb;
 
-  switch (c->var_type)
+  switch (c->var.type ())
     {
     case var_string:
-      if (*(char **) c->var)
-	stb.putstr (*(char **) c->var, '"');
+      {
+	char * var = c->var.get<char *> ();
+	if (var != nullptr)
+	  stb.putstr (var, '"');
+      }
       break;
     case var_string_noescape:
     case var_optional_filename:
     case var_filename:
     case var_enum:
-      if (*(char **) c->var)
-	stb.puts (*(char **) c->var);
+      {
+	const char *var;
+	if (c->var.type () == var_enum)
+	  var = c->var.get<const char *> ();
+	else
+	  var = c->var.get<char *> ();
+	if (var != nullptr)
+	  stb.puts (var);
+      }
       break;
     case var_boolean:
-      stb.puts (*(bool *) c->var ? "on" : "off");
+      stb.puts (c->var.get<bool> () ? "on" : "off");
       break;
     case var_auto_boolean:
-      switch (*(enum auto_boolean*) c->var)
+      switch (c->var.get<enum auto_boolean> ())
 	{
 	case AUTO_BOOLEAN_TRUE:
 	  stb.puts ("on");
@@ -667,26 +691,33 @@ get_setshow_command_value_string (const cmd_list_element *c)
       break;
     case var_uinteger:
     case var_zuinteger:
-      if (c->var_type == var_uinteger
-	  && *(unsigned int *) c->var == UINT_MAX)
-	stb.puts ("unlimited");
-      else
-	stb.printf ("%u", *(unsigned int *) c->var);
+      {
+	unsigned int const var = c->var.get<unsigned int> ();
+	if (c->var.type () == var_uinteger
+	    && var == UINT_MAX)
+	  stb.puts ("unlimited");
+	else
+	  stb.printf ("%u", var);
+      }
       break;
     case var_integer:
     case var_zinteger:
-      if (c->var_type == var_integer
-	  && *(int *) c->var == INT_MAX)
-	stb.puts ("unlimited");
-      else
-	stb.printf ("%d", *(int *) c->var);
+      {
+	int const var = c->var.get<int> ();
+	if (c->var.type () == var_integer
+	    && var == INT_MAX)
+	  stb.puts ("unlimited");
+	else
+	  stb.printf ("%d", var);
+      }
       break;
     case var_zuinteger_unlimited:
       {
-	if (*(int *) c->var == -1)
+	int const var = c->var.get<int> ();
+	if (var == -1)
 	  stb.puts ("unlimited");
 	else
-	  stb.printf ("%d", *(int *) c->var);
+	  stb.printf ("%d", var);
       }
       break;
     default:

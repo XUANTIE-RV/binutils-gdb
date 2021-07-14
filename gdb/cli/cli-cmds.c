@@ -232,7 +232,7 @@ with_command_1 (const char *set_cmd_prefix,
 					  /*ignore_help_classes=*/ 1);
   gdb_assert (set_cmd != nullptr);
 
-  if (set_cmd->var == nullptr)
+  if (!set_cmd->var.valid ())
     error (_("Cannot use this setting with the \"with\" command"));
 
   std::string temp_value
@@ -2090,29 +2090,29 @@ setting_cmd (const char *fnname, struct cmd_list_element *showlist,
 static struct value *
 value_from_setting (const cmd_list_element *cmd, struct gdbarch *gdbarch)
 {
-  switch (cmd->var_type)
+  switch (cmd->var.type ())
     {
     case var_integer:
-      if (*(int *) cmd->var == INT_MAX)
+      if (cmd->var.get<int> () == INT_MAX)
 	return value_from_longest (builtin_type (gdbarch)->builtin_int,
 				   0);
       else
 	return value_from_longest (builtin_type (gdbarch)->builtin_int,
-				   *(int *) cmd->var);
+				   cmd->var.get<int> ());
     case var_zinteger:
       return value_from_longest (builtin_type (gdbarch)->builtin_int,
-				 *(int *) cmd->var);
+				 cmd->var.get<int> ());
     case var_boolean:
       return value_from_longest (builtin_type (gdbarch)->builtin_int,
-				 *(bool *) cmd->var ? 1 : 0);
+				 cmd->var.get<bool> () ? 1 : 0);
     case var_zuinteger_unlimited:
       return value_from_longest (builtin_type (gdbarch)->builtin_int,
-				 *(int *) cmd->var);
+				 cmd->var.get<int> ());
     case var_auto_boolean:
       {
 	int val;
 
-	switch (*(enum auto_boolean*) cmd->var)
+	switch (cmd->var.get<enum auto_boolean> ())
 	  {
 	  case AUTO_BOOLEAN_TRUE:
 	    val = 1;
@@ -2130,27 +2130,35 @@ value_from_setting (const cmd_list_element *cmd, struct gdbarch *gdbarch)
 				   val);
       }
     case var_uinteger:
-      if (*(unsigned int *) cmd->var == UINT_MAX)
+      if (cmd->var.get<unsigned int> () == UINT_MAX)
 	return value_from_ulongest
 	  (builtin_type (gdbarch)->builtin_unsigned_int, 0);
       else
 	return value_from_ulongest
 	  (builtin_type (gdbarch)->builtin_unsigned_int,
-	   *(unsigned int *) cmd->var);
+	   cmd->var.get<unsigned int> ());
     case var_zuinteger:
       return value_from_ulongest (builtin_type (gdbarch)->builtin_unsigned_int,
-				  *(unsigned int *) cmd->var);
+				  cmd->var.get<unsigned int> ());
     case var_string:
     case var_string_noescape:
     case var_optional_filename:
     case var_filename:
     case var_enum:
-      if (*(char **) cmd->var)
-	return value_cstring (*(char **) cmd->var, strlen (*(char **) cmd->var),
-			      builtin_type (gdbarch)->builtin_char);
-      else
-	return value_cstring ("", 1,
-			      builtin_type (gdbarch)->builtin_char);
+      {
+	const char *var;
+	if (cmd->var.type () == var_enum)
+	  var = cmd->var.get<const char *> ();
+	else
+	  var = cmd->var.get<char *> ();
+
+	if (var != nullptr)
+	  return value_cstring (var, strlen (var),
+				builtin_type (gdbarch)->builtin_char);
+	else
+	  return value_cstring ("", 1,
+				builtin_type (gdbarch)->builtin_char);
+      }
     default:
       gdb_assert_not_reached ("bad var_type");
     }
@@ -2186,7 +2194,7 @@ gdb_maint_setting_internal_fn (struct gdbarch *gdbarch,
 static struct value *
 str_value_from_setting (const cmd_list_element *cmd, struct gdbarch *gdbarch)
 {
-  switch (cmd->var_type)
+  switch (cmd->var.type ())
     {
     case var_integer:
     case var_zinteger:
@@ -2211,13 +2219,20 @@ str_value_from_setting (const cmd_list_element *cmd, struct gdbarch *gdbarch)
 	 as this function handle some characters specially, e.g. by
 	 escaping quotes.  So, we directly use the cmd->var string value,
 	 similarly to the value_from_setting code for these cases.  */
-      if (*(char **) cmd->var)
-	return value_cstring (*(char **) cmd->var, strlen (*(char **) cmd->var),
-			      builtin_type (gdbarch)->builtin_char);
-      else
-	return value_cstring ("", 1,
-			      builtin_type (gdbarch)->builtin_char);
+      {
+	const char *var;
+	if (cmd->var.type () == var_enum)
+	  var = cmd->var.get<const char *> ();
+	else
+	  var = cmd->var.get<char *> ();
 
+	if (var != nullptr)
+	  return value_cstring (var, strlen (var),
+				builtin_type (gdbarch)->builtin_char);
+	else
+	  return value_cstring ("", 1,
+				builtin_type (gdbarch)->builtin_char);
+      }
     default:
       gdb_assert_not_reached ("bad var_type");
     }
