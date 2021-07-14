@@ -458,15 +458,13 @@ gdbpy_parameter_value (base_setting const & var)
     case var_filename:
     case var_enum:
       {
-	const char *str;
-        if (var.type () == var_enum)
-          str = var.get<const char *> ();
-        else
-          str = var.get<char *> ();
+	std::string str;
+	if (var.type () == var_enum)
+	  str = var.get<const char *> ();
+	else
+	  str = var.get<std::string> ();
 
-	if (str == nullptr)
-	  str = "";
-	return host_string_to_python_string (str).release ();
+	return host_string_to_python_string (str.c_str ()).release ();
       }
 
     case var_boolean:
