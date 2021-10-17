@@ -6969,7 +6969,6 @@ bp_location::bp_location (const bp_location_ops *ops, breakpoint *owner)
   loc->cond_bytecode = NULL;
   loc->shlib_disabled = 0;
   loc->enabled = 1;
-
   switch (owner->type)
     {
     case bp_breakpoint:
@@ -7018,7 +7017,6 @@ bp_location::bp_location (const bp_location_ops *ops, breakpoint *owner)
     default:
       internal_error (__FILE__, __LINE__, _("unknown breakpoint type"));
     }
-
   loc->refc = 1;
 }
 
@@ -9351,7 +9349,6 @@ create_breakpoint (struct gdbarch *gdbarch,
   else
     {
       std::unique_ptr <breakpoint> b = new_breakpoint_from_type (type_wanted);
-
       init_raw_breakpoint_without_location (b.get (), gdbarch, type_wanted, ops);
       b->location = copy_event_location (location);
 
@@ -9406,8 +9403,8 @@ break_command_1 (const char *arg, int flag, int from_tty)
 {
   int tempflag = flag & BP_TEMPFLAG;
   enum bptype type_wanted = (flag & BP_HARDWAREFLAG
-			     ? bp_hardware_breakpoint
-			     : bp_breakpoint);
+                             ? bp_hardware_breakpoint
+                             : bp_breakpoint);
   struct breakpoint_ops *ops;
 
   event_location_up location = string_to_event_location (&arg, current_language);

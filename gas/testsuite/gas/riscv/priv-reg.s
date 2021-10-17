@@ -195,10 +195,6 @@
 	csr mhpmcounter30h
 	csr mhpmcounter31h
 
-	csr mucounteren
-	csr mscounteren
-	csr mhcounteren
-
 	csr mhpmevent3
 	csr mhpmevent4
 	csr mhpmevent5
@@ -267,3 +263,5 @@
 	csr pmpaddr13
 	csr pmpaddr14
 	csr pmpaddr15
+# vsstatus
+	csr vsstatus

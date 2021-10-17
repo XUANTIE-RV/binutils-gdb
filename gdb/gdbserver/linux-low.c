@@ -5358,7 +5358,8 @@ regsets_fetch_inferior_registers (struct regsets_info *regsets_info,
 #endif
       if (res < 0)
 	{
-	  if (errno == EIO)
+          if (errno == EIO
+              || (errno == EINVAL && regset->type == OPTIONAL_REGS))
 	    {
 	      /* If we get EIO on a regset, do not try it again for
 		 this process mode.  */
@@ -5456,7 +5457,8 @@ regsets_store_inferior_registers (struct regsets_info *regsets_info,
 
       if (res < 0)
 	{
-	  if (errno == EIO)
+          if (errno == EIO
+              || (errno == EINVAL && regset->type == OPTIONAL_REGS))
 	    {
 	      /* If we get EIO on a regset, do not try it again for
 		 this process mode.  */

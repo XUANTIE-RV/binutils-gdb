@@ -220,6 +220,7 @@ force:
 ## so it doesn't depend on us installing it on the system.
 
 install:
+install-strip:
 
 #install:	$(INSTALL_TARGETS)
 

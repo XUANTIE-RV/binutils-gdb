@@ -1,0 +1,231 @@
+
+global portnum
+global binfile
+
+proc find_qemu { } {
+  global GDB 
+  
+  if [target_info exists qemu_prog] { 
+    return [target_info qemu_prog] 
+}
+
+return "can't find qemu"
+}
+
+#proc qemu_download_current_prog { } {
+#    global last_loaded_file 
+#
+#    set host_exec $last_loaded_file
+#	set qemu_host_exec $host_exec
+#	if [is_remote target] {
+#	   set 	qemu_server_exec [gdb_download $host_exec]
+#	} else {
+#	    set qemu_server_exec $host_exec
+#        }
+#    return $qemu_host_exec
+#} 
+
+proc gdb_target_cmd { targetname serialport } {
+    global gdb_prompt
+
+    set serialport_re [string_to_regexp $serialport]
+  
+    set targetname "remote"
+   if [target_info exists sockethost] {
+        set debughost [target_info sockethost]
+    } else {
+        set debughost "localhost:"
+    }
+
+    
+    send_gdb "target $targetname $debughost$serialport\n"
+    gdb_expect 180 {
+        -re "\r\n$gdb_prompt $" {}
+        -re ".*\\(gdb\\).*" {}
+        timeout {
+          perror "start qemu failed (timeout)";
+          return
+        }
+
+    }
+    return 0
+}
+
+proc qemu_default_get_comm_port { port } {
+    return "$port"
+}
+
+proc qemu_start { option arguments } {
+    global gdb_prompt
+    global qemuport
+    global protocol
+    global binfile
+
+#    set target_exec [qemu_download_current_prog] 
+	set target_exec $binfile
+    set arguments "$target_exec"	
+   if [target_info exists gdb,socketport] {
+        set portnum [target_info gdb,socketport]
+    } else {
+        # Bump the port number to avoid conflicts with hung ports.
+        incr portnum
+    }
+   if [target_info exists sockethost] {
+        set debughost [target_info sockethost]
+    } else {
+        set debughost "localhost:"
+    }
+
+    set qemuport $debughost$portnum 
+
+
+    if [target_info exists qemu,get_comm_port] {
+        set get_comm_port [target_info qemu,get_comm_port]
+    } else {
+        set get_comm_port qemu_default_get_comm_port
+    }
+
+
+   if [target_info exists gdb_protocol] {
+        set protocol [target_info gdb_protocol]
+    } else {
+        set protocol "remote"
+    }
+
+    if [target_info exists hostname] {
+        set hostname [target_info hostname]
+    } else {
+        set hostname ""
+    }
+
+    if [target_info exists CPU] {
+        set CPU [target_info CPU]
+    } else {
+        set CPU "sifive-e51"
+    }
+
+    set qemu [find_qemu]
+	set qemu_command "$qemu"
+	set gdbport $debughost$portnum
+
+set qemu_opt [board_info target qemu_option1]
+if { [string first "/lib" "${qemu_opt}"] >= 0 } {
+       set gdb_sysinit "[string trim "${qemu_opt}" "-cpu ${CPU} -L -g $portnum"]"
+       gdb_test_multiple "set sysroot $gdb_sysinit" "gdb add shared lib" {
+       -re "\r\n$gdb_prompt $" {}
+       -re ".*\\(gdb\\).*" {}
+      }
+}
+
+
+for {set i 1} {$i <= 100} {incr i} {
+
+    send_gdb "kill\n"
+    gdb_expect 120 {
+        -re "Kill the program being debugged. .y or n. $" {
+            send_gdb "y\n"
+            verbose "\t\tKilling previous program being debugged"
+            exp_continue
+        }
+        -re "$gdb_prompt $" {
+            # OK.
+        }
+        -re ".*The program is not being run.*" {}
+    }
+
+   if [target_info exists qemu_option1] {
+        set qemu_option1 [target_info qemu_option1]
+    }
+
+   if [target_info exists qemu_option2] {
+        set qemu_option2 [target_info qemu_option2]
+    }
+ 
+   append qemu_option1 "$portnum"
+
+	if { [target_info gdb_protocol] == "remote" } then {
+	   set qemu_args1 "shell ssh -l $username $hostname $qemu $qemu_option1 $target_exec $qemu_option2&"
+	} else {
+	   set qemu_args1 "shell $qemu $qemu_option1 $qemu_option2 $target_exec&"
+	}
+	
+	
+	gdb_test_multiple "$qemu_args1" "start qemu" {
+	        -re "\r\n$gdb_prompt $" {}
+	        -re ".*\\(gdb\\).*" {}
+	        timeout {
+	          perror "start qemu failed (timeout)";
+	          return
+	        }
+	}
+
+    set targetname "remote"
+    send_gdb "target $targetname $debughost$portnum\n"
+    gdb_expect 180 {
+        -re ".*Address already in use.* $" {
+              incr portnum
+        }
+        -re "Remote debugging using.* $" {
+              return 0 
+        }
+        -re ".*\\(gdb\\).*" {}
+        timeout {
+          perror "start qemu failed (timeout)";
+          return
+        }
+
+    }
+
+}
+
+} 
+
+
+proc qemu_run { child_args } {
+
+    global protocol
+    global qemuport
+    global gdb_prompt
+    send_gdb "kill\n"
+    gdb_expect 120 {
+        -re "Kill the program being debugged. .y or n. $" {
+            send_gdb "y\n"
+            verbose "\t\tKilling previous program being debugged"
+            exp_continue
+        }
+        -re "$gdb_prompt $" {
+            # OK.
+        }
+        -re ".*The program is not being run.*" {}
+    }
+
+    return  [qemu_spawn $child_args]
+
+}
+
+proc qemu_spawn { child_args } {
+	global binfile
+#    set target_exec [qemu_download_current_prog]
+	set target_exec $binfile
+    set arguments "$target_exec"
+    if { $child_args != "" } {
+        append arguments "$child_args"
+    }
+    return [qemu_start "" $arguments]
+}
+
+proc qemu_reconnect { } {
+   
+    global qemuport
+
+    set msg3 "target remote $qemuport"
+    gdb_test_multiple "$msg3" "target remote" {
+	-re "Remote debugging using.*" {}
+	-re "VNC server running on.*" {}
+	timeout {
+          perror "target remote failed (timeout)";
+          return
+        }
+    }
+
+}	

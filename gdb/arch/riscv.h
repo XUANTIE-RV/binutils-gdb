@@ -46,6 +46,10 @@ struct riscv_gdbarch_features
      that there are no f-registers.  No other value is valid.  */
   int flen = 0;
 
+
+  /* When Vector Support.  */
+  int vlen = 0;
+
   /* Equality operator.  */
   bool operator== (const struct riscv_gdbarch_features &rhs) const
   {
@@ -66,10 +70,28 @@ struct riscv_gdbarch_features
   }
 };
 
-/* Create and return a target description that is compatible with
-   FEATURES.  */
 
-const target_desc *riscv_create_target_description
-	(struct riscv_gdbarch_features features);
+#ifdef GDBSERVER
+
+/* Create and return a target description that is compatible with FEATURES.
+ *    This is only used directly from the gdbserver where the created target
+ *       description is modified after it is return.  */
+
+target_desc *riscv_create_target_description
+        (const struct riscv_gdbarch_features features);
+
+#else
+
+/* Lookup an already existing target description matching FEATURES, or
+ *    create a new target description if this is the first time we have seen
+ *       FEATURES.  For the same FEATURES the same target_desc is always
+ *          returned.  This is important when trying to lookup gdbarch objects as
+ *             GDBARCH_LIST_LOOKUP_BY_INFO performs a pointer comparison on target
+ *                descriptions to find candidate gdbarch objects.  */
+
+const target_desc *riscv_lookup_target_description
+        (const struct riscv_gdbarch_features features);
+
+#endif /* GDBSERVER */
 
 #endif /* ARCH_RISCV_H */

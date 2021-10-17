@@ -191,6 +191,12 @@ enum bptype
        deleted now and the breakpoint moved to the target function entry
        point.  */
     bp_gnu_ifunc_resolver_return,
+
+#ifdef CSKYMODIFY_CONFIG
+    /* CSKY AUTO BREAKPOINT */
+    bp_auto_breakpoint,
+#endif
+
   };
 
 /* States of enablement of breakpoint.  */

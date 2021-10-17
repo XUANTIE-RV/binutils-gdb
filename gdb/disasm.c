@@ -259,6 +259,10 @@ gdb_pretty_print_disassembler::pretty_print_insn (struct ui_out *uiout,
       {
 	CORE_ADDR end_pc;
 	bfd_byte data;
+#ifdef CSKYMODIFY_CONFIG
+        CORE_ADDR addr;
+#endif
+	int err;
 	const char *spacer = "";
 
 	/* Build the opcodes using a temporary stream so we can
@@ -267,7 +271,7 @@ gdb_pretty_print_disassembler::pretty_print_insn (struct ui_out *uiout,
 
 	size = m_di.print_insn (pc);
 	end_pc = pc + size;
-
+#ifndef CSKYMODIFY_CONFIG
 	for (;pc < end_pc; ++pc)
 	  {
 	    read_code (pc, &data, 1);
@@ -277,6 +281,18 @@ gdb_pretty_print_disassembler::pretty_print_insn (struct ui_out *uiout,
 
 	uiout->field_stream ("opcodes", m_opcode_stb);
 	uiout->text ("\t");
+#else   /* CSKYMODIFY_CONFIG */
+        for (addr = end_pc; addr > pc; addr --)
+          {
+            read_code ((addr - 1), &data, 1);
+            m_opcode_stb.printf ("%02x", (unsigned) data);
+          }
+
+        if (size == 2)
+          m_opcode_stb.printf ("    ");
+        uiout->field_stream ("opcode", m_opcode_stb);
+        uiout->text ("\t");
+#endif  /* CSKYMODIFY_CONFIG */
       }
     else
       size = m_di.print_insn (pc);

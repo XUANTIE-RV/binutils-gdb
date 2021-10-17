@@ -40,6 +40,7 @@ struct riscv_private_data
 
 static const char * const *riscv_gpr_names;
 static const char * const *riscv_fpr_names;
+static const char * const *riscv_vecr_names;
 
 /* Other options.  */
 static int no_aliases;	/* If set disassemble as most general inst.  */
@@ -49,6 +50,7 @@ set_default_riscv_dis_options (void)
 {
   riscv_gpr_names = riscv_gpr_names_abi;
   riscv_fpr_names = riscv_fpr_names_abi;
+  riscv_vecr_names = riscv_vecr_names_numeric;
   no_aliases = 0;
 }
 
@@ -241,6 +243,87 @@ print_insn_args (const char *d, insn_t l, bfd_vma pc, disassemble_info *info)
 		 (unsigned)EXTRACT_UTYPE_IMM (l) >> RISCV_IMM_BITS);
 	  break;
 
+	case 'X': /* T-HEAD extended.  */
+	  {
+	  switch (*++d)
+	    {
+	    case 'I':
+	      {
+		int nbit = 0;
+		int shift = 0;
+		int at = -1;
+		int value = l;
+		int sign = 0;
+
+		if (*++d == 's')
+		  {
+		    sign = 1;
+		    d++;
+		  }
+
+		nbit = strtol (d, &d, 10);
+		if (*d == 'S')
+		  shift = strtol (++d, &d, 10);
+		if (*d == '@')
+		  at= strtol (++d, &d, 10);
+
+		/* d will puls 1 in the for loop.  */
+		d -= 1;
+
+		if (at != - 1)
+		  {
+		    value = (int)EXTRACT_T_HEAD_IMM (l, nbit, at);
+
+		    if (sign && (value & (1 << (nbit - 1))))
+		      value |= ~((1 << nbit) - 1);
+
+		    if (shift > 0)
+		      value <<= shift;
+		    else if (shift < 0)
+		      value >>= -shift;
+		  }
+		else
+		  value = nbit;
+		print (info->stream, "%d", value);
+		break;
+	      }
+	      break;
+	    case 'm':
+	      print (info->stream, "%d", (int)EXTRACT_T_HEAD_EXT_MIMM (l));
+	      break;
+	    case 'l':
+	      print (info->stream, "%d", (int)EXTRACT_T_HEAD_EXT_LIMM (l));
+	      break;
+	    case 'a':
+	      print (info->stream, "%d", (int)EXTRACT_T_HEAD_LR_IMM (l));
+	      break;
+	    case 'P':
+	      {
+		switch (*++d)
+		  {
+		    case 'd':
+		      print (info->stream, "%s",
+			     riscv_gpr_names[EXTRACT_OPERAND (PD, l)]);
+		      break;
+		    case 's':
+		      print (info->stream, "%s",
+			     riscv_gpr_names[EXTRACT_OPERAND (PS1, l)]);
+		      break;
+		    case 't':
+		      print (info->stream, "%s",
+			     riscv_gpr_names[EXTRACT_OPERAND (PS2, l)]);
+		      break;
+		    case 'r':
+		      print (info->stream, "%s",
+			     riscv_gpr_names[EXTRACT_OPERAND (PS3, l)]);
+		      break;
+		  }
+	      }
+	      break;
+	    }
+	  }
+	  break;
+
 	case 'm':
 	  arg_print (info, EXTRACT_OPERAND (RM, l),
 		     riscv_rm, ARRAY_SIZE (riscv_rm));
@@ -341,6 +424,83 @@ print_insn_args (const char *d, insn_t l, bfd_vma pc, disassemble_info *info)
 	  print (info->stream, "%d", rs1);
 	  break;
 
+	case 'V': /* RVV */
+	  switch (*++d)
+	    {
+	    case 'd':
+	    case 'f':
+	      print (info->stream, "%s",
+		      riscv_vecr_names[EXTRACT_OPERAND (VD, l)]);
+	      break;
+
+	    case 'e':
+	      if (!EXTRACT_OPERAND (VWD, l))
+		print (info->stream, "%s", riscv_gpr_names[0]);
+	      else
+		print (info->stream, "%s",
+		       riscv_vecr_names[EXTRACT_OPERAND (VD, l)]);
+	      break;
+
+	    case 's':
+	      print (info->stream, "%s",
+		      riscv_vecr_names[EXTRACT_OPERAND (VS1, l)]);
+	      break;
+
+	    case 't':
+	    case 'u': /* VS1 == VS2 already verified at this point.  */
+	    case 'v': /* VD == VS1 == VS2 already verified at this point.  */
+	      print (info->stream, "%s",
+		      riscv_vecr_names[EXTRACT_OPERAND (VS2, l)]);
+	      break;
+
+	    case '0':
+	      print (info->stream, "%s", riscv_vecr_names[0]);
+	      break;
+
+	    case 'c':
+	      {
+		int imm = EXTRACT_RVV_VC_IMM (l);
+		unsigned int imm_vlmul = EXTRACT_OPERAND (VLMUL, imm);
+		unsigned int imm_vsew = EXTRACT_OPERAND (VSEW, imm);
+		unsigned int imm_vediv = EXTRACT_OPERAND (VEDIV, imm);
+		unsigned int imm_vtype_res = EXTRACT_OPERAND (VTYPE_RES, imm);
+
+		if (imm_vsew < ARRAY_SIZE (riscv_vsew)
+		    && imm_vlmul < ARRAY_SIZE (riscv_vlen)
+		    && imm_vediv < ARRAY_SIZE (riscv_vediv)
+		    && ! imm_vtype_res)
+		  print (info->stream, "%s,%s,%s", riscv_vsew[imm_vsew],
+			 riscv_vlen[imm_vlmul], riscv_vediv[imm_vediv]);
+		else
+		  print (info->stream, "%d", imm);
+	      }
+	      break;
+
+	    case 'i':
+	      print (info->stream, "%d", (int)EXTRACT_RVV_VI_IMM (l));
+	      break;
+
+	    case 'j':
+	      print (info->stream, "%d", (int)EXTRACT_RVV_VI_UIMM (l));
+	      break;
+
+	    case 'k':
+	      print (info->stream, "%d", (int)EXTRACT_RVV_OFFSET (l));
+	      break;
+
+	    case 'm':
+	      if (! EXTRACT_OPERAND (VMASK, l))
+		print (info->stream, ",%s", riscv_vecm_names_numeric[0]);
+	      break;
+
+	    default:
+	      /* xgettext:c-format */
+	      print (info->stream, _("# internal error, undefined modifier (V%c)"),
+		     *d);
+	      return;
+	    }
+	  break;
+
 	default:
 	  /* xgettext:c-format */
 	  print (info->stream, _("# internal error, undefined modifier (%c)"),
@@ -370,6 +530,10 @@ riscv_disassemble_insn (bfd_vma memaddr, insn_t word, disassemble_info *info)
   if (! init)
     {
       for (op = riscv_opcodes; op->name; op++)
+	if (!riscv_hash[OP_HASH_IDX (op->match)])
+	  riscv_hash[OP_HASH_IDX (op->match)] = op;
+      /* THEAD extensions.  */
+      for (op = riscv_thead_opcodes; op->name; op++)
 	if (!riscv_hash[OP_HASH_IDX (op->match)])
 	  riscv_hash[OP_HASH_IDX (op->match)] = op;
 

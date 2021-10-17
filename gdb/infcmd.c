@@ -62,7 +62,6 @@
 #include "source.h"
 
 /* Local functions: */
-
 static void until_next_command (int);
 
 static void step_1 (int, int, const char *);

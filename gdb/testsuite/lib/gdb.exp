@@ -532,7 +532,6 @@ proc gdb_breakpoint { function args } {
 proc runto { function args } {
     global gdb_prompt
     global decimal
-
     delete_breakpoints
 
     # Default to "no-message".
@@ -559,7 +558,6 @@ proc runto { function args } {
     if ![eval gdb_breakpoint {$function} $args] {
 	return 0
     }
-
     gdb_run_cmd
     
     # the "at foo.c:36" output we get with -g.
@@ -1496,6 +1494,94 @@ proc default_gdb_exit {} {
 # TODO: gdb.base/sepdebug.exp and gdb.stabs/weird.exp might be able to use
 # this if they can get more information set.
 
+proc test_infile { file_path args  } {
+
+	global srcdir verbose CPU SOC
+
+	set test_file {"csky.ld" "button.h" "cache.h" "clock.h" "compiler.h"
+		"cpu.h" "fixed-clock.h" "gpio.h" "interrupt.h" "io.h"
+		"itim.h" "led.h" "machine.h" "metal.h" "pmp.h" 
+		"riscv,clint0.h" "riscv,cpu.h" "riscv,plic0.h" "shutdown.h" 
+		"sifive,clic0.h" "sifive,fe310-g000,hfrosc.h"
+		"sifive,fe310-g000,hfxosc.h" "sifive,fe310-g000,pll.h"
+		"sifive,fe310-g000,prci.h" "sifive,fu540-c000,l2.h"
+		"sifive,global-external-interrupts0.h"
+		"sifive,gpio0.h" "sifive,gpio-buttons.h"
+		"sifive,gpio-leds.h" "sifive,gpio-switches.h"
+		"sifive,local-external-interrupts0.h"
+		"sifive,spi0.h" "sifive,test0.h" "sifive,uart0.h"
+		"spi.h" "switch.h" "timer.h" "tty.h" "uart.h"}
+
+	foreach iterm $test_file {
+		if { $args == "copy" } {
+			file copy $srcdir/gdb.target/$SOC/$CPU/$file_path/$iterm $iterm
+		} 
+		if { $args == "delete" } {
+			exec rm $iterm
+		}
+	}
+}
+
+proc test_init {} {
+    global srcdir verbose CPU SOC
+    set CPU [board_info target CPU]
+    set SOC [board_info target SOC]
+   if [target_info exists gdb,socketport] {
+        set portnum [target_info gdb,socketport]
+    } else {
+        set portnum "1025"
+    }
+
+   if [target_info exists sockethost] {
+        set debughost [target_info sockethost]
+    } else {
+        set debughost "localhost:"
+    }
+
+if [ istarget "riscv64*elf*" ] {
+        if { [board_info target exists qemu_prog] } {
+            if { [board_info target exists cflags] } then {
+            set cflags [board_info target cflags]
+            } else {
+            set cflags ""
+            }
+
+ 	       if [file exists csky.ld] then {
+			test_infile "qemu" "delete"
+       		 }
+			test_infile "qemu" "copy"
+            target_compile "$srcdir/gdb.target/$SOC/$CPU/qemu/crt0.S" "./crt0.o" object {"$cflags"}
+            target_compile "$srcdir/gdb.target/$SOC/$CPU/qemu/entry.S" "./entry.o" object {"$cflags"}
+	    target_compile "$srcdir/gdb.target/$SOC/$CPU/qemu/shutdown.c" "./shutdown.o" object {"$cflags"}
+            target_compile "$srcdir/gdb.target/$SOC/$CPU/qemu/sys_exit.c" "./sys_exit.o" object {"$cflags"}
+        } else {
+            if ![file exists .gdbinit] then {
+            file copy $srcdir/gdb.target/$SOC/$CPU/board/gdbinit  .gdbinit
+            }
+            set gdb_init [open ".gdbinit" "w"]
+            puts $gdb_init "target remote $debughost$portnum\r\nreset\r\nset *(unsigned int *) 0x1fbad008=0xff\r\nset *(unsigned int *) 0x201ffffc = 0x1\r\nset \$mcor = 0x70013\r\nset \$mhint = 0x2630c\r\nset \$mhcr = 0x11ff\r\nset \$mxstatus = 0x638000"
+            close $gdb_init
+
+            if { [board_info target exists cflags] } then {
+            set cflags [board_info target cflags]
+            } else {
+            set cflags ""
+            }
+
+       	if [file exists csky.ld] then {
+		test_infile "board" "delete"
+       	 }
+		test_infile "board" "copy"
+            target_compile "$srcdir/gdb.target/$SOC/$CPU/board/crt0.S" "./crt0.o" object {"$cflags"}
+            target_compile "$srcdir/gdb.target/$SOC/$CPU/board/entry.S" "./entry.o" object {"$cflags"}
+	     target_compile "$srcdir/gdb.target/$SOC/$CPU/board/shutdown.c" "./shutdown.o" object {"$cflags"}
+            target_compile "$srcdir/gdb.target/$SOC/$CPU/board/sys_exit.c" "./sys_exit.o" object {"$cflags"}
+
+       }
+
+} 
+}
+
 proc gdb_file_cmd { arg } {
     global gdb_prompt
     global verbose
@@ -1520,18 +1606,18 @@ proc gdb_file_cmd { arg } {
 
     # The file command used to kill the remote target.  For the benefit
     # of the testsuite, preserve this behavior.
-    send_gdb "kill\n"
-    gdb_expect 120 {
-	-re "Kill the program being debugged. .y or n. $" {
-	    send_gdb "y\n"
-	    verbose "\t\tKilling previous program being debugged"
-	    exp_continue
-	}
-	-re "$gdb_prompt $" {
-	    # OK.
-	}
-    }
-
+#    send_gdb "kill\n"
+#    gdb_expect 120 {
+#	-re "Kill the program being debugged. .y or n. $" {
+#	    send_gdb "y\n"
+#	    verbose "\t\tKilling previous program being debugged"
+#	    exp_continue
+#	}
+#	-re "$gdb_prompt $" {
+#	    # OK.
+#	}
+#    }
+ 
     send_gdb "file $arg\n"
     gdb_expect 120 {
 	-re "Reading symbols from.*LZMA support was disabled.*$gdb_prompt $" {
@@ -1548,6 +1634,10 @@ proc gdb_file_cmd { arg } {
             verbose "\t\tLoaded $arg into $GDB"
 	    set gdb_file_cmd_debug_info "debug"
 	    return 0
+        }
+	-re "A program is being debugged already.*Are you sure you want to change the file.*y or n. $" {
+                 send_gdb "y\n"
+                 exp_continue
         }
         -re "Load new symbol table from \".*\".*y or n. $" {
             send_gdb "y\n"
@@ -3519,6 +3609,11 @@ proc gdb_compile {source dest type options} {
     }
     set shlib_found 0
     set shlib_load 0
+
+    if { [ istarget "csky*elf*" ] || [ istarget "riscv*" ] } {
+       test_init
+    }
+    
     foreach opt $options {
         if {[regexp {^shlib=(.*)} $opt dummy_var shlib_name]
 	    && $type == "executable"} {
@@ -4238,6 +4333,9 @@ proc gdb_load_cmd { args } {
 	-re "Loading section\[^\r\]*\r\n" {
 	    exp_continue
 	}
+	-re "Reading symbols.*Loading section\[^\r\]*\r\n" {
+	    exp_continue
+	}
 	-re "Start address\[\r\]*\r\n" {
 	    exp_continue
 	}
@@ -4260,7 +4358,9 @@ proc gdb_load_cmd { args } {
 	    return -1
 	}
     }
-    return -1
+
+	return -1
+
 }
 
 # Invoke "gcore".  CORE is the name of the core file to write.  TEST
@@ -4430,6 +4530,26 @@ proc gdb_remote_download {dest fromfile {tofile {}}} {
 #
 # Copy the listed library to the target.
 
+proc gdb_download { filename } {
+if { [board_info target exists qemu_prog] } {
+   set destname $filename
+} else {
+   if [target_info exists dest_path] {
+        set dest_path [target_info dest_path]
+        file copy -force $filename $dest_path
+        verbose "dest_path is $dest_path"
+        set execname [file tail $filename]
+        set destname "$dest_path/$execname"
+        verbose "destname is $destname"
+     } else {
+        set destname [remote_download target $filename]
+     }
+}
+    lappend cleanfiles $destname
+    verbose "destname is $destname file name is $filename"
+    return $destname
+}
+
 proc gdb_load_shlib { file } {
     global gdb_spawn_id
 
@@ -4458,11 +4578,18 @@ proc gdb_load_shlib { file } {
 # The return value is 0 for success, -1 for failure.
 # Many files in config/*.exp override this procedure.
 #
+#proc gdb_load { arg } {
+#    if { $arg != "" } {
+#	return [gdb_file_cmd $arg]
+#    }
+#    return 0
+#}
+
 proc gdb_load { arg } {
-    if { $arg != "" } {
-	return [gdb_file_cmd $arg]
+    if ![gdb_file_cmd $arg] {
+           return [gdb_load_cmd $arg];
     }
-    return 0
+    return -1;
 }
 
 # gdb_reload -- load a file into the target.  Called before "running",

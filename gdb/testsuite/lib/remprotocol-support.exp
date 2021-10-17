@@ -1,0 +1,364 @@
+
+
+
+global mi_gdb_prompt
+
+
+if ![info exists mi_gdb_prompt] then {
+    set mi_gdb_prompt "\[(\]gdb\[)\] \r\n"
+}
+
+proc remprotocol_download_current_prog { } {
+    global last_loaded_file
+
+    set host_exec $last_loaded_file
+    return $host_exec
+}
+
+proc remprotocol_target { } {
+     set target_exec [remprotocol_download_current_prog]
+     return $target_exec
+} 
+
+proc remprotocol_spawn { child_args } {
+     
+    global gdb_prompt
+
+    set target_exec [remprotocol_download_current_prog]
+    set arguments "$target_exec"
+    if { $child_args != "" } {
+        append arguments "$child_args"
+    }
+
+    remprotocol_target
+    remprotocol_start "" $arguments
+    gdb_load $target_exec
+    gdb_test "set remote system-call-allowed 1" ".*" ""
+    return 0
+}
+
+
+proc remprotocol_start { option child_args } {
+
+    global gdb_prompt
+    global mi_gdb_prompt
+    if ![info exists mi_gdb_prompt] then {
+        set mi_gdb_prompt "\[(\]gdb\[)\] \r\n"
+    }
+
+   if [target_info exists gdb,socketport] {
+        set portnum [target_info gdb,socketport]
+    } else {
+        # Bump the port number to avoid conflicts with hung ports.
+        incr portnum
+    }
+
+   if [target_info exists sockethost] {
+        set debughost [target_info sockethost]
+    } else {
+        set debughost "localhost:"
+    }
+        set qemuport $debughost$portnum
+        set protocol "remote"
+
+
+    send_gdb "kill\n"
+    gdb_expect 120 {
+        -re "Kill the program being debugged. .y or n. $" {
+            send_gdb "y\n"
+            verbose "\t\tKilling previous program being debugged"
+            exp_continue
+        }
+        -re ".*$gdb_prompt $" {
+            # OK.
+        }
+        -re ".*$mi_gdb_prompt$" {
+            # OK.
+        }
+        -re ".*The program is not being run.* $" { }
+    }
+
+   send_gdb "target remote $debughost$portnum\n"
+   gdb_expect 180 {
+        -re "Remote debugging using.* $" {}
+        -re ".*stopped,frame.*done.*$" {}
+        -re "A program is being debugged already.*y or n. $" {
+            gdb_test "y" ".*" ""
+         }
+        -re "VNC server running on.*" {}
+        timeout {
+          perror "target remote failed (timeout)";
+          return
+        }
+   }
+
+
+#   set remprotocol_args "target remote $debughost$portnum"
+#   gdb_test_multiple "$remprotocol_args" "target remote" {
+#        -re "Remote debugging using.*$gdb_prompt $" {}
+#        -re ".*stopped,frame.*done\r\n$mi_gdb_prompt$" {}
+#        -re "A program is being debugged already.*y or n. $" {
+#            gdb_test "y" ".*" ""
+#         }
+#        -re "VNC server running on.*" {}
+#        timeout {
+#          perror "target remote failed (timeout)";
+#          return
+#        }
+#   }
+     
+    return 0
+ 
+}
+
+
+proc remprotocol_run { child_args } {
+    global protocol
+    global gdb_prompt
+
+    send_gdb "kill\n"
+    gdb_expect 120 {
+        -re "Kill the program being debugged. .y or n. $" {
+            send_gdb "y\n"
+            verbose "\t\tKilling previous program being debugged"
+            exp_continue
+        }
+        -re "$gdb_prompt $" {
+            # OK.
+        }
+        -re ".*The program is not being run.*" {}
+    }
+
+    return  [remprotocol_spawn $child_args]
+
+}
+
+
+
+proc remprotocol_mi { child_args } {
+ 
+    global protocol
+    global gdb_prompt 
+
+    set target_exec [remprotocol_download_current_prog]
+    set arguments "$target_exec"
+    if { $child_args != "" } {
+        append arguments "$child_args"
+    }
+
+    remprotocol_start "" $arguments
+    mi_gdb_test "load $arguments" ".*Loading section.*" "load program"
+    return 0
+}
+
+
+proc remprotocol_mi_load_cmd  { child_args } { 
+
+   mi_gdb_test "load $child_args" ".*Loading section.*" "load program"
+}
+
+
+proc remprotocol_mi_load  { child_args } {
+
+    global protocol
+    global gdb_prompt
+
+    if ![mi_gdb_file $child_args] {
+         remprotocol_start "" $child_args
+         return [remprotocol_mi_load_cmd $child_args]; 
+    }
+    return -1;
+
+}
+
+
+proc mi_gdb_file { arg } {
+    global verbose
+    global loadpath
+    global loadfile
+    global GDB
+    global mi_gdb_prompt
+    global last_loaded_file
+    upvar timeout timeout
+
+    set last_loaded_file $arg
+    send_gdb "105-file-exec-and-symbols $arg\n"
+    gdb_expect 120 {
+        -re "Reading symbols from.*done.*$mi_gdb_prompt$" {
+            verbose "\t\tLoaded $arg into the $GDB"
+            return 0
+        }
+        -re "has no symbol-table.*$mi_gdb_prompt$" {
+            perror "$arg wasn't compiled with \"-g\""
+            return -1
+        }
+        -re "Load new symbol table from \".*\".*y or n. $" {
+            send_gdb "y\n"
+            gdb_expect 120 {
+                -re "Reading symbols from.*done.*$mi_gdb_prompt$" {
+                    verbose "\t\tLoaded $arg with new symbol table into $GDB"
+                    # All OK
+                }
+                timeout {
+                    perror "(timeout) Couldn't load $arg, other program already loaded."
+                    return -1
+                }
+            }
+        }
+        -re "No such file or directory.*$mi_gdb_prompt$" {
+            perror "($arg) No such file or directory\n"
+            return -1
+        }
+        -re "105-file-exec-and-symbols .*\r\n105\\\^done\r\n$mi_gdb_prompt$" {
+            # We (MI) are just giving the prompt back for now, instead of giving
+            # some acknowledgement.
+            return 0
+        }
+        timeout {
+            perror "couldn't load $arg into $GDB (timed out)."
+            return -1
+        }
+        eof {
+            # This is an attempt to detect a core dump, but seems not to
+            # work.  Perhaps we need to match .* followed by eof, in which
+            # gdb_expect does not seem to have a way to do that.
+            perror "couldn't load $arg into $GDB (end of file)."
+            return -1
+        }
+    }
+}
+
+
+proc gdb_load { arg } {
+    if ![gdb_file_cmd $arg] {
+           return [gdb_load_cmd $arg];
+    }
+    return -1;
+}
+
+
+proc gdb_file_cmd { arg } {
+    global gdb_prompt
+    global verbose
+    global GDB
+    global last_loaded_file
+
+    # Save this for the benefit of gdbserver-support.exp.
+    set last_loaded_file $arg
+
+    # Set whether debug info was found.
+    # Default to "fail".
+    global gdb_file_cmd_debug_info
+    set gdb_file_cmd_debug_info "fail"
+
+    # The file command used to kill the remote target.  For the benefit
+    # of the testsuite, preserve this behavior.
+    send_gdb "file $arg\n"
+    gdb_expect 120 {
+        -re "Reading symbols from.*LZMA support was disabled.*done.*$gdb_prompt $" {
+       verbose "\t\tLoaded $arg into $GDB; .gnu_debugdata found but no LZMA available"
+            set gdb_file_cmd_debug_info "lzma"
+            return 0
+        }
+        -re "Reading symbols from.*no debugging symbols found.*done.*$gdb_prompt $" {
+            verbose "\t\tLoaded $arg into $GDB with no debugging symbols"
+            set gdb_file_cmd_debug_info "nodebug"
+            return 0
+        }
+        -re "Reading symbols from.*done.*$gdb_prompt $" {
+            verbose "\t\tLoaded $arg into $GDB"
+            set gdb_file_cmd_debug_info "debug"
+            return 0
+        }
+        -re "A program is being debugged already.*Are you sure you want to change the file.*y or n. $" {
+                 send_gdb "y\n"
+                 exp_continue
+        }
+        -re "Load new symbol table from \".*\".*y or n. $" {
+            send_gdb "y\n"
+            gdb_expect 120 {
+                -re "Reading symbols from.*done.*$gdb_prompt $" {
+                    verbose "\t\tLoaded $arg with new symbol table into $GDB"
+                    set gdb_file_cmd_debug_info "debug"
+                    return 0
+                }
+                timeout {
+                    perror "Couldn't load $arg, other program already loaded (timeout)."
+                    return -1
+                }
+                eof {
+                    perror "Couldn't load $arg, other program already loaded (eof)."
+                    return -1
+                }
+            }
+        }
+       -re "No such file or directory.*$gdb_prompt $" {
+            perror "($arg) No such file or directory"
+            return -1
+        }
+        -re "A problem internal to GDB has been detected" {
+            fail "($arg) (GDB internal error)"
+            gdb_internal_error_resync
+            return -1
+        }
+        -re "$gdb_prompt $" {
+            perror "Couldn't load $arg into $GDB."
+            return -1
+            }
+        timeout {
+            perror "Couldn't load $arg into $GDB (timeout)."
+            return -1
+        }
+        eof {
+            # This is an attempt to detect a core dump, but seems not to
+            # work.  Perhaps we need to match .* followed by eof, in which
+            # gdb_expect does not seem to have a way to do that.
+            perror "Couldn't load $arg into $GDB (eof)."
+            return -1
+        }
+    }
+ 
+}
+
+
+proc gdb_load_cmd { args } {
+    global gdb_prompt
+
+    if [target_info exists gdb_load_timeout] {
+        set loadtimeout [target_info gdb_load_timeout]
+    } else {
+        set loadtimeout 1600
+    }
+    send_gdb "load $args\n"
+    verbose "Timeout is now $loadtimeout seconds" 2
+    gdb_expect $loadtimeout {
+        -re "Loading section\[^\r\]*\r\n" {
+            exp_continue
+        }
+        -re "Start address\[\r\]*\r\n" {
+            exp_continue
+        }
+        -re "Transfer rate\[\r\]*\r\n" {
+            exp_continue
+        } 
+        -re "Memory access error\[^\r\]*\r\n" {
+            perror "Failed to load program"
+            return -1
+        }
+        -re "$gdb_prompt $" {
+            return 0
+        }
+        -re "(.*)\r\n$gdb_prompt " {
+            perror "Unexpected reponse from 'load' -- $expect_out(1,string)"
+            return -1
+        }
+        timeout {
+            perror "Timed out trying to load $args."
+            return -1
+        }
+    }
+    return -1
+}
+
+
+

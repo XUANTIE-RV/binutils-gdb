@@ -1,0 +1,53 @@
+# Copyright 2000, 2002, 2003, 2004, 2005, 2007, 2008, 2009, 2010
+# Free Software Foundation, Inc.
+
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+# Test framework for GDB (remote protocol) using a "qemu",
+# ie. a debug agent running as a native process on the same or
+# a different host.
+
+#
+# This module to be used for testing gdb with a "qemu" 
+# built either from libremote or from gdb/qemu.  
+#
+
+
+load_lib qemu-support.exp
+
+proc qemu_gdb_load { } {
+    return [qemu_spawn ""]
+}
+
+proc gdb_reload { } {
+    return [qemu_run ""]
+}
+
+proc gdb_start { } {
+	default_gdb_start
+	return [qemu_run ""]
+}
+
+
+proc gdb_reconnect { } {
+    return [qemu_reconnect]
+}
+
+
+proc mi_gdb_target_load { } {
+     return [qemu_run ""]
+}
+
+
+

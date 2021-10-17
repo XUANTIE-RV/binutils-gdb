@@ -1,0 +1,35 @@
+#name			inst		opcode		c906	mode		
+inst_fd_fs1_fs2_rm	fadd.h		04000053	O	inst fd, fs1, fs2, rm
+inst_rd_fs1		fclass.h	e4001053		O	inst rd, fs1
+inst_fd_fs1		fcvt.d.h	42200053	O		inst fd, fs1
+inst_fd_fs1_rm	fcvt.h.d	44100053	O		inst fd, fs1, rm
+inst_fd_rs1_rm	fcvt.h.l	d4200053	O		inst fd, rs1, rm
+inst_fd_rs1_rm	fcvt.h.lu	d4300053	O		inst fd, rs1, rm
+inst_fd_fs1_rm	fcvt.h.s	44000053	O		inst fd, fs1, rm
+inst_fd_rs1_rm	fcvt.h.w	d4000053	O		inst fd, rs1, rm
+inst_fd_rs1_rm	fcvt.h.wu	d4100053	O		inst fd, rs1, rm
+inst_rd_fs1_rm	fcvt.l.h	c4200053	O		inst rd, fs1, rm
+inst_rd_fs1_rm	fcvt.lu.h	c4300053	O		inst rd, fs1, rm
+inst_fd_fs1		fcvt.s.h	40200053	O		inst fd, fs1
+inst_rd_fs1_rm	fcvt.w.h	c4000053	O		inst rd, fs1, rm
+inst_rd_fs1_rm	fcvt.wu.h	c4100053	O		inst rd, fs1, rm
+inst_fd_fs1_fs2_rm	fdiv.h	1c000053	O		inst fd, fs1, fs2, rm
+inst_rd_fs1_fs2	feq.h		a4002053	O		inst rd, fs1, fs2
+inst_rd_fs1_fs2	fle.h		a4000053	O		inst rd, fs1, fs2
+inst_rd_fs1_fs2	flt.h		a4001053	O		inst rd, fs1, fs2
+inst_fd_fs1_fs2	fmax.h		2c001053	O		inst fd, fs1, fs2
+inst_fd_fs1_fs2	fmin.h		2c000053	O		inst fd, fs1, fs2
+inst_fd_fs1_fs2_rm	fmul.h	14000053	O		inst fd, fs1, fs2, rm
+inst_fd_rs1		fmv.h.x		f4000053	O		inst fd,rs1
+inst_rd_fs1		fmv.x.h		e4000053	O		inst rd,fs1
+inst_fd_fs1_fs2	fsgnj.h		24000053	O		inst fd, fs1, fs2
+inst_fd_fs1_fs2	fsgnjn.h	24001053	O		inst fd, fs1, fs2
+inst_fd_fs1_fs2	fsgnjx.h	24002053	O		inst fd, fs1, fs2
+inst_fd_fs1_rm	fsqrt.h		5c000053	O		inst fd, fs1, rm
+inst_fd_fs1_fs2_rm	fsub.h	0c000053	O		inst fd, fs1, fs2, rm
+inst_fd_fs1_fs2_fs3_rm	fnmadd.h	0400004f	O	inst fd, fs1, fs2, fs3, rm
+inst_fd_fs1_fs2_fs3_rm	fmsub.h	04000047	O	inst fd, fs1, fs2, fs3, rm
+inst_fd_fs1_fs2_fs3_rm	fmadd.h	04000043	O	inst fd, fs1, fs2, fs3, rm
+inst_fd_fs1_fs2_fs3_rm	fnmsub.h	0400004b	O	inst fd, fs1, fs2, fs3, rm
+inst_fd_imm12_rs1	flh		00001007	O		inst fd,imm12(rs1)
+inst_fs2_imm12_rs1	fsh		00001027	O		inst fs2,imm12(rs1)

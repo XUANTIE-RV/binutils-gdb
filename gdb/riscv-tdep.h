@@ -53,7 +53,13 @@ enum
 
   RISCV_PRIV_REGNUM = 4161,
 
+#ifndef CSKYMODIFY_CONFIG
   RISCV_LAST_REGNUM = RISCV_PRIV_REGNUM
+#else
+  RISCV_LAST_REGNUM = RISCV_PRIV_REGNUM,
+  RISCV_FIRST_VP_REGNUM = RISCV_PRIV_REGNUM + 1,
+  RISCV_LAST_VP_REGNUM = RISCV_PRIV_REGNUM + 32
+#endif
 };
 
 /* RiscV DWARF register numbers.  */
@@ -114,5 +120,16 @@ extern int riscv_abi_flen (struct gdbarch *gdbarch);
 /* Single step based on where the current instruction will take us.  */
 extern std::vector<CORE_ADDR> riscv_software_single_step
   (struct regcache *regcache);
+
+#ifdef CSKYMODIFY_CONFIG
+
+/* For execution environment switch.  */
+#define EXEC_ENV_IS_TEE(mxstatus)  ((mxstatus) & 0x20000000)
+#define CSKY_TEE 1
+#define CSKY_REE 0
+
+#define RISCV_MAX_REGISTER_SIZE 16
+
+#endif
 
 #endif /* RISCV_TDEP_H */

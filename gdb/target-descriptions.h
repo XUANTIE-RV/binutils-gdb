@@ -23,6 +23,10 @@
 #define TARGET_DESCRIPTIONS_H 1
 #include "common/tdesc.h"
 
+#ifdef CSKYMODIFY_CONFIG
+struct pseudo_reg;
+#endif
+
 struct tdesc_arch_data;
 struct target_ops;
 /* An inferior's target description info is stored in this opaque
@@ -231,6 +235,39 @@ namespace selftests {
 void record_xml_tdesc (const char *xml_file,
 		       const struct target_desc *tdesc);
 }
+#endif
+
+#ifdef CSKYMODIFY_CONFIG
+int
+csky_tdesc_get_pseudo_regs (const struct tdesc_feature *feature,
+                            struct pseudo_reg **m_pseudo_reg_list);
+
+void
+csky_tdesc_free_pseudo_reg_list (struct pseudo_reg **m_pseudo_reg_list);
+
+/* Judge whether a pseudo reg is related to TEE or REE.
+ *  *    If not REE or TEE, return -1.  */
+int
+csky_tdesc_get_tee_type (struct gdbarch *gdbarch,
+                         struct pseudo_reg *m_pseudo_reg_list,
+                         int regnum);
+
+/* Return csky pseudo reg's name  */
+const char *
+csky_tdesc_pseudo_register_name (struct gdbarch *gdbarch, int regno,
+                                 struct pseudo_reg *m_pseudo_reg_list);
+
+long
+csky_tdesc_get_pseudo_target_regnum (struct gdbarch *gdbarch,
+                                     int regnum,
+                                     struct pseudo_reg *m_pseudo_reg_list);
+
+/* Return for csky pseudo register.  */
+
+struct type *
+csky_tdesc_pseudo_register_type (struct gdbarch *gdbarch,
+                                 int regno,
+                                 struct pseudo_reg *m_pseudo_reg_list);
 #endif
 
 #endif /* TARGET_DESCRIPTIONS_H */

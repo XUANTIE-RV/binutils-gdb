@@ -38,6 +38,10 @@
 #include "completer.h"
 #include "readline/tilde.h" /* tilde_expand */
 
+#ifdef CSKYMODIFY_CONFIG
+#include "riscv-tdep.h"
+#endif
+
 /* Types.  */
 
 struct property
@@ -387,6 +391,19 @@ struct tdesc_arch_reg
   struct tdesc_reg *reg;
   struct type *type;
 };
+
+#ifdef CSKYMODIFY_CONFIG
+/* For csky pseudo reg.  */
+
+struct pseudo_reg
+{
+  pseudo_reg ()
+  : m_reg (NULL, NULL), next (NULL)
+  {}
+  struct tdesc_arch_reg m_reg;
+  struct pseudo_reg *next;
+};
+#endif
 
 struct tdesc_arch_data
 {
@@ -1092,6 +1109,7 @@ tdesc_use_registers (struct gdbarch *gdbarch,
     if (arch_reg.reg != NULL)
       htab_remove_elt (reg_hash, arch_reg.reg);
 
+#ifndef CSKYMODIFY_CONFIG
   /* Assign numbers to the remaining registers and add them to the
      list of registers.  The new numbers are always above gdbarch_num_regs.
      Iterate over the features, not the hash table, so that the order
@@ -1108,6 +1126,7 @@ tdesc_use_registers (struct gdbarch *gdbarch,
 	  data->arch_regs.emplace_back (reg.get (), nullptr);
 	  num_regs++;
 	}
+#endif /* CSKYMODIFY_CONFIG */
 
   htab_delete (reg_hash);
 
@@ -1867,3 +1886,212 @@ The parameter is the directory name."),
 		 &maintenancechecklist);
   set_cmd_completer (cmd, filename_completer);
 }
+
+#ifdef CSKYMODIFY_CONFIG
+int
+csky_tdesc_get_pseudo_regs (const struct tdesc_feature *feature,
+                            struct pseudo_reg **m_pseudo_reg_list)
+{
+  int nums_pseudo_regs = 0;
+
+  *m_pseudo_reg_list = NULL;
+  for (const tdesc_reg_up &reg : feature->registers)
+    {
+      if (reg == NULL)
+        return -1;
+
+      /* Check "env" content.  */
+      if (strcmp (reg->env.c_str(), "") != 0)
+        {
+          if ((strcasecmp (reg->env.c_str(), "ree") != 0)
+              && (strcasecmp (reg->env.c_str(), "tee") != 0))
+            {
+              warning (_("a pseudo reg named \"%s\" has an un-recognized"
+                         " env \"%s\", only \"ree\" or \" tee\" is"
+                         " recognized, please check."),
+                         reg->name.c_str(), reg->env.c_str());
+              return -1;
+            }
+        }
+
+      /* Add reg to m_pseudo_reg_list.  */
+      if (*m_pseudo_reg_list == NULL)
+        {
+          (*m_pseudo_reg_list) = new pseudo_reg ();
+          (*m_pseudo_reg_list)->m_reg.reg = reg.get();
+          nums_pseudo_regs++;
+        }
+      else
+        {
+          struct pseudo_reg *pr_tmp, *tmp;
+          pr_tmp = *m_pseudo_reg_list;
+          while (pr_tmp->next)
+            pr_tmp = pr_tmp->next;
+          tmp = new pseudo_reg ();
+
+          tmp->m_reg.reg = reg.get();
+          pr_tmp->next = tmp;
+          nums_pseudo_regs++;
+        }
+    }
+
+  return nums_pseudo_regs;
+}
+
+void
+csky_tdesc_free_pseudo_reg_list (struct pseudo_reg **m_pseudo_reg_list)
+{
+  if (*m_pseudo_reg_list == NULL)
+    return;
+  else
+    {
+      struct pseudo_reg *pr_tmp;
+      pr_tmp = *m_pseudo_reg_list;
+      *m_pseudo_reg_list  = (*m_pseudo_reg_list)->next;
+      delete (pr_tmp);
+    }
+}
+
+/* Return a pseudo_reg from m_pseudo_reg_list find by regnum.  */
+
+static struct pseudo_reg *
+csky_tdesc_get_pseudo_reg (struct gdbarch *gdbarch,
+                           struct pseudo_reg *m_pseudo_reg_list,
+                           int regnum)
+{
+  struct pseudo_reg *pr_tmp;
+  int num_pseudo_regs = gdbarch_num_pseudo_regs (gdbarch);
+
+  if ((regnum < 0) || (regnum >= num_pseudo_regs))
+    return NULL;
+
+  pr_tmp = m_pseudo_reg_list;
+  while (regnum && pr_tmp)
+    {
+      pr_tmp = pr_tmp->next;
+      regnum --;
+    }
+  return pr_tmp;
+}
+
+/* Return csky pseudo reg's name.  */
+
+const char *
+csky_tdesc_pseudo_register_name (struct gdbarch *gdbarch,
+                                 int regnum,
+                                 struct pseudo_reg *m_pseudo_reg_list)
+{
+  struct pseudo_reg *pr_tmp;
+
+  pr_tmp = csky_tdesc_get_pseudo_reg (gdbarch, m_pseudo_reg_list, regnum);
+
+  if (pr_tmp && pr_tmp->m_reg.reg)
+    return pr_tmp->m_reg.reg->name.c_str();
+  else
+    return NULL;
+}
+
+int
+csky_tdesc_get_tee_type (struct gdbarch *gdbarch,
+                         struct pseudo_reg *m_pseudo_reg_list,
+                         int regnum)
+{
+  struct pseudo_reg *pr_tmp;
+
+  pr_tmp = csky_tdesc_get_pseudo_reg (gdbarch, m_pseudo_reg_list, regnum);
+
+  if (pr_tmp && pr_tmp->m_reg.reg)
+    {
+      if (strcasecmp (pr_tmp->m_reg.reg->env.c_str(), "ree") == 0)
+        return CSKY_REE;
+      else if (strcasecmp (pr_tmp->m_reg.reg->env.c_str(), "tee") == 0)
+        return CSKY_TEE;
+      return -1;
+    }
+  else
+    return -1;
+}
+
+long
+csky_tdesc_get_pseudo_target_regnum (struct gdbarch *gdbarch,
+                                     int regnum,
+                                     struct pseudo_reg *m_pseudo_reg_list)
+{
+   struct pseudo_reg *pr_tmp;
+
+  pr_tmp = csky_tdesc_get_pseudo_reg (gdbarch, m_pseudo_reg_list, regnum);
+
+  if (pr_tmp && pr_tmp->m_reg.reg)
+    return pr_tmp->m_reg.reg->target_regnum;
+  else
+    return -1;
+}
+
+/* Return for csky pseudo register.  */
+
+struct type *
+csky_tdesc_pseudo_register_type (struct gdbarch *gdbarch,
+                                 int regno,
+                                 struct pseudo_reg *m_pseudo_reg_list)
+{
+  struct pseudo_reg *pr;
+
+  pr = csky_tdesc_get_pseudo_reg(gdbarch, m_pseudo_reg_list, regno);
+
+  if (pr == NULL)
+    return NULL;
+
+  if (pr->m_reg.type == NULL)
+    {
+      /* First check for a predefined or target defined type.  */
+      if (pr->m_reg.reg->tdesc_type)
+        pr->m_reg.type = make_gdb_type (gdbarch, pr->m_reg.reg->tdesc_type);
+
+      /* Next try size-sensitive type shortcuts.  */
+      else if (pr->m_reg.reg->type == "float")
+        {
+          if (pr->m_reg.reg->bitsize == gdbarch_float_bit (gdbarch))
+            pr->m_reg.type = builtin_type (gdbarch)->builtin_float;
+          else if (pr->m_reg.reg->bitsize == gdbarch_double_bit (gdbarch))
+            pr->m_reg.type = builtin_type (gdbarch)->builtin_double;
+          else if (pr->m_reg.reg->bitsize == gdbarch_long_double_bit (gdbarch))
+            pr->m_reg.type = builtin_type (gdbarch)->builtin_long_double;
+          else
+            {
+              warning (_("register \"%s\" has an unsupported size (%d bits)"),
+                       pr->m_reg.reg->name.c_str(), pr->m_reg.reg->bitsize);
+              pr->m_reg.type = builtin_type (gdbarch)->builtin_double;
+            }
+        }
+      else if (pr->m_reg.reg->type == "int")
+        {
+          if (pr->m_reg.reg->bitsize == gdbarch_long_bit (gdbarch))
+            pr->m_reg.type = builtin_type (gdbarch)->builtin_long;
+          else if (pr->m_reg.reg->bitsize == TARGET_CHAR_BIT)
+            pr->m_reg.type = builtin_type (gdbarch)->builtin_char;
+          else if (pr->m_reg.reg->bitsize == gdbarch_short_bit (gdbarch))
+            pr->m_reg.type = builtin_type (gdbarch)->builtin_short;
+          else if (pr->m_reg.reg->bitsize == gdbarch_int_bit (gdbarch))
+            pr->m_reg.type = builtin_type (gdbarch)->builtin_int;
+          else if (pr->m_reg.reg->bitsize == gdbarch_long_long_bit (gdbarch))
+            pr->m_reg.type = builtin_type (gdbarch)->builtin_long_long;
+          else if (pr->m_reg.reg->bitsize == gdbarch_ptr_bit (gdbarch))
+          /* A bit desperate by this point...  */
+            pr->m_reg.type = builtin_type (gdbarch)->builtin_data_ptr;
+          else
+            {
+              warning (_("register \"%s\" has an unsupported size (%d bits)"),
+                        pr->m_reg.reg->name.c_str(),  pr->m_reg.reg->bitsize);
+              pr->m_reg.type = builtin_type (gdbarch)->builtin_long;
+            }
+        }
+      if (pr->m_reg.type == NULL)
+        internal_error (__FILE__, __LINE__,
+                        "register \"%s\" has an unknown type \"%s\"",
+                         pr->m_reg.reg->name.c_str(),
+                         pr->m_reg.reg->type.c_str());
+    }
+  return pr->m_reg.type;
+}
+
+#endif

@@ -14457,6 +14457,33 @@ _ACEOF
 fi
 
 
+# Detect which type of /proc is in use, such as for Solaris.
+
+if test "${target}" = "${host}"; then
+  case "${host}" in
+  *-*-sysv4.2* | *-*-sysv5* )
+
+$as_echo "#define NEW_PROC_API 1" >>confdefs.h
+
+      ;;
+  *-*-solaris2.[6789] | *-*-solaris2.1[0-9]*)
+
+$as_echo "#define NEW_PROC_API 1" >>confdefs.h
+
+      ;;
+  esac
+fi
+
+# Add macro for where has been modified by csky
+case "${target}" in
+  riscv* )
+
+$as_echo "#define CSKYMODIFY_CONFIG 1" >>confdefs.h
+      ;;
+  *)
+      ;;
+esac
+
 if test "$ac_cv_header_sys_procfs_h" = yes; then
   { $as_echo "$as_me:${as_lineno-$LINENO}: checking for gregset_t in sys/procfs.h" >&5
 $as_echo_n "checking for gregset_t in sys/procfs.h... " >&6; }

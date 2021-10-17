@@ -181,6 +181,9 @@ tdesc_start_reg (struct gdb_xml_parser *parser,
   char *name, *group;
   const char *type;
   int bitsize, regnum, save_restore;
+#ifdef CSKYMODIFY_CONFIG
+  char *env;
+#endif
 
   int length = attributes.size ();
 
@@ -206,6 +209,12 @@ tdesc_start_reg (struct gdb_xml_parser *parser,
     save_restore = * (ULONGEST *) attributes[ix++].value.get ();
   else
     save_restore = 1;
+#ifdef CSKYMODIFY_CONFIG
+  if (ix < length && strcmp (attributes[ix].name, "env") == 0)
+    env = (char *) attributes[ix++].value.get ();
+  else
+    env = NULL;
+#endif
 
   if (strcmp (type, "int") != 0
       && strcmp (type, "float") != 0
@@ -213,8 +222,13 @@ tdesc_start_reg (struct gdb_xml_parser *parser,
     gdb_xml_error (parser, _("Register \"%s\" has unknown type \"%s\""),
 		   name, type);
 
+#ifdef CSKYMODIFY_CONFIG
+  csky_tdesc_create_reg (data->current_feature, name, regnum, save_restore,
+                         group, bitsize, type, env);
+#else
   tdesc_create_reg (data->current_feature, name, regnum, save_restore, group,
 		    bitsize, type);
+#endif
 
   data->next_regnum = regnum + 1;
 }
@@ -535,6 +549,9 @@ static const struct gdb_xml_attribute reg_attributes[] = {
   { "group", GDB_XML_AF_OPTIONAL, NULL, NULL },
   { "save-restore", GDB_XML_AF_OPTIONAL,
     gdb_xml_parse_attr_enum, gdb_xml_enums_boolean },
+#ifdef CSKYMODIFY_CONFIG
+  { "env", GDB_XML_AF_OPTIONAL, NULL, NULL },
+#endif
   { NULL, GDB_XML_AF_NONE, NULL, NULL }
 };
 

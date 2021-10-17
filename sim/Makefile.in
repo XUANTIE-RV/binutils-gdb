@@ -157,6 +157,7 @@ distclean maintainer-clean realclean:
 	rm -f Makefile config.cache config.log config.status
 
 install:
+install-strip:
 	@rootme=`pwd` ; export rootme ; \
 	for dir in . ${SUBDIRS}; do \
 		if [ "$$dir" = "." ]; then \

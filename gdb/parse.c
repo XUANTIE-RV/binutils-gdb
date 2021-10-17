@@ -684,8 +684,10 @@ handle_register:
   str.ptr++;
   write_exp_string (ps, str);
   write_exp_elt_opcode (ps, OP_REGISTER);
+#ifndef CSKYMODIFY_CONFIG
   innermost_block.update (expression_context_block,
 			  INNERMOST_BLOCK_FOR_REGISTERS);
+#endif
   return;
 }
 

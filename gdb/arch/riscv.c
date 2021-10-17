@@ -24,43 +24,28 @@
 #include "../features/riscv/64bit-cpu.c"
 #include "../features/riscv/32bit-fpu.c"
 #include "../features/riscv/64bit-fpu.c"
+#include "../features/riscv/128bit-vpu.c"
 
-/* Wrapper used by std::unordered_map to generate hash for feature set.  */
-struct riscv_gdbarch_features_hasher
-{
-  std::size_t
-  operator() (const riscv_gdbarch_features &features) const noexcept
-  {
-    return features.hash ();
-  }
-};
+#ifndef GDBSERVER
+#define STATIC_IN_GDB static
+#else
+#define STATIC_IN_GDB
+#endif
 
-/* Cache of previously seen target descriptions, indexed by the feature set
-   that created them.  */
-static std::unordered_map<riscv_gdbarch_features,
-                          target_desc *,
-                          riscv_gdbarch_features_hasher> riscv_tdesc_cache;
 
 /* See arch/riscv.h.  */
 
-const target_desc *
+STATIC_IN_GDB target_desc *
 riscv_create_target_description (struct riscv_gdbarch_features features)
 {
-  /* Have we seen this feature set before?  If we have return the same
-     target description.  GDB expects that if two target descriptions are
-     the same (in content terms) then they will actually be the same
-     instance.  This is important when trying to lookup gdbarch objects as
-     GDBARCH_LIST_LOOKUP_BY_INFO performs a pointer comparison on target
-     descriptions to find candidate gdbarch objects.  */
-  const auto it = riscv_tdesc_cache.find (features);
-  if (it != riscv_tdesc_cache.end ())
-    return it->second;
-
   /* Now we should create a new target description.  */
   target_desc *tdesc = allocate_target_description ();
 
 #ifndef IN_PROCESS_AGENT
   std::string arch_name = "riscv";
+
+  /* CSKYMIDFY_CONFIG.  */
+  std::string only_arch_name = "riscv";
 
   if (features.xlen == 4)
     arch_name.append (":rv32i");
@@ -76,7 +61,7 @@ riscv_create_target_description (struct riscv_gdbarch_features features)
   else if (features.flen == 16)
     arch_name.append ("q");
 
-  set_tdesc_architecture (tdesc, arch_name.c_str ());
+  set_tdesc_architecture (tdesc, only_arch_name.c_str ());
 #endif
 
   long regnum = 0;
@@ -93,8 +78,48 @@ riscv_create_target_description (struct riscv_gdbarch_features features)
   else if (features.flen == 8)
     regnum = create_feature_riscv_64bit_fpu (tdesc, regnum);
 
+  /* If T-HEAD vector128 support.  */
+  if (features.vlen == 128)
+    regnum = create_feature_riscv_128bit_vpu (tdesc, regnum);
+
+  return tdesc;
+}
+
+
+#ifndef GDBSERVER
+
+/* Wrapper used by std::unordered_map to generate hash for feature set.  */
+struct riscv_gdbarch_features_hasher
+{
+  std::size_t
+  operator() (const riscv_gdbarch_features &features) const noexcept
+  {
+    return features.hash ();
+  }
+};
+
+/* Cache of previously seen target descriptions, indexed by the feature set
+   that created them.  */
+static std::unordered_map<riscv_gdbarch_features,
+                          const target_desc *,
+                          riscv_gdbarch_features_hasher> riscv_tdesc_cache;
+
+/* See arch/riscv.h.  */
+
+const target_desc *
+riscv_lookup_target_description (const struct riscv_gdbarch_features features)
+{
+  /* Lookup in the cache.  */
+  const auto it = riscv_tdesc_cache.find (features);
+  if (it != riscv_tdesc_cache.end ())
+    return it->second;
+
+  target_desc *tdesc = riscv_create_target_description (features);
+
   /* Add to the cache.  */
   riscv_tdesc_cache.emplace (features, tdesc);
 
   return tdesc;
 }
+
+#endif /* !GDBSERVER */

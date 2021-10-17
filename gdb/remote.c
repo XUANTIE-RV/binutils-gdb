@@ -14791,7 +14791,6 @@ stepping is supported by the target.  The default is on."),
 			   show_range_stepping,
 			   &setlist,
 			   &showlist);
-
   /* Eventually initialize fileio.  See fileio.c */
   initialize_remote_fileio (remote_set_cmdlist, remote_show_cmdlist);
 

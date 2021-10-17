@@ -37,6 +37,11 @@ static inline unsigned int riscv_insn_length (insn_t insn)
     return 6;
   if ((insn & 0x7f) == 0x3f) /* 64-bit extensions.  */
     return 8;
+
+  /* For P extension.  */
+  if ((insn & 0x7f) == 0x7f) /* 64-bit extensions.  */
+    return 4;
+
   /* Longer instructions not supported at the moment.  */
   return 2;
 }
@@ -50,6 +55,24 @@ static const char * const riscv_pred_succ[16] =
 {
   0,   "w",  "r",  "rw",  "o",  "ow",  "or",  "orw",
   "i", "iw", "ir", "irw", "io", "iow", "ior", "iorw"
+};
+
+/* List of vsetvli vsew constants.  */
+static const char * const riscv_vsew[5] =
+{
+  "e8", "e16", "e32", "e64", "e128"
+};
+
+/* List of vsetvli vlmul constants.  */
+static const char * const riscv_vlen[4] =
+{
+  "m1", "m2", "m4", "m8"
+};
+
+/* List of vsetvli vediv constants.  */
+static const char * const riscv_vediv[4] =
+{
+  "d1", "d2", "d4", "d8"
 };
 
 #define RVC_JUMP_BITS 11
@@ -99,6 +122,22 @@ static const char * const riscv_pred_succ[16] =
   ((RV_X(x, 3, 2) << 1) | (RV_X(x, 10, 2) << 3) | (RV_X(x, 2, 1) << 5) | (RV_X(x, 5, 2) << 6) | (-RV_X(x, 12, 1) << 8))
 #define EXTRACT_RVC_J_IMM(x) \
   ((RV_X(x, 3, 3) << 1) | (RV_X(x, 11, 1) << 4) | (RV_X(x, 2, 1) << 5) | (RV_X(x, 7, 1) << 6) | (RV_X(x, 6, 1) << 7) | (RV_X(x, 9, 2) << 8) | (RV_X(x, 8, 1) << 10) | (-RV_X(x, 12, 1) << 11))
+#define EXTRACT_T_HEAD_EXT_MIMM(x) \
+  (RV_X(x, 26, 6))
+#define EXTRACT_T_HEAD_EXT_LIMM(x) \
+  (RV_X(x, 20, 6))
+#define EXTRACT_T_HEAD_LR_IMM(x) \
+  (RV_X(x, 25, 2))
+#define EXTRACT_T_HEAD_IMM(x,nbit,at) \
+  (RV_X(x, at, nbit))
+#define EXTRACT_RVV_VI_IMM(x) \
+  (RV_X(x, 15, 5) | (-RV_X(x, 19, 1) << 5))
+#define EXTRACT_RVV_VI_UIMM(x) \
+  (RV_X(x, 15, 5))
+#define EXTRACT_RVV_OFFSET(x) \
+  (RV_X(x, 29, 3))
+#define EXTRACT_RVV_VC_IMM(x) \
+  (RV_X(x, 20, 11))
 
 #define ENCODE_ITYPE_IMM(x) \
   (RV_X(x, 0, 12) << 20)
@@ -138,6 +177,16 @@ static const char * const riscv_pred_succ[16] =
   ((RV_X(x, 1, 2) << 3) | (RV_X(x, 3, 2) << 10) | (RV_X(x, 5, 1) << 2) | (RV_X(x, 6, 2) << 5) | (RV_X(x, 8, 1) << 12))
 #define ENCODE_RVC_J_IMM(x) \
   ((RV_X(x, 1, 3) << 3) | (RV_X(x, 4, 1) << 11) | (RV_X(x, 5, 1) << 2) | (RV_X(x, 6, 1) << 7) | (RV_X(x, 7, 1) << 6) | (RV_X(x, 8, 2) << 9) | (RV_X(x, 10, 1) << 8) | (RV_X(x, 11, 1) << 12))
+#define ENCODE_T_HEAD_EXT_MIMM(x) \
+  (RV_X(x, 0, 6) << 26)
+#define ENCODE_T_HEAD_EXT_LIMM(x) \
+  (RV_X(x, 0, 6) << 20)
+#define ENCODE_T_HEAD_LR_IMM(x) \
+  (RV_X(x, 0, 2) << 25)
+#define ENCODE_T_HEAD_IMM(x,nbit,at) \
+  (RV_X(x, 0, nbit) << at)
+#define ENCODE_RVV_VC_IMM(x) \
+  (RV_X(x, 0, 11) << 20)
 
 #define VALID_ITYPE_IMM(x) (EXTRACT_ITYPE_IMM(ENCODE_ITYPE_IMM(x)) == (x))
 #define VALID_STYPE_IMM(x) (EXTRACT_STYPE_IMM(ENCODE_STYPE_IMM(x)) == (x))
@@ -158,6 +207,11 @@ static const char * const riscv_pred_succ[16] =
 #define VALID_RVC_SDSP_IMM(x) (EXTRACT_RVC_SDSP_IMM(ENCODE_RVC_SDSP_IMM(x)) == (x))
 #define VALID_RVC_B_IMM(x) (EXTRACT_RVC_B_IMM(ENCODE_RVC_B_IMM(x)) == (x))
 #define VALID_RVC_J_IMM(x) (EXTRACT_RVC_J_IMM(ENCODE_RVC_J_IMM(x)) == (x))
+#define VALID_RVV_VC_IMM(x) (EXTRACT_RVV_VC_IMM(ENCODE_RVV_VC_IMM(x)) == (x))
+#define VALID_T_HEAD_EXT_MIMM(x) (EXTRACT_T_HEAD_EXT_MIMM(ENCODE_T_HEAD_EXT_MIMM(x)) == (x))
+#define VALID_T_HEAD_EXT_LIMM(x) (EXTRACT_T_HEAD_EXT_LIMM(ENCODE_T_HEAD_EXT_LIMM(x)) == (x))
+#define VALID_T_HEAD_LR_IMM(x) (EXTRACT_T_HEAD_LR_IMM(ENCODE_T_HEAD_LR_IMM(x)) == (x))
+#define VALID_T_HEAD_EXT_IMM(x,nbit,at) (EXTRACT_T_HEAD_IMM(ENCODE_T_HEAD_IMM(x,nbit,at),nbit,at) == (x))
 
 #define RISCV_RTYPE(insn, rd, rs1, rs2) \
   ((MATCH_ ## insn) | ((rd) << OP_SH_RD) | ((rs1) << OP_SH_RS1) | ((rs2) << OP_SH_RS2))
@@ -255,6 +309,50 @@ static const char * const riscv_pred_succ[16] =
 #define OP_SH_CFUNCT3          13
 #define OP_MASK_CFUNCT2                0x3
 #define OP_SH_CFUNCT2          5
+/* T-HEAD extended fields.  */
+#define OP_MASK_T_HEAD_EXT_MSB 0x3f
+#define OP_SH_T_HEAD_EXT_MSB   26
+#define OP_MASK_T_HEAD_EXT_LSB 0x3f
+#define OP_SH_T_HEAD_EXT_LSB   20
+#define OP_MASK_T_HEAD_LR_IMM  0x3
+#define OP_SH_T_HEAD_LR_IMM    25
+
+/* RVV fields.  */
+
+#define OP_MASK_VD		0x1f
+#define OP_SH_VD		7
+#define OP_MASK_VS1		0x1f
+#define OP_SH_VS1		15
+#define OP_MASK_VS2		0x1f
+#define OP_SH_VS2		20
+#define OP_MASK_VIMM		0x1f
+#define OP_SH_VIMM		15
+#define OP_MASK_VMASK		0x1
+#define OP_SH_VMASK		25
+#define OP_MASK_VFUNCT6		0x3f
+#define OP_SH_VFUNCT6		26
+
+#define OP_MASK_VLMUL		0x3
+#define OP_SH_VLMUL		0
+#define OP_MASK_VSEW		0x7
+#define OP_SH_VSEW		2
+#define OP_MASK_VEDIV		0x3
+#define OP_SH_VEDIV		5
+#define OP_MASK_VTYPE_RES	0xf
+#define OP_SH_VTYPE_RES		7
+
+#define OP_MASK_VWD		0x1
+#define OP_SH_VWD		26
+
+/* RVP fields.  */
+#define OP_MASK_PD              0x1f
+#define OP_SH_PD                7
+#define OP_MASK_PS1             0x1f
+#define OP_SH_PS1               15
+#define OP_MASK_PS2             0x1f
+#define OP_SH_PS2               20
+#define OP_MASK_PS3             0x1f
+#define OP_SH_PS3               27
 
 /* ABI names for selected x-registers.  */
 
@@ -269,6 +367,8 @@ static const char * const riscv_pred_succ[16] =
 
 #define NGPR 32
 #define NFPR 32
+#define NVECR 32
+#define NVECM 1
 
 /* These fake label defines are use by both the assembler, and
    libopcodes.  The assembler uses this when it needs to generate a fake
@@ -292,7 +392,7 @@ static const char * const riscv_pred_succ[16] =
   EXTRACT_BITS ((INSN), OP_MASK_##FIELD, OP_SH_##FIELD)
 
 /* The maximal number of subset can be required. */
-#define MAX_SUBSET_NUM 4
+#define MAX_SUBSET_NUM 8
 
 /* This structure holds information for a particular instruction.  */
 
@@ -304,7 +404,7 @@ struct riscv_opcode
   unsigned xlen_requirement;
   /* An array of ISA subset name (I, M, A, F, D, Xextension), must ended
      with a NULL pointer sential.  */
-  const char *subset[MAX_SUBSET_NUM];
+  const char *subset[MAX_SUBSET_NUM][MAX_SUBSET_NUM];
   /* A string describing the arguments for this instruction.  */
   const char *args;
   /* The basic opcode for the instruction.  When assembling, this
@@ -354,6 +454,11 @@ struct riscv_opcode
 #define INSN_8_BYTE		0x00000040
 #define INSN_16_BYTE		0x00000050
 
+/* The intruction has bugs, it need fixup in bintuils. */
+#define INSN_BUGFIX             0xffff0000
+#define IS_INSN_BUGFIX(info)    ((info & 0xffffff00) == INSN_BUGFIX)
+
+
 /* Instruction is actually a macro.  It should be ignored by the
    disassembler, and requires special treatment by the assembler.  */
 #define INSN_MACRO		0xffffffff
@@ -383,15 +488,20 @@ enum
   M_SH,
   M_SW,
   M_SD,
+  M_FLH,
   M_FLW,
   M_FLD,
   M_FLQ,
+  M_FSH,
   M_FSW,
   M_FSD,
   M_FSQ,
   M_CALL,
   M_J,
   M_LI,
+  M_VMSGE,
+  M_VMSGEU,
+  M_SWAP16,
   M_NUM_MACROS
 };
 
@@ -400,8 +510,12 @@ extern const char * const riscv_gpr_names_numeric[NGPR];
 extern const char * const riscv_gpr_names_abi[NGPR];
 extern const char * const riscv_fpr_names_numeric[NFPR];
 extern const char * const riscv_fpr_names_abi[NFPR];
+extern const char * const riscv_vecr_names_numeric[NVECR];
+extern const char * const riscv_vecm_names_numeric[NVECM];
 
 extern const struct riscv_opcode riscv_opcodes[];
 extern const struct riscv_opcode riscv_insn_types[];
+/* THEAD Extensions.  */
+extern const struct riscv_opcode riscv_thead_opcodes[];
 
 #endif /* _RISCV_H_ */

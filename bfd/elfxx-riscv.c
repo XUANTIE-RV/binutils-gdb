@@ -1103,7 +1103,7 @@ riscv_parsing_subset_version (riscv_parse_subset_t *rps,
 const char *
 riscv_supported_std_ext (void)
 {
-  return "mafdqlcbjtpvn";
+  return "mafdqlcbjtpvnh";
 }
 
 /* Parsing function for standard extensions.
@@ -1193,7 +1193,7 @@ riscv_parse_std_ext (riscv_parse_subset_t *rps,
     {
       char subset[2] = {0, 0};
 
-      if (*p == 'x' || *p == 's')
+      if (*p == 'x' || *p == 's' || *p == 'z')
 	break;
 
       if (*p == '_')
@@ -1294,6 +1294,75 @@ riscv_parse_sv_or_non_std_ext (riscv_parse_subset_t *rps,
 
       *q = '\0';
 
+      if (strcmp (subset, "xcki") == 0)
+        riscv_add_subset (rps->subset_list, "xthead", 2, 0);
+      riscv_add_subset (rps->subset_list, subset, major_version, minor_version);
+      free (subset);
+      p += end_of_version - subset;
+
+      if (*p != '\0' && *p != '_')
+	{
+	  rps->error_handler ("-march=%s: %s must seperate with _",
+			      march, ext_type_str);
+	  return NULL;
+	}
+    }
+
+  return p;
+}
+
+/* Parsing function for non-standard and supervisor extensions.
+
+   Return Value:
+     Points to the end of extensions.
+
+   Arguments:
+     `rps`: Hooks and status for parsing subset.
+     `march`: Full arch string.
+     `p`: Curent parsing position.
+     `ext_type`: What kind of extensions, 'x', 's' or 'sx'.
+     `ext_type_str`: Full name for kind of extension.  */
+
+static const char *
+riscv_parse_z_ext (riscv_parse_subset_t *rps,
+                   const char *march,
+                   const char *p,
+                   const char *ext_type,
+                   const char *ext_type_str)
+{
+  unsigned major_version = 0;
+  unsigned minor_version = 0;
+  size_t ext_type_len = strlen (ext_type);
+
+  while (*p)
+    {
+      if (*p == '_')
+	{
+	  p++;
+	  continue;
+	}
+
+      if (strncmp (p, ext_type, ext_type_len) != 0)
+	break;
+
+      char *subset = xstrdup (p);
+      char *q = subset;
+      const char *end_of_version;
+
+      while (*++q != '\0' && *q != '_')
+	;
+
+      end_of_version =
+	riscv_parsing_subset_version (
+	  rps,
+	  march,
+	  q, &major_version, &minor_version,
+	  /* default_major_version= */ 2,
+	  /* default_minor_version= */ 0,
+	  /* std_ext_p= */FALSE);
+
+      *q = '\0';
+
       riscv_add_subset (rps->subset_list, subset, major_version, minor_version);
       free (subset);
       p += end_of_version - subset;
@@ -1344,6 +1413,12 @@ riscv_parse_subset (riscv_parse_subset_t *rps,
   /* Parsing standard extension.  */
   p = riscv_parse_std_ext (rps, arch, p);
 
+  if (p == NULL)
+    return FALSE;
+
+  /* Parsing Z extension.  */
+  p = riscv_parse_z_ext (
+	rps, arch, p, "z", "Z extension");
   if (p == NULL)
     return FALSE;
 

@@ -172,6 +172,7 @@ SFILES = \
 	$(srcdir)/linux-mips-low.c \
 	$(srcdir)/linux-nios2-low.c \
 	$(srcdir)/linux-ppc-low.c \
+	$(srcdir)/linux-riscv-low.c \
 	$(srcdir)/linux-s390-low.c \
 	$(srcdir)/linux-sh-low.c \
 	$(srcdir)/linux-sparc-low.c \
@@ -183,6 +184,7 @@ SFILES = \
 	$(srcdir)/proc-service.list \
 	$(srcdir)/regcache.c \
 	$(srcdir)/remote-utils.c \
+	$(srcdir)/riscv-linux-tdesc.c \
 	$(srcdir)/server.c \
 	$(srcdir)/symbol.c \
 	$(srcdir)/target.c \
@@ -197,6 +199,7 @@ SFILES = \
 	$(srcdir)/arch/arm-get-next-pcs.c \
 	$(srcdir)/arch/arm-linux.c \
 	$(srcdir)/arch/ppc-linux-common.c \
+	$(srcdir)/arch/riscv.c \
 	$(srcdir)/common/btrace-common.c \
 	$(srcdir)/common/buffer.c \
 	$(srcdir)/common/cleanups.c \

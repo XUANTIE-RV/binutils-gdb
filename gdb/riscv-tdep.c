@@ -134,6 +134,7 @@ struct riscv_register_feature
 static const struct riscv_register_feature riscv_xreg_feature =
 {
  "org.gnu.gdb.riscv.cpu",
+#ifndef CSKYMODIFY_CONFIG
  {
    { RISCV_ZERO_REGNUM + 0, { "zero", "x0" }, true },
    { RISCV_ZERO_REGNUM + 1, { "ra", "x1" }, true },
@@ -169,6 +170,43 @@ static const struct riscv_register_feature riscv_xreg_feature =
    { RISCV_ZERO_REGNUM + 31, { "t6", "x31" }, true },
    { RISCV_ZERO_REGNUM + 32, { "pc" }, true }
  }
+#else
+ {
+   { RISCV_ZERO_REGNUM + 0, { "zero", "x0" },     true },
+   { RISCV_ZERO_REGNUM + 1, { "ra", "x1" },       true },
+   { RISCV_ZERO_REGNUM + 2, { "sp", "x2" },       true },
+   { RISCV_ZERO_REGNUM + 3, { "gp", "x3" },       true },
+   { RISCV_ZERO_REGNUM + 4, { "tp", "x4" },       true },
+   { RISCV_ZERO_REGNUM + 5, { "t0", "x5" },       true },
+   { RISCV_ZERO_REGNUM + 6, { "t1", "x6" },       true },
+   { RISCV_ZERO_REGNUM + 7, { "t2", "x7" },       true },
+   { RISCV_ZERO_REGNUM + 8, { "fp", "x8", "s0" }, true },
+   { RISCV_ZERO_REGNUM + 9, { "s1", "x9" },       false },
+   { RISCV_ZERO_REGNUM + 10, { "a0", "x10" },     false },
+   { RISCV_ZERO_REGNUM + 11, { "a1", "x11" },     false },
+   { RISCV_ZERO_REGNUM + 12, { "a2", "x12" },     false },
+   { RISCV_ZERO_REGNUM + 13, { "a3", "x13" },     false },
+   { RISCV_ZERO_REGNUM + 14, { "a4", "x14" },     false },
+   { RISCV_ZERO_REGNUM + 15, { "a5", "x15" },     false },
+   { RISCV_ZERO_REGNUM + 16, { "a6", "x16" },     false },
+   { RISCV_ZERO_REGNUM + 17, { "a7", "x17" },     false },
+   { RISCV_ZERO_REGNUM + 18, { "s2", "x18" },     false },
+   { RISCV_ZERO_REGNUM + 19, { "s3", "x19" },     false },
+   { RISCV_ZERO_REGNUM + 20, { "s4", "x20" },     false },
+   { RISCV_ZERO_REGNUM + 21, { "s5", "x21" },     false },
+   { RISCV_ZERO_REGNUM + 22, { "s6", "x22" },     false },
+   { RISCV_ZERO_REGNUM + 23, { "s7", "x23" },     false },
+   { RISCV_ZERO_REGNUM + 24, { "s8", "x24" },     false },
+   { RISCV_ZERO_REGNUM + 25, { "s9", "x25" },     false },
+   { RISCV_ZERO_REGNUM + 26, { "s10", "x26" },    false },
+   { RISCV_ZERO_REGNUM + 27, { "s11", "x27" },    false },
+   { RISCV_ZERO_REGNUM + 28, { "t3", "x28" },     false },
+   { RISCV_ZERO_REGNUM + 29, { "t4", "x29" },     false },
+   { RISCV_ZERO_REGNUM + 30, { "t5", "x30" },     false },
+   { RISCV_ZERO_REGNUM + 31, { "t6", "x31" },     false },
+   { RISCV_ZERO_REGNUM + 32, { "pc" },            true }
+ }
+#endif
 };
 
 /* The f-registers feature set.  */
@@ -210,10 +248,15 @@ static const struct riscv_register_feature riscv_freg_feature =
    { RISCV_FIRST_FP_REGNUM + 30, { "ft10", "f30" }, true },
    { RISCV_FIRST_FP_REGNUM + 31, { "ft11", "f31" }, true },
 
+#ifndef CSKYMODIFY_CONFIG
    { RISCV_CSR_FFLAGS_REGNUM, { "fflags" }, true },
    { RISCV_CSR_FRM_REGNUM, { "frm" }, true },
    { RISCV_CSR_FCSR_REGNUM, { "fcsr" }, true },
-
+#else
+   { RISCV_CSR_FFLAGS_REGNUM, { "fflags" }, false },
+   { RISCV_CSR_FRM_REGNUM, { "frm" }, false },
+   { RISCV_CSR_FCSR_REGNUM, { "fcsr" }, false },
+#endif
  }
 };
 
@@ -259,6 +302,55 @@ riscv_create_csr_aliases ()
       reg.names.push_back (alias);
     }
 }
+
+#ifdef CSKYMODIFY_CONFIG
+/* The v-registers feature set.  */
+
+static const struct riscv_register_feature riscv_vreg_feature =
+{
+ "org.gnu.gdb.riscv.vpu",
+ {
+   { RISCV_FIRST_VP_REGNUM + 0, { "v0" }, true },
+   { RISCV_FIRST_VP_REGNUM + 1, { "v1" }, true },
+   { RISCV_FIRST_VP_REGNUM + 2, { "v2" }, true },
+   { RISCV_FIRST_VP_REGNUM + 3, { "v3" }, true },
+   { RISCV_FIRST_VP_REGNUM + 4, { "v4" }, true },
+   { RISCV_FIRST_VP_REGNUM + 5, { "v5" }, true },
+   { RISCV_FIRST_VP_REGNUM + 6, { "v6" }, true },
+   { RISCV_FIRST_VP_REGNUM + 7, { "v7" }, true },
+   { RISCV_FIRST_VP_REGNUM + 8, { "v8" }, true },
+   { RISCV_FIRST_VP_REGNUM + 9, { "v9" }, true },
+   { RISCV_FIRST_VP_REGNUM + 10, { "v10" }, true },
+   { RISCV_FIRST_VP_REGNUM + 11, { "v11" }, true },
+   { RISCV_FIRST_VP_REGNUM + 12, { "v12" }, true },
+   { RISCV_FIRST_VP_REGNUM + 13, { "v13" }, true },
+   { RISCV_FIRST_VP_REGNUM + 14, { "v14" }, true },
+   { RISCV_FIRST_VP_REGNUM + 15, { "v15" }, true },
+   { RISCV_FIRST_VP_REGNUM + 16, { "v16" }, false },
+   { RISCV_FIRST_VP_REGNUM + 17, { "v17" }, false },
+   { RISCV_FIRST_VP_REGNUM + 18, { "v18" }, false },
+   { RISCV_FIRST_VP_REGNUM + 19, { "v19" }, false },
+   { RISCV_FIRST_VP_REGNUM + 20, { "v20" }, false },
+   { RISCV_FIRST_VP_REGNUM + 21, { "v21" }, false },
+   { RISCV_FIRST_VP_REGNUM + 22, { "v22" }, false },
+   { RISCV_FIRST_VP_REGNUM + 23, { "v23" }, false },
+   { RISCV_FIRST_VP_REGNUM + 24, { "v24" }, false },
+   { RISCV_FIRST_VP_REGNUM + 25, { "v25" }, false },
+   { RISCV_FIRST_VP_REGNUM + 26, { "v26" }, false },
+   { RISCV_FIRST_VP_REGNUM + 27, { "v27" }, false },
+   { RISCV_FIRST_VP_REGNUM + 28, { "v28" }, false },
+   { RISCV_FIRST_VP_REGNUM + 29, { "v29" }, false },
+   { RISCV_FIRST_VP_REGNUM + 30, { "v30" }, false },
+   { RISCV_FIRST_VP_REGNUM + 31, { "v31" }, false },
+
+   { RISCV_CSR_VSTART_REGNUM,{ "vstart" }, false },
+   { RISCV_CSR_VXSAT_REGNUM, { "vxsat" },  false },
+   { RISCV_CSR_VXRM_REGNUM,  { "vxrm" },   false },
+   { RISCV_CSR_VL_REGNUM,    { "vl" },     false },
+   { RISCV_CSR_VTYPE_REGNUM, { "vtype" },  false },
+ }
+};
+#endif
 
 /* Controls whether we place compressed breakpoints or not.  When in auto
    mode GDB tries to determine if the target supports compressed
@@ -2776,6 +2868,10 @@ riscv_frame_cache (struct frame_info *this_frame, void **this_cache)
   /* Scan the prologue, filling in the cache.  */
   start_addr = get_frame_func (this_frame);
   pc = get_frame_pc (this_frame);
+#ifdef CSKYMODIFY_CONFIG
+  if (start_addr == 0)
+    start_addr = pc;
+#endif
   riscv_scan_prologue (gdbarch, start_addr, pc, cache);
 
   /* We can now calculate the frame base address.  */
@@ -2937,7 +3033,7 @@ riscv_find_default_target_description (const struct gdbarch_info info)
     features.xlen = 8;
 
   /* Now build a target description based on the feature set.  */
-  return riscv_create_target_description (features);
+  return riscv_lookup_target_description (features);
 }
 
 /* All of the registers in REG_SET are checked for in FEATURE, TDESC_DATA
@@ -3052,6 +3148,10 @@ riscv_gdbarch_init (struct gdbarch_info info,
     = tdesc_find_feature (tdesc, riscv_virtual_feature.name);
   const struct tdesc_feature *feature_csr
     = tdesc_find_feature (tdesc, riscv_csr_feature.name);
+#ifdef CSKYMODIFY_CONFIG
+  const struct tdesc_feature *feature_vpu
+    = tdesc_find_feature (tdesc, riscv_vreg_feature.name);
+#endif
 
   if (feature_cpu == NULL)
     return NULL;
@@ -3107,6 +3207,11 @@ riscv_gdbarch_init (struct gdbarch_info info,
   if (feature_csr)
     riscv_check_tdesc_feature (tdesc_data, feature_csr,
                                &riscv_csr_feature);
+#ifdef CSKYMODIFY_CONFIG
+  if (feature_vpu)
+    riscv_check_tdesc_feature (tdesc_data, feature_vpu,
+                               &riscv_vreg_feature);
+#endif
 
   if (!valid_p)
     {
@@ -3217,7 +3322,12 @@ riscv_gdbarch_init (struct gdbarch_info info,
      This means the target description mechanism will add any target
      specific registers after this number.  This helps make debugging GDB
      just a little easier.  */
+#ifndef CSKYMODIFY_CONFIG
   set_gdbarch_num_regs (gdbarch, RISCV_LAST_REGNUM + 1);
+#else
+  /* v0-v31.  */
+  set_gdbarch_num_regs (gdbarch, RISCV_LAST_REGNUM + 1 + 32);
+#endif
 
   /* We don't have to provide the count of 0 here (its the default) but
      include this line to make it explicit that, right now, we don't have
