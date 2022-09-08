@@ -1052,11 +1052,7 @@ riscv_parsing_subset_version (riscv_parse_subset_t *rps,
 	    {
 	      /* Might be beginning of `p` extension.  */
 	      if (std_ext_p)
-		{
-		  *major_version = version;
-		  *minor_version = 0;
-		  return p;
-		}
+		break;
 	      else
 		{
 		  rps->error_handler
@@ -1095,7 +1091,7 @@ riscv_parsing_subset_version (riscv_parse_subset_t *rps,
 const char *
 riscv_supported_std_ext (void)
 {
-  return "mafdqlcbjtpvn";
+  return "mafdqlcbhjtpvn";
 }
 
 /* Parsing function for standard extensions.
@@ -1318,11 +1314,24 @@ riscv_parse_prefixed_ext (riscv_parse_subset_t *rps,
 			  const char *p,
 			  const riscv_parse_config_t *config)
 {
+  static int orders['z' - 'a' + 1] = {0};
+  static int order = 1;
   unsigned major_version = 0;
   unsigned minor_version = 0;
   const char *last_name;
+  const char *order_string = "imafdqlcbjtpvn";
   riscv_isa_ext_class_t class;
   bfd_boolean use_default_version;
+
+  if (order == 1)
+    {
+      for (int i = 0; order_string[i] != '\0'; i++)
+	{
+	  if (orders[order_string[i] - 'a'] == 0)
+	    orders[order_string[i] - 'a'] = order++;
+	}
+    }
+
 
   while (*p)
     {
@@ -1358,7 +1367,7 @@ riscv_parse_prefixed_ext (riscv_parse_subset_t *rps,
 	 For 'z', it must be known from a list and cannot simply be 'z'.  */
 
       /* Check that the extension name is well-formed.  */
-      if (!config->ext_valid_p (subset))
+      if (!config->ext_valid_p || !config->ext_valid_p (subset))
 	{
 	  rps->error_handler
 	    (_("-march=%s: Invalid or unknown %s ISA extension: '%s'"),
@@ -1378,8 +1387,51 @@ riscv_parse_prefixed_ext (riscv_parse_subset_t *rps,
 	  return NULL;
 	}
 
+      /* Check that the z extensions is before s extensions.  */
+      if ((last_name[0] == 's' && subset[0] == 'z')
+	  || (last_name[0] == 'x' && subset[0] == 's')
+	  || (last_name[0] == 'x' && subset[0] == 'z'))
+	{
+	  rps->error_handler
+	    (_("\
+	       -march=%s: %s ISA extension not in order: \'%s\' must come before \'%s\'."),
+	     march, config->prefix, subset, last_name);
+	  free (subset);
+	  return NULL;
+
+	}
+
+      /* Check that z extensions.   */
+      if (last_name[0] == 'z' && subset[0] == 'z')
+	{
+	  if (orders[last_name[1] - 'a'] >  orders[subset[1] - 'a']
+	      || (orders[last_name[1] - 'a'] ==  orders[subset[1] - 'a']
+		  && strcasecmp (last_name, subset) > 0))
+	    {
+	      rps->error_handler
+		(_("\
+-march=%s: %s ISA extension not in order: \'%s\' must come before \'%s\'."),
+		 march, config->prefix, subset, last_name);
+	      free (subset);
+	      return NULL;
+	    }
+	}
+      else if (last_name[0] == 's' && subset[0] == 's')
+	{
+	  if (orders[last_name[1] - 'a'] >  orders[subset[1] - 'a']
+	      || (orders[last_name[1] - 'a'] ==  orders[subset[1] - 'a']
+		  && strcasecmp (last_name, subset) > 0))
+	    {
+	      rps->error_handler
+		(_("\
+-march=%s: %s ISA extension not in order: \'%s\' must come before \'%s\'."),
+		 march, config->prefix, subset, last_name);
+	      free (subset);
+	      return NULL;
+	    }
+	}
       /* Check that we are in alphabetical order within the subset.  */
-      if (!strncasecmp (last_name, config->prefix, 1)
+      else if (!strncasecmp (last_name, config->prefix, 1)
 	  && strcasecmp (last_name, subset) > 0)
 	{
 	  rps->error_handler
@@ -1424,16 +1476,35 @@ riscv_parse_prefixed_ext (riscv_parse_subset_t *rps,
    Keep this list alphabetically ordered.  */
 
 static const char * const riscv_std_z_ext_strtab[] =
-  {
-    "zicsr", "zvamo", "zvlsseg", NULL
-  };
+{
+  "zicbom", "zicbop", "zicboz", "zicsr", "zihintpause",
+  "zfh",
+  "zba", "zbb", "zbc", "zbs",
+  "zpn", "zprvsfextra", "zpsfoperand",
+  "zvamo", "zvlsseg",
+  NULL
+};
 
 /* Same as `riscv_std_z_ext_strtab', but for S-class extensions.  */
 
 static const char * const riscv_std_s_ext_strtab[] =
-  {
-    NULL
-  };
+{
+  "svinval",
+  NULL,
+};
+
+/* For merge arch attr.  */
+const char * const *
+riscv_supported_std_z_ext_strtab(void)
+{
+  return riscv_std_z_ext_strtab;
+}
+
+const char * const *
+riscv_supported_std_s_ext_strtab(void)
+{
+  return riscv_std_s_ext_strtab;
+}
 
 /* For the extension EXT, search through the list of known extensions
    KNOWN_EXTS for a match, and return TRUE if found.  */
@@ -1485,8 +1556,8 @@ riscv_ext_s_valid_p (const char *arg)
 
 static const riscv_parse_config_t parse_config[] =
 {
-   {RV_ISA_CLASS_S, "s", riscv_ext_s_valid_p},
    {RV_ISA_CLASS_Z, "z", riscv_ext_z_valid_p},
+   {RV_ISA_CLASS_S, "s", riscv_ext_s_valid_p},
    {RV_ISA_CLASS_X, "x", riscv_ext_x_valid_p},
    {RV_ISA_CLASS_UNKNOWN, NULL, NULL}
 };
@@ -1519,9 +1590,15 @@ riscv_parse_subset (riscv_parse_subset_t *rps,
     }
   else
     {
-      rps->error_handler
-	(_("-march=%s: ISA string must begin with rv32 or rv64"),
-	 arch);
+      /* Arch string shouldn't be NULL or empty here.  However,
+	 it might be empty only when we failed to merge the arch
+	 string in the riscv_merge_attributes.  We have already
+	 issued the correct error message in another side, so do
+	 not issue this error when the arch string is empty.  */
+      if (strlen (arch))
+	rps->error_handler (
+	  _("-march=%s: ISA string must begin with rv32 or rv64"),
+	  arch);
       return FALSE;
     }
 

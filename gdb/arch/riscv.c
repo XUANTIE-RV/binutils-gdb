@@ -24,6 +24,7 @@
 #include "../features/riscv/64bit-cpu.c"
 #include "../features/riscv/32bit-fpu.c"
 #include "../features/riscv/64bit-fpu.c"
+#include "../features/riscv/128bit-vpu.c"
 
 #ifndef GDBSERVER
 #define STATIC_IN_GDB static
@@ -72,6 +73,10 @@ riscv_create_target_description (const struct riscv_gdbarch_features features)
     regnum = create_feature_riscv_32bit_fpu (tdesc, regnum);
   else if (features.flen == 8)
     regnum = create_feature_riscv_64bit_fpu (tdesc, regnum);
+
+  /* If T-HEAD vector128 support.  */
+  if (features.vlen == 128)
+    regnum = create_feature_riscv_128bit_vpu (tdesc, regnum);
 
   return tdesc;
 }

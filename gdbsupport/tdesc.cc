@@ -445,3 +445,31 @@ print_xml_feature::add_line (const char *fmt, ...)
   va_end (ap);
   add_line (tmp);
 }
+
+#ifdef CSKYMODIFY_CONFIG
+tdesc_reg::tdesc_reg (struct tdesc_feature *feature, const std::string &name_,
+                      int regnum, int save_restore_, const char *group_,
+                      int bitsize_, const char *type_, const char *env_)
+  : name (name_), target_regnum (regnum),
+    save_restore (save_restore_),
+    group (group_ != NULL ? group_ : ""),
+    bitsize (bitsize_),
+    type (type_ != NULL ? type_ : "<unknown>"),
+    env(env_ != NULL ? env_ : "")
+{
+  /* If the register's type is target-defined, look it up now.  We may not
+     have easy access to the containing feature when we want it later.  */
+  tdesc_type = tdesc_named_type (feature, type.c_str ());
+}
+
+void
+csky_tdesc_create_reg (struct tdesc_feature *feature, const char *name,
+                       int regnum, int save_restore, const char *group,
+                       int bitsize, const char *type, const char *env)
+{
+  tdesc_reg *reg = new tdesc_reg (feature, name, regnum, save_restore,
+                                  group, bitsize, type, env);
+
+  feature->registers.emplace_back (reg);
+}
+#endif

@@ -414,6 +414,8 @@ Options:\n\
                           for the output data column of the listing\n"));
   fprintf (stream, _("\
   @FILE                   read options from FILE\n"));
+  fprintf (stream, _("\
+  --eh-frame-sections     enable multiple .eh_frame sections (only for baremetal)\n"));
 
   md_show_usage (stream);
 
@@ -510,7 +512,8 @@ parse_args (int * pargc, char *** pargv)
       OPTION_WARN_FATAL,
       OPTION_COMPRESS_DEBUG,
       OPTION_NOCOMPRESS_DEBUG,
-      OPTION_NO_PAD_SECTIONS /* = STD_BASE + 40 */
+      OPTION_NO_PAD_SECTIONS,
+      OPTION_EH_FRAME_SECTIONS /* = STD_BASE + 41 */
     /* When you add options here, check that they do
        not collide with OPTION_MD_BASE.  See as.h.  */
     };
@@ -588,6 +591,7 @@ parse_args (int * pargc, char *** pargv)
     ,{"target-help", no_argument, NULL, OPTION_TARGET_HELP}
     ,{"traditional-format", no_argument, NULL, OPTION_TRADITIONAL_FORMAT}
     ,{"warn", no_argument, NULL, OPTION_WARN}
+    ,{"eh-frame-sections", no_argument, NULL, OPTION_EH_FRAME_SECTIONS}
   };
 
   /* Construct the option lists from the standard list and the target
@@ -1115,6 +1119,10 @@ This program has absolutely no warranty.\n"));
               as_fatal (_("--hash-size needs a numeric argument"));
 	    break;
 	  }
+
+	case OPTION_EH_FRAME_SECTIONS:
+	  flag_eh_frame_sections = 1;
+	  break;
 	}
     }
 

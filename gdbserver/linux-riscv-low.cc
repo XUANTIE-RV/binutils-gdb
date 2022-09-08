@@ -30,6 +30,13 @@
 # define NFPREG 33
 #endif
 
+#ifdef CSKYMODIFY_CONFIG
+#include "asm/ptrace.h"
+#ifndef NT_RISCV_VECTOR
+# define NT_RISCV_VECTOR 0x900
+#endif
+#endif
+
 /* Linux target op definitions for the RISC-V architecture.  */
 
 class riscv_target : public linux_process_target
@@ -158,6 +165,59 @@ riscv_store_fpregset (struct regcache *regcache, const void *buf)
   supply_register_by_name (regcache, "fcsr", regbuf);
 }
 
+#ifdef CSKYMODIFY_CONFIG
+/* Collect VPRs from REGCACHE into BUF.  */
+
+static void
+riscv_fill_vpregset (struct regcache *regcache, void *buf)
+{
+  const struct target_desc *tdesc = regcache->tdesc;
+  int regno = find_regno (tdesc, "v0");
+  int vlen = register_size (regcache->tdesc, regno);
+  gdb_byte *regbuf = (gdb_byte *) buf;
+  int i;
+
+  for (i = 0; i < 32; i++, regbuf += vlen)
+    collect_register (regcache, regno + i, regbuf);
+
+  collect_register_by_name (regcache, "vstart", regbuf);
+  regbuf += 8;
+  collect_register_by_name (regcache, "vxsat", regbuf);
+  regbuf += 8;
+  collect_register_by_name (regcache, "vxrm", regbuf);
+  regbuf += 8;
+  collect_register_by_name (regcache, "vl", regbuf);
+  regbuf += 8;
+  collect_register_by_name (regcache, "vtype", regbuf);
+}
+
+/* Supply VPRs from BUF into REGCACHE.  */
+
+static void
+riscv_store_vpregset (struct regcache *regcache, const void *buf)
+{
+  const struct target_desc *tdesc = regcache->tdesc;
+  int regno = find_regno (tdesc, "v0");
+  int vlen = register_size (regcache->tdesc, regno);
+  const gdb_byte *regbuf = (const gdb_byte *) buf;
+  int i;
+
+  for (i = 0; i < 32; i++, regbuf += vlen)
+    supply_register (regcache, regno + i, regbuf);
+
+  supply_register_by_name (regcache, "vstart", regbuf);
+  regbuf += 8;
+  supply_register_by_name (regcache, "vxsat", regbuf);
+  regbuf += 8;
+  supply_register_by_name (regcache, "vxrm", regbuf);
+  regbuf += 8;
+  supply_register_by_name (regcache, "vl", regbuf);
+  regbuf += 8;
+  supply_register_by_name (regcache, "vtype", regbuf);
+}
+
+#endif
+
 /* RISC-V/Linux regsets.  FPRs are optional and come in different sizes,
    so define multiple regsets for them marking them all as OPTIONAL_REGS
    rather than FP_REGS, so that "regsets_fetch_inferior_registers" picks
@@ -175,6 +235,11 @@ static struct regset_info riscv_regsets[] = {
   { PTRACE_GETREGSET, PTRACE_SETREGSET, NT_FPREGSET,
     sizeof (struct __riscv_mc_f_ext_state), OPTIONAL_REGS,
     riscv_fill_fpregset, riscv_store_fpregset },
+#ifdef CSKYMODIFY_CONFIG
+  { PTRACE_GETREGSET, PTRACE_SETREGSET, NT_RISCV_VECTOR,
+    sizeof (struct __riscv_v_state), OPTIONAL_REGS,
+    riscv_fill_vpregset, riscv_store_vpregset },
+#endif
   NULL_REGSET
 };
 

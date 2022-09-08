@@ -1,3 +1,27 @@
+2021-01-07  Philipp Tomsich  <prt@gnu.org>
+
+	* opcode/riscv-opc.h: Added MATCH_PAUSE, MASK_PAUSE and DECLARE_INSN
+	for pause hint instruction.
+	* opcode/riscv.h (enum riscv_insn_class): Added INSN_CLASS_ZIHINTPAUSE.
+
+2021-01-07  Claire Xenia Wolf  <claire@symbioticeda.com>
+	    Jim Wilson  <jimw@sifive.com>
+	    Andrew Waterman  <andrew@sifive.com>
+	    Maxim Blinov  <maxim.blinov@embecosm.com>
+	    Kito Cheng  <kito.cheng@sifive.com>
+	    Nelson Chu  <nelson.chu@sifive.com>
+
+2020-08-31  Alan Modra  <amodra@gmail.com>
+
+	PR 26493
+	* opcode/riscv.h (OP_MASK_CSR, OP_MASK_CUSTOM_IMM)
+	(OP_MASK_FUNCT7, OP_MASK_RS3): Make unsigned.
+
+2021-03-16  Kuan-Lin Chen  <kuanlinchentw@gmail.com>
+
+	* opcode/riscv-opc.h: Support zba, zbb and zbc extensions.
+	* opcode/riscv.h (riscv_insn_class): Add INSN_CLASS_ZB*.
+
 2020-07-22  H.J. Lu  <hongjiu.lu@intel.com>
 
 	PR ld/26262

@@ -36,10 +36,10 @@
 	vsetivli a0, 0xb, e256, m2, ta, mu
 	vsetivli a0, 0xb, e256, m2, tu, mu
 
-	vle1.v v4, (a0)
-	vle1.v v4, 0(a0)
-	vse1.v v4, (a0)
-	vse1.v v4, 0(a0)
+	vlm.v v4, (a0)
+	vlm.v v4, 0(a0)
+	vsm.v v4, (a0)
+	vsm.v v4, 0(a0)
 
 	vle8.v v4, (a0)
 	vle8.v v4, 0(a0)
@@ -2092,18 +2092,18 @@
 	vwredsum.vs v4, v8, v12, v0.t
 
 	vfredosum.vs v4, v8, v12
-	vfredsum.vs v4, v8, v12
+	vfredusum.vs v4, v8, v12
 	vfredmax.vs v4, v8, v12
 	vfredmin.vs v4, v8, v12
 	vfredosum.vs v4, v8, v12, v0.t
-	vfredsum.vs v4, v8, v12, v0.t
+	vfredusum.vs v4, v8, v12, v0.t
 	vfredmax.vs v4, v8, v12, v0.t
 	vfredmin.vs v4, v8, v12, v0.t
 
 	vfwredosum.vs v4, v8, v12
-	vfwredsum.vs v4, v8, v12
+	vfwredusum.vs v4, v8, v12
 	vfwredosum.vs v4, v8, v12, v0.t
-	vfwredsum.vs v4, v8, v12, v0.t
+	vfwredusum.vs v4, v8, v12, v0.t
 
 	# Aliases
 	vmcpy.m v4, v8
@@ -2121,14 +2121,14 @@
 	vmornot.mm v4, v8, v12
 	vmxnor.mm v4, v8, v12
 
-	vpopc.m a0, v12
+	vcpop.m a0, v12
 	vfirst.m a0, v12
 	vmsbf.m v4, v8
 	vmsif.m v4, v8
 	vmsof.m v4, v8
 	viota.m v4, v8
 	vid.v v4
-	vpopc.m a0, v12, v0.t
+	vcpop.m a0, v12, v0.t
 	vfirst.m a0, v12, v0.t
 	vmsbf.m v4, v8, v0.t
 	vmsif.m v4, v8, v0.t

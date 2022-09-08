@@ -3758,6 +3758,8 @@ dump_dwarf_section (bfd *abfd, asection *section,
 
   if (CONST_STRNEQ (name, ".gnu.linkonce.wi."))
     match = ".debug_info";
+  else if (CONST_STRNEQ (name, ".eh_frame."))
+    match = ".eh_frame";
   else
     match = name;
 

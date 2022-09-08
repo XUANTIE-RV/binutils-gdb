@@ -1,0 +1,2 @@
+
+	.attribute arch, "rv64i2p0_m2p0_a2p0_f2p0_d2p0_c2p0_b1p0_zba1p0_zbb1p0_zbc1p0_zbs1p0_xtheadc2p0"

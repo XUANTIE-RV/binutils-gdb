@@ -53,7 +53,11 @@ enum
 
   RISCV_PRIV_REGNUM = 4161,
 
-  RISCV_LAST_REGNUM = RISCV_PRIV_REGNUM
+  RISCV_V0_REGNUM,
+
+  RISCV_V31_REGNUM = RISCV_V0_REGNUM + 31,
+
+  RISCV_LAST_REGNUM = RISCV_V31_REGNUM
 };
 
 /* RiscV DWARF register numbers.  */
@@ -63,6 +67,8 @@ enum
   RISCV_DWARF_REGNUM_X31 = 31,
   RISCV_DWARF_REGNUM_F0 = 32,
   RISCV_DWARF_REGNUM_F31 = 63,
+  RISCV_DWARF_REGNUM_V0 = 96,
+  RISCV_DWARF_REGNUM_V31 = 127,
   RISCV_DWARF_REGNUM_CSR_BEGIN = 4096,
   RISCV_DWARF_REGNUM_CSR_END = 8191,
 };
@@ -96,6 +102,13 @@ struct gdbarch_tdep
   int duplicate_frm_regnum = -1;
   int duplicate_fcsr_regnum = -1;
 
+  int duplicate_vstart_regnum = -1;
+  int duplicate_vxsat_regnum = -1;
+  int duplicate_vxrm_regnum = -1;
+  int duplicate_vcsr_regnum = -1;
+  int duplicate_vl_regnum = -1;
+  int duplicate_vtype_regnum = -1;
+  int duplicate_vlenb_regnum = -1;
 };
 
 
@@ -131,5 +144,6 @@ extern int riscv_abi_flen (struct gdbarch *gdbarch);
 /* Single step based on where the current instruction will take us.  */
 extern std::vector<CORE_ADDR> riscv_software_single_step
   (struct regcache *regcache);
+
 
 #endif /* RISCV_TDEP_H */

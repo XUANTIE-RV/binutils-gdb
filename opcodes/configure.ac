@@ -311,7 +311,7 @@ if test x${all_targets} = xfalse ; then
 	bfd_pru_arch)		ta="$ta pru-dis.lo pru-opc.lo" ;;
 	bfd_pyramid_arch)	;;
 	bfd_romp_arch)		;;
-	bfd_riscv_arch)         ta="$ta riscv-dis.lo riscv-opc.lo" ;;
+	bfd_riscv_arch)         ta="$ta riscv-dis.lo riscv-opc.lo riscv-opc-v-07.lo" ;;
 	bfd_rs6000_arch)	ta="$ta ppc-dis.lo ppc-opc.lo" ;;
 	bfd_rl78_arch)		ta="$ta rl78-dis.lo rl78-decode.lo";;
 	bfd_rx_arch)		ta="$ta rx-dis.lo rx-decode.lo";;

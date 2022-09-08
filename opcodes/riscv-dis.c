@@ -32,7 +32,9 @@
 #include "bfd_stdint.h"
 #include <ctype.h>
 
+#define RISCV_VECTOR_VERSION(major,minor)  ((major << 16) | minor)
 static enum riscv_priv_spec_class default_priv_spec = PRIV_SPEC_CLASS_NONE;
+static unsigned int riscv_vector_version = RISCV_VECTOR_VERSION(1,0);
 
 struct riscv_private_data
 {
@@ -104,6 +106,13 @@ parse_riscv_dis_option (const char *option)
       if (!riscv_get_priv_spec_class (value, &default_priv_spec))
        opcodes_error_handler (_("unknown privilege spec set by %s=%s"),
                               option, value);
+    }
+  else if (strcmp (option, "vector-version") == 0)
+    {
+      if (strcmp (value, "1.0") == 0)
+	riscv_vector_version = RISCV_VECTOR_VERSION(1,0);
+      else if (strcmp (value, "0.7") == 0)
+	riscv_vector_version = RISCV_VECTOR_VERSION(0,7);
     }
   else
     {
@@ -447,6 +456,22 @@ print_insn_args (const char *d, insn_t l, bfd_vma pc, disassemble_info *info)
 		unsigned int imm_vma = EXTRACT_OPERAND (VMA, imm);
 		unsigned int imm_vtype_res = EXTRACT_OPERAND (VTYPE_RES, imm);
 
+		if (RISCV_VECTOR_VERSION(0,7) == riscv_vector_version)
+		  {
+		    unsigned int imm_vediv = EXTRACT_OPERAND (VEDIV07, imm);
+		    imm_vlmul = EXTRACT_OPERAND (VLMUL07, imm);
+		    imm_vsew = EXTRACT_OPERAND (VSEW07, imm);
+		    imm_vtype_res = EXTRACT_OPERAND (VTYPE_RES07, imm);
+		    if (imm_vsew < ARRAY_SIZE (riscv_vsew)
+			&& imm_vlmul < ARRAY_SIZE (riscv_vlen)
+			&& imm_vediv < ARRAY_SIZE (riscv_vediv)
+			&& ! imm_vtype_res)
+		      print (info->stream, "%s,%s,%s", riscv_vsew[imm_vsew],
+			     riscv_vlen[imm_vlmul], riscv_vediv[imm_vediv]);
+		    else
+		      print (info->stream, "%d", imm);
+		    break;
+		  }
 		if (imm_vsew < ARRAY_SIZE (riscv_vsew)
 		    && imm_vlmul < ARRAY_SIZE (riscv_vlmul)
 		    && imm_vta < ARRAY_SIZE (riscv_vta)
@@ -485,6 +510,116 @@ print_insn_args (const char *d, insn_t l, bfd_vma pc, disassemble_info *info)
 	    }
 	  break;
 
+	case 'f':
+	  print (info->stream, "%d", (int)EXTRACT_STYPE_IMM (l));
+	  break;
+
+	case 'X': /* T-HEAD extended.  */
+	  {
+	    switch (*++d)
+	      {
+		case '>':
+		  {
+		      int nbit = 0;
+		      int shift = 0;
+		      int at = -1;
+		      int value = l;
+		      int sign = 0;
+
+		      if (*++d == '@')
+			at= strtol (++d, &d, 10);
+
+		      /* d will puls 1 in the for loop.  */
+		      d -= 1;
+
+		      if (at != -1)
+			{
+			  value = (int)EXTRACT_T_HEAD_IMM (l, 6, at);
+			}
+		      else
+			value = 0;
+		      print (info->stream, "%d", value);
+		      break;
+		  }
+		case 'I':
+		  {
+		      int nbit = 0;
+		      int shift = 0;
+		      int at = -1;
+		      int value = l;
+		      int sign = 0;
+
+		      if (*++d == 's')
+			{
+			  sign = 1;
+			  d++;
+			}
+
+		      nbit = strtol (d, &d, 10);
+		      if (*d == 'S')
+			shift = strtol (++d, &d, 10);
+		      if (*d == '@')
+			at= strtol (++d, &d, 10);
+
+		      /* d will puls 1 in the for loop.  */
+		      d -= 1;
+
+		      if (at != - 1)
+			{
+			  value = (int)EXTRACT_T_HEAD_IMM (l, nbit, at);
+
+			  if (sign && (value & (1 << (nbit - 1))))
+			    value |= ~((1 << nbit) - 1);
+
+			  if (shift > 0)
+			    value <<= shift;
+			  else if (shift < 0)
+			    value >>= -shift;
+			}
+		      else
+			value = nbit;
+		      print (info->stream, "%d", value);
+		      break;
+		  }
+		  break;
+		case 'm':
+		  print (info->stream, "%d", (int)EXTRACT_T_HEAD_EXT_MIMM (l));
+		  break;
+		case 'l':
+		  print (info->stream, "%d", (int)EXTRACT_T_HEAD_EXT_LIMM (l));
+		  break;
+		case 'a':
+		  print (info->stream, "%d", (int)EXTRACT_T_HEAD_LR_IMM (l));
+		  break;
+		case 'P':
+		  {
+		    switch (*++d)
+		      {
+			case 'd':
+			  print (info->stream, "%s",
+				 riscv_gpr_names[EXTRACT_OPERAND (PD, l)]);
+			  break;
+			case 's':
+			  print (info->stream, "%s",
+				 riscv_gpr_names[EXTRACT_OPERAND (PS1, l)]);
+			  break;
+			case 't':
+			  print (info->stream, "%s",
+				 riscv_gpr_names[EXTRACT_OPERAND (PS2, l)]);
+			  break;
+			case 'r':
+			  print (info->stream, "%s",
+				 riscv_gpr_names[EXTRACT_OPERAND (PS3, l)]);
+			  break;
+		      }
+		  }
+		  break;
+
+		default:
+		  break;
+	      }
+	  }
+	  break;
 	default:
 	  /* xgettext:c-format */
 	  print (info->stream, _("# internal error, undefined modifier (%c)"),
@@ -504,7 +639,7 @@ riscv_disassemble_insn (bfd_vma memaddr, insn_t word, disassemble_info *info)
 {
   const struct riscv_opcode *op;
   static bfd_boolean init = 0;
-  static const struct riscv_opcode *riscv_hash[OP_MASK_OP + 1];
+  static const struct riscv_opcode *riscv_hash[OP_MASK_OP + 1] = {0};
   struct riscv_private_data *pd;
   int insnlen;
 
@@ -516,6 +651,8 @@ riscv_disassemble_insn (bfd_vma memaddr, insn_t word, disassemble_info *info)
       for (op = riscv_opcodes; op->name; op++)
 	if (!riscv_hash[OP_HASH_IDX (op->match)])
 	  riscv_hash[OP_HASH_IDX (op->match)] = op;
+
+      /* If RVV 0.7 support, update vector insns.  */
 
       init = 1;
     }
@@ -553,11 +690,11 @@ riscv_disassemble_insn (bfd_vma memaddr, insn_t word, disassemble_info *info)
   info->target = 0;
   info->target2 = 0;
 
-  op = riscv_hash[OP_HASH_IDX (word)];
-  if (op != NULL)
+  if (riscv_vector_version == RISCV_VECTOR_VERSION(0,7))
     {
       unsigned xlen = 0;
 
+      op = riscv_v_07_opcodes;
       /* If XLEN is not known, get its value from the ELF class.  */
       if (info->mach == bfd_mach_riscv64)
 	xlen = 64;
@@ -572,7 +709,7 @@ riscv_disassemble_insn (bfd_vma memaddr, insn_t word, disassemble_info *info)
       for (; op->name; op++)
 	{
 	  /* Does the opcode match?  */
-	  if (! (op->match_func) (op, word, 0, NULL))
+	  if (! (op->match_func) (op, word, 0, NULL, xlen))
 	    continue;
 	  /* Is this a pseudo-instruction and may we print it as such?  */
 	  if (no_aliases && (op->pinfo & INSN_ALIAS))
@@ -624,6 +761,76 @@ riscv_disassemble_insn (bfd_vma memaddr, insn_t word, disassemble_info *info)
 	}
     }
 
+  op = riscv_hash[OP_HASH_IDX (word)];
+  if (op != NULL)
+    {
+      unsigned xlen = 0;
+
+      /* If XLEN is not known, get its value from the ELF class.  */
+      if (info->mach == bfd_mach_riscv64)
+	xlen = 64;
+      else if (info->mach == bfd_mach_riscv32)
+	xlen = 32;
+      else if (info->section != NULL)
+	{
+	  Elf_Internal_Ehdr *ehdr = elf_elfheader (info->section->owner);
+	  xlen = ehdr->e_ident[EI_CLASS] == ELFCLASS64 ? 64 : 32;
+	}
+
+      for (; op->name; op++)
+	{
+	  /* Does the opcode match?  */
+	  if (! (op->match_func) (op, word, 0, NULL, xlen))
+	    continue;
+	  /* Is this a pseudo-instruction and may we print it as such?  */
+	  if (no_aliases && (op->pinfo & INSN_ALIAS))
+	    continue;
+	  /* Is this instruction restricted to a certain value of XLEN?  */
+	  if ((op->xlen_requirement != 0) && (op->xlen_requirement != xlen))
+	    continue;
+
+	  /* It's a match.  */
+	  (*info->fprintf_func) (info->stream, "%s", op->name);
+	  print_insn_args (op->args, word, memaddr, info);
+
+	  /* Try to disassemble multi-instruction addressing sequences.  */
+	  if (pd->print_addr != (bfd_vma)-1)
+	    {
+	      info->target = pd->print_addr;
+	      (*info->fprintf_func) (info->stream, " # ");
+	      (*info->print_address_func) (info->target, info);
+	      pd->print_addr = -1;
+	    }
+
+	  /* Finish filling out insn_info fields.  */
+	  switch (op->pinfo & INSN_TYPE)
+	    {
+	    case INSN_BRANCH:
+	      info->insn_type = dis_branch;
+	      break;
+	    case INSN_CONDBRANCH:
+	      info->insn_type = dis_condbranch;
+	      break;
+	    case INSN_JSR:
+	      info->insn_type = dis_jsr;
+	      break;
+	    case INSN_DREF:
+	      info->insn_type = dis_dref;
+	      break;
+	    default:
+	      break;
+	    }
+
+	  if (op->pinfo & INSN_DATA_SIZE)
+	    {
+	      int size = ((op->pinfo & INSN_DATA_SIZE)
+			  >> INSN_DATA_SIZE_SHIFT);
+	      info->data_size = 1 << (size - 1);
+	    }
+
+	  return insnlen;
+	}
+    }
   /* We did not find a match, so just print the instruction bits.  */
   info->insn_type = dis_noninsn;
   (*info->fprintf_func) (info->stream, "0x%llx", (unsigned long long)word);
@@ -666,6 +873,28 @@ print_insn_riscv (bfd_vma memaddr, struct disassemble_info *info)
   return riscv_disassemble_insn (memaddr, insn, info);
 }
 
+disassembler_ftype
+riscv_get_disassembler (bfd *abfd)
+{
+  if (abfd)
+    {
+      const struct elf_backend_data *backend = get_elf_backend_data (abfd);
+      const char *sec_name = NULL;
+      if (backend)
+        sec_name = get_elf_backend_data (abfd)->obj_attrs_section;
+
+      if (sec_name && bfd_get_section_by_name (abfd, sec_name) != NULL)
+	{
+	  obj_attribute *attr = elf_known_obj_attributes_proc (abfd);
+
+	  /* Check RVV 0.7.  */
+	  if (strstr(attr[Tag_RISCV_arch].s, "v0p7"))
+	      riscv_vector_version  = RISCV_VECTOR_VERSION(0,7);
+	}
+    }
+  return print_insn_riscv;
+}
+
 /* Prevent use of the fake labels that are generated as part of the DWARF
    and for relaxable relocations in the assembler.  */
 
@@ -701,5 +930,8 @@ with the -M switch (multiple options should be separated by commas):\n"));
   priv-spec=PRIV  Print the CSR according to the chosen privilege spec\n\
                   (1.9, 1.9.1, 1.10, 1.11).\n"));
 
+  fprintf (stream, _("\n\
+  vector-version=Version  Print the V extension instructions according to the chosen v-spec\n\
+                  (1.0, 0.7).\n"));
   fprintf (stream, _("\n"));
 }

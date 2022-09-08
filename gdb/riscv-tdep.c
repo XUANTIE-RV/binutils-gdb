@@ -74,6 +74,8 @@ static inline bool is_ ## INSN_NAME ## _insn (long insn) \
 #include "opcode/riscv-opc.h"
 #undef DECLARE_INSN
 
+static bool prologue_schedue = false;
+
 /* Cached information about a frame.  */
 
 struct riscv_unwind_cache
@@ -270,22 +272,22 @@ static const struct riscv_register_feature riscv_xreg_feature =
    { RISCV_ZERO_REGNUM + 13, { "a3", "x13" }, RISCV_REG_REQUIRED },
    { RISCV_ZERO_REGNUM + 14, { "a4", "x14" }, RISCV_REG_REQUIRED },
    { RISCV_ZERO_REGNUM + 15, { "a5", "x15" }, RISCV_REG_REQUIRED },
-   { RISCV_ZERO_REGNUM + 16, { "a6", "x16" }, RISCV_REG_REQUIRED },
-   { RISCV_ZERO_REGNUM + 17, { "a7", "x17" }, RISCV_REG_REQUIRED },
-   { RISCV_ZERO_REGNUM + 18, { "s2", "x18" }, RISCV_REG_REQUIRED },
-   { RISCV_ZERO_REGNUM + 19, { "s3", "x19" }, RISCV_REG_REQUIRED },
-   { RISCV_ZERO_REGNUM + 20, { "s4", "x20" }, RISCV_REG_REQUIRED },
-   { RISCV_ZERO_REGNUM + 21, { "s5", "x21" }, RISCV_REG_REQUIRED },
-   { RISCV_ZERO_REGNUM + 22, { "s6", "x22" }, RISCV_REG_REQUIRED },
-   { RISCV_ZERO_REGNUM + 23, { "s7", "x23" }, RISCV_REG_REQUIRED },
-   { RISCV_ZERO_REGNUM + 24, { "s8", "x24" }, RISCV_REG_REQUIRED },
-   { RISCV_ZERO_REGNUM + 25, { "s9", "x25" }, RISCV_REG_REQUIRED },
-   { RISCV_ZERO_REGNUM + 26, { "s10", "x26" }, RISCV_REG_REQUIRED },
-   { RISCV_ZERO_REGNUM + 27, { "s11", "x27" }, RISCV_REG_REQUIRED },
-   { RISCV_ZERO_REGNUM + 28, { "t3", "x28" }, RISCV_REG_REQUIRED },
-   { RISCV_ZERO_REGNUM + 29, { "t4", "x29" }, RISCV_REG_REQUIRED },
-   { RISCV_ZERO_REGNUM + 30, { "t5", "x30" }, RISCV_REG_REQUIRED },
-   { RISCV_ZERO_REGNUM + 31, { "t6", "x31" }, RISCV_REG_REQUIRED },
+   { RISCV_ZERO_REGNUM + 16, { "a6", "x16" }, RISCV_REG_OPTIONAL },
+   { RISCV_ZERO_REGNUM + 17, { "a7", "x17" }, RISCV_REG_OPTIONAL },
+   { RISCV_ZERO_REGNUM + 18, { "s2", "x18" }, RISCV_REG_OPTIONAL },
+   { RISCV_ZERO_REGNUM + 19, { "s3", "x19" }, RISCV_REG_OPTIONAL },
+   { RISCV_ZERO_REGNUM + 20, { "s4", "x20" }, RISCV_REG_OPTIONAL },
+   { RISCV_ZERO_REGNUM + 21, { "s5", "x21" }, RISCV_REG_OPTIONAL },
+   { RISCV_ZERO_REGNUM + 22, { "s6", "x22" }, RISCV_REG_OPTIONAL },
+   { RISCV_ZERO_REGNUM + 23, { "s7", "x23" }, RISCV_REG_OPTIONAL },
+   { RISCV_ZERO_REGNUM + 24, { "s8", "x24" }, RISCV_REG_OPTIONAL },
+   { RISCV_ZERO_REGNUM + 25, { "s9", "x25" }, RISCV_REG_OPTIONAL },
+   { RISCV_ZERO_REGNUM + 26, { "s10", "x26" }, RISCV_REG_OPTIONAL },
+   { RISCV_ZERO_REGNUM + 27, { "s11", "x27" }, RISCV_REG_OPTIONAL },
+   { RISCV_ZERO_REGNUM + 28, { "t3", "x28" }, RISCV_REG_OPTIONAL },
+   { RISCV_ZERO_REGNUM + 29, { "t4", "x29" }, RISCV_REG_OPTIONAL },
+   { RISCV_ZERO_REGNUM + 30, { "t5", "x30" }, RISCV_REG_OPTIONAL },
+   { RISCV_ZERO_REGNUM + 31, { "t6", "x31" }, RISCV_REG_OPTIONAL },
    { RISCV_ZERO_REGNUM + 32, { "pc" }, RISCV_REG_REQUIRED }
  }
 };
@@ -389,6 +391,105 @@ riscv_create_csr_aliases ()
     }
 }
 
+/* The v-registers feature set.  */
+static const struct riscv_register_feature riscv_vreg_feature =
+{
+ "org.gnu.gdb.riscv.vpu", false,
+ {
+   { RISCV_V0_REGNUM + 0, { "v0"}, RISCV_REG_REQUIRED },
+   { RISCV_V0_REGNUM + 1, { "v1"}, RISCV_REG_REQUIRED },
+   { RISCV_V0_REGNUM + 2, { "v2"}, RISCV_REG_REQUIRED },
+   { RISCV_V0_REGNUM + 3, { "v3"}, RISCV_REG_REQUIRED },
+   { RISCV_V0_REGNUM + 4, { "v4"}, RISCV_REG_REQUIRED },
+   { RISCV_V0_REGNUM + 5, { "v5"}, RISCV_REG_REQUIRED },
+   { RISCV_V0_REGNUM + 6, { "v6"}, RISCV_REG_REQUIRED },
+   { RISCV_V0_REGNUM + 7, { "v7"}, RISCV_REG_REQUIRED },
+   { RISCV_V0_REGNUM + 8, { "v8"}, RISCV_REG_REQUIRED },
+   { RISCV_V0_REGNUM + 9, { "v9"}, RISCV_REG_REQUIRED },
+   { RISCV_V0_REGNUM + 10, { "v10" }, RISCV_REG_REQUIRED },
+   { RISCV_V0_REGNUM + 11, { "v11" }, RISCV_REG_REQUIRED },
+   { RISCV_V0_REGNUM + 12, { "v12" }, RISCV_REG_REQUIRED },
+   { RISCV_V0_REGNUM + 13, { "v13" }, RISCV_REG_REQUIRED },
+   { RISCV_V0_REGNUM + 14, { "v14" }, RISCV_REG_REQUIRED },
+   { RISCV_V0_REGNUM + 15, { "v15" }, RISCV_REG_REQUIRED },
+   { RISCV_V0_REGNUM + 16, { "v16" }, RISCV_REG_REQUIRED },
+   { RISCV_V0_REGNUM + 17, { "v17" }, RISCV_REG_REQUIRED },
+   { RISCV_V0_REGNUM + 18, { "v18" }, RISCV_REG_REQUIRED },
+   { RISCV_V0_REGNUM + 19, { "v19" }, RISCV_REG_REQUIRED },
+   { RISCV_V0_REGNUM + 20, { "v20" }, RISCV_REG_REQUIRED },
+   { RISCV_V0_REGNUM + 21, { "v21" }, RISCV_REG_REQUIRED },
+   { RISCV_V0_REGNUM + 22, { "v22" }, RISCV_REG_REQUIRED },
+   { RISCV_V0_REGNUM + 23, { "v23" }, RISCV_REG_REQUIRED },
+   { RISCV_V0_REGNUM + 24, { "v24" }, RISCV_REG_REQUIRED },
+   { RISCV_V0_REGNUM + 25, { "v25" }, RISCV_REG_REQUIRED },
+   { RISCV_V0_REGNUM + 26, { "v26" }, RISCV_REG_REQUIRED },
+   { RISCV_V0_REGNUM + 27, { "v27" }, RISCV_REG_REQUIRED },
+   { RISCV_V0_REGNUM + 28, { "v28" }, RISCV_REG_REQUIRED },
+   { RISCV_V0_REGNUM + 29, { "v29" }, RISCV_REG_REQUIRED },
+   { RISCV_V0_REGNUM + 30, { "v30" }, RISCV_REG_REQUIRED },
+   { RISCV_V0_REGNUM + 31, { "v31" }, RISCV_REG_REQUIRED },
+
+   { RISCV_CSR_VSTART_REGNUM, { "vstart"}, RISCV_REG_REQUIRED_MAYBE_CSR },
+   { RISCV_CSR_VXSAT_REGNUM, { "vxsat"}, RISCV_REG_REQUIRED_MAYBE_CSR },
+   { RISCV_CSR_VXRM_REGNUM, { "vxrm"}, RISCV_REG_REQUIRED_MAYBE_CSR },
+   { RISCV_CSR_VL_REGNUM, { "vl"}, RISCV_REG_REQUIRED_MAYBE_CSR },
+   { RISCV_CSR_VTYPE_REGNUM, { "vtype"}, RISCV_REG_REQUIRED_MAYBE_CSR },
+   /* New for V extensions v1.0. The RISCV_REG_OPTIONAL could be
+      compatible with v0.7.  */
+   { RISCV_CSR_VCSR_REGNUM, { "vcsr"}, RISCV_REG_OPTIONAL},
+   { RISCV_CSR_VLENB_REGNUM, { "vlenb"}, RISCV_REG_OPTIONAL},
+ }
+};
+
+static const struct riscv_register_feature riscv_vector_feature =
+{
+ "org.gnu.gdb.riscv.vector", false,
+ {
+   { RISCV_V0_REGNUM + 0, { "v0"}, RISCV_REG_REQUIRED },
+   { RISCV_V0_REGNUM + 1, { "v1"}, RISCV_REG_REQUIRED },
+   { RISCV_V0_REGNUM + 2, { "v2"}, RISCV_REG_REQUIRED },
+   { RISCV_V0_REGNUM + 3, { "v3"}, RISCV_REG_REQUIRED },
+   { RISCV_V0_REGNUM + 4, { "v4"}, RISCV_REG_REQUIRED },
+   { RISCV_V0_REGNUM + 5, { "v5"}, RISCV_REG_REQUIRED },
+   { RISCV_V0_REGNUM + 6, { "v6"}, RISCV_REG_REQUIRED },
+   { RISCV_V0_REGNUM + 7, { "v7"}, RISCV_REG_REQUIRED },
+   { RISCV_V0_REGNUM + 8, { "v8"}, RISCV_REG_REQUIRED },
+   { RISCV_V0_REGNUM + 9, { "v9"}, RISCV_REG_REQUIRED }, 
+   { RISCV_V0_REGNUM + 10, { "v10" }, RISCV_REG_REQUIRED },
+   { RISCV_V0_REGNUM + 11, { "v11" }, RISCV_REG_REQUIRED },
+   { RISCV_V0_REGNUM + 12, { "v12" }, RISCV_REG_REQUIRED },
+   { RISCV_V0_REGNUM + 13, { "v13" }, RISCV_REG_REQUIRED },
+   { RISCV_V0_REGNUM + 14, { "v14" }, RISCV_REG_REQUIRED },
+   { RISCV_V0_REGNUM + 15, { "v15" }, RISCV_REG_REQUIRED },
+   { RISCV_V0_REGNUM + 16, { "v16" }, RISCV_REG_REQUIRED },
+   { RISCV_V0_REGNUM + 17, { "v17" }, RISCV_REG_REQUIRED },
+   { RISCV_V0_REGNUM + 18, { "v18" }, RISCV_REG_REQUIRED },
+   { RISCV_V0_REGNUM + 19, { "v19" }, RISCV_REG_REQUIRED },
+   { RISCV_V0_REGNUM + 20, { "v20" }, RISCV_REG_REQUIRED },
+   { RISCV_V0_REGNUM + 21, { "v21" }, RISCV_REG_REQUIRED },
+   { RISCV_V0_REGNUM + 22, { "v22" }, RISCV_REG_REQUIRED },
+   { RISCV_V0_REGNUM + 23, { "v23" }, RISCV_REG_REQUIRED },
+   { RISCV_V0_REGNUM + 24, { "v24" }, RISCV_REG_REQUIRED },
+   { RISCV_V0_REGNUM + 25, { "v25" }, RISCV_REG_REQUIRED },
+   { RISCV_V0_REGNUM + 26, { "v26" }, RISCV_REG_REQUIRED },
+   { RISCV_V0_REGNUM + 27, { "v27" }, RISCV_REG_REQUIRED },
+   { RISCV_V0_REGNUM + 28, { "v28" }, RISCV_REG_REQUIRED },
+   { RISCV_V0_REGNUM + 29, { "v29" }, RISCV_REG_REQUIRED },
+   { RISCV_V0_REGNUM + 30, { "v30" }, RISCV_REG_REQUIRED },
+   { RISCV_V0_REGNUM + 31, { "v31" }, RISCV_REG_REQUIRED },
+
+   { RISCV_CSR_VSTART_REGNUM, { "vstart"}, RISCV_REG_REQUIRED_MAYBE_CSR },
+   { RISCV_CSR_VXSAT_REGNUM, { "vxsat"}, RISCV_REG_REQUIRED_MAYBE_CSR },
+   { RISCV_CSR_VXRM_REGNUM, { "vxrm"}, RISCV_REG_REQUIRED_MAYBE_CSR },
+   { RISCV_CSR_VL_REGNUM, { "vl"}, RISCV_REG_REQUIRED_MAYBE_CSR },
+   { RISCV_CSR_VTYPE_REGNUM, { "vtype"}, RISCV_REG_REQUIRED_MAYBE_CSR },
+
+   /* New for V extensions v1.0. The RISCV_REG_OPTIONAL could be
+      compatible with v0.7.  */
+   { RISCV_CSR_VCSR_REGNUM, { "vcsr"}, RISCV_REG_OPTIONAL},
+   { RISCV_CSR_VLENB_REGNUM, { "vlenb"}, RISCV_REG_OPTIONAL},
+ }
+};
 /* Controls whether we place compressed breakpoints or not.  When in auto
    mode GDB tries to determine if the target supports compressed
    breakpoints, and uses them if it does.  */
@@ -405,6 +506,15 @@ show_use_compressed_breakpoints (struct ui_file *file, int from_tty,
   fprintf_filtered (file,
 		    _("Debugger's use of compressed breakpoints is set "
 		      "to %s.\n"), value);
+}
+
+static void
+show_prologue_schedue(struct ui_file *file, int from_tty,
+				 struct cmd_list_element *c,
+				 const char *value)
+{
+  fprintf_filtered (file,
+		    _("The prologue_schedue is set to %s.\n"), value);
 }
 
 /* The set and show lists for 'set riscv' and 'show riscv' prefixes.  */
@@ -504,6 +614,21 @@ riscv_is_fp_regno_p (int regno)
 {
   return (regno >= RISCV_FIRST_FP_REGNUM
 	  && regno <= RISCV_LAST_FP_REGNUM);
+}
+
+/* Return true if REGNO is a control and status register.  */
+static bool
+riscv_is_gpr_regno_p (int regno)
+{
+  return (regno >= RISCV_ZERO_REGNUM
+	  && regno < RISCV_PC_REGNUM);
+}
+
+static bool
+riscv_is_csr_regno_p (int regno)
+{
+  return (regno >= RISCV_FIRST_CSR_REGNUM
+	  && regno <= RISCV_LAST_CSR_REGNUM);
 }
 
 /* Implement the breakpoint_kind_from_pc gdbarch method.  */
@@ -632,6 +757,20 @@ riscv_register_name (struct gdbarch *gdbarch, int regnum)
     return NULL;
   if (tdep->duplicate_fcsr_regnum == regnum)
     return NULL;
+  if (tdep->duplicate_vstart_regnum == regnum)
+    return NULL;
+  if (tdep->duplicate_vxsat_regnum == regnum)
+    return NULL;
+  if (tdep->duplicate_vxrm_regnum == regnum)
+    return NULL;
+  if (tdep->duplicate_vcsr_regnum == regnum)
+    return NULL;
+  if (tdep->duplicate_vl_regnum == regnum)
+    return NULL;
+  if (tdep->duplicate_vtype_regnum == regnum)
+    return NULL;
+  if (tdep->duplicate_vlenb_regnum == regnum)
+    return NULL;
 
   /* The remaining registers are different.  For all other registers on the
      machine we prefer to see the names that the target description
@@ -733,6 +872,32 @@ riscv_register_type (struct gdbarch *gdbarch, int regnum)
                || regnum == RISCV_TP_REGNUM)
 	type = builtin_type (gdbarch)->builtin_data_ptr;
     }
+
+  /* If type is not builtin_int0, use it.  */
+  if (type->length != 0)
+    return type;
+
+  if (riscv_is_gpr_regno_p(regnum))
+    {
+      if (xlen == 4)
+        type =  builtin_type (gdbarch)->builtin_uint32;
+      else if (xlen == 8)
+        type =  builtin_type (gdbarch)->builtin_uint64;
+    }
+
+  if (riscv_is_csr_regno_p(regnum))
+    {
+      if (xlen == 4
+          || regnum == RISCV_CSR_FFLAGS_REGNUM
+          || regnum == RISCV_CSR_FRM_REGNUM
+          || regnum == RISCV_CSR_FCSR_REGNUM)
+        type = builtin_type (gdbarch)->builtin_uint32;
+      else if (xlen == 8)
+        type = builtin_type (gdbarch)->builtin_uint64;
+    }
+
+  /* FIXME: if a vector reg has no type.  */
+  /* TODO:... */
 
   return type;
 }
@@ -982,6 +1147,10 @@ riscv_register_reggroup_p (struct gdbarch  *gdbarch, int regnum,
       || gdbarch_register_name (gdbarch, regnum)[0] == '\0')
     return 0;
 
+  /* Just make gprs and pc as general_reggroup.  */
+  if (reggroup == general_reggroup)
+    return regnum < RISCV_FIRST_FP_REGNUM;
+
   if (regnum > RISCV_LAST_REGNUM)
     {
       /* Any extra registers from the CSR tdesc_feature (identified in
@@ -1006,8 +1175,8 @@ riscv_register_reggroup_p (struct gdbarch  *gdbarch, int regnum,
 
   if (reggroup == all_reggroup)
     {
-      if (regnum < RISCV_FIRST_CSR_REGNUM || regnum == RISCV_PRIV_REGNUM)
-	return 1;
+      if (regnum < RISCV_FIRST_CSR_REGNUM || regnum >= RISCV_PRIV_REGNUM)
+        return 1;
       if (riscv_is_regnum_a_named_csr (regnum))
         return 1;
       return 0;
@@ -1040,7 +1209,7 @@ riscv_register_reggroup_p (struct gdbarch  *gdbarch, int regnum,
       return 0;
     }
   else if (reggroup == vector_reggroup)
-    return 0;
+    return (regnum >= RISCV_V0_REGNUM && regnum <= RISCV_V31_REGNUM);
   else
     return 0;
 }
@@ -1472,7 +1641,7 @@ riscv_insn::decode (struct gdbarch *gdbarch, CORE_ADDR pc)
       else if (is_c_swsp_insn (ival))
 	decode_css_type_insn (SW, ival, EXTRACT_RVC_SWSP_IMM (ival));
       else if (xlen != 4 && is_c_sdsp_insn (ival))
-	decode_css_type_insn (SW, ival, EXTRACT_RVC_SDSP_IMM (ival));
+	decode_css_type_insn (SD, ival, EXTRACT_RVC_SDSP_IMM (ival));
       /* C_JR and C_MV have the same opcode.  If RS2 is 0, then this is a C_JR.
 	 So must try to match C_JR first as it ahs more bits in mask.  */
       else if (is_c_jr_insn (ival))
@@ -1511,6 +1680,8 @@ riscv_scan_prologue (struct gdbarch *gdbarch,
 {
   CORE_ADDR cur_pc, next_pc, after_prologue_pc;
   CORE_ADDR end_prologue_addr = 0;
+  int prologue_started = 0;
+  int ra_stored = 0;
 
   /* Find an upper limit on the function prologue using the debug
      information.  If the debug information could not be used to provide
@@ -1555,6 +1726,7 @@ riscv_scan_prologue (struct gdbarch *gdbarch,
           gdb_assert (insn.rs1 () < RISCV_NUM_INTEGER_REGS);
           regs[insn.rd ()]
             = pv_add_constant (regs[insn.rs1 ()], insn.imm_signed ());
+	  prologue_started = 1;
 	}
       else if ((insn.opcode () == riscv_insn::SW
 		|| insn.opcode () == riscv_insn::SD)
@@ -1571,6 +1743,8 @@ riscv_scan_prologue (struct gdbarch *gdbarch,
           stack.store (pv_add_constant (regs[insn.rs1 ()], insn.imm_signed ()),
                         (insn.opcode () == riscv_insn::SW ? 4 : 8),
                         regs[insn.rs2 ()]);
+	  if (insn.rs2() == RISCV_RA_REGNUM)
+	    ra_stored = 1;
 	}
       else if (insn.opcode () == riscv_insn::ADDI
 	       && insn.rd () == RISCV_FP_REGNUM
@@ -1631,7 +1805,9 @@ riscv_scan_prologue (struct gdbarch *gdbarch,
           gdb_assert (insn.rs2 () < RISCV_NUM_INTEGER_REGS);
           regs[insn.rd ()] = pv_add (regs[insn.rs1 ()], regs[insn.rs2 ()]);
         }
-      else
+      else if (!prologue_schedue
+	       || (prologue_started
+		   && ra_stored))
 	{
 	  end_prologue_addr = cur_pc;
 	  break;
@@ -2938,6 +3114,7 @@ riscv_frame_cache (struct frame_info *this_frame, void **this_cache)
   /* Scan the prologue, filling in the cache.  */
   start_addr = get_frame_func (this_frame);
   pc = get_frame_pc (this_frame);
+
   riscv_scan_prologue (gdbarch, start_addr, pc, cache);
 
   /* We can now calculate the frame base address.  */
@@ -3153,6 +3330,9 @@ riscv_dwarf_reg_to_regnum (struct gdbarch *gdbarch, int reg)
   else if (RISCV_DWARF_REGNUM_CSR_BEGIN <= reg && reg <= RISCV_DWARF_REGNUM_CSR_END)
     return RISCV_FIRST_CSR_REGNUM + (reg - RISCV_DWARF_REGNUM_CSR_BEGIN);
 
+  else if (reg >= RISCV_DWARF_REGNUM_V0 && reg <= RISCV_DWARF_REGNUM_V31)
+    return RISCV_V0_REGNUM + (reg - RISCV_DWARF_REGNUM_V0);
+
   return -1;
 }
 
@@ -3257,6 +3437,54 @@ riscv_tdesc_unknown_reg (struct gdbarch *gdbarch, tdesc_feature *feature,
 	}
     }
 
+  if (strcmp (tdesc_feature_name (feature), riscv_vreg_feature.name) == 0
+      || strcmp (tdesc_feature_name (feature), riscv_vector_feature.name) == 0
+      || strcmp (tdesc_feature_name (feature), riscv_csr_feature.name) == 0)
+    {
+      struct gdbarch_tdep *tdep = gdbarch_tdep (gdbarch);
+      int *regnum_ptr = nullptr;
+
+      if (strcmp (reg_name, "vstart") == 0)
+        regnum_ptr = &tdep->duplicate_vstart_regnum;
+      else if (strcmp (reg_name, "vxsat") == 0)
+        regnum_ptr = &tdep->duplicate_vxsat_regnum;
+      else if (strcmp (reg_name, "vxrm") == 0)
+        regnum_ptr = &tdep->duplicate_vxrm_regnum;
+      else if (strcmp (reg_name, "vcsr") == 0)
+        regnum_ptr = &tdep->duplicate_vcsr_regnum;
+      else if (strcmp (reg_name, "vl") == 0)
+        regnum_ptr = &tdep->duplicate_vl_regnum;
+      else if (strcmp (reg_name, "vtype") == 0)
+        regnum_ptr = &tdep->duplicate_vtype_regnum;
+      else if (strcmp (reg_name, "vlenb") == 0)
+        regnum_ptr = &tdep->duplicate_vlenb_regnum;
+
+      if (regnum_ptr != nullptr)
+        {
+          /* When csr unknwn regs will update unknown_csrs_first_regnum
+             and unknown_csrs_count later, they should update here for
+	     sync.  */
+          if (strcmp (tdesc_feature_name (feature), riscv_csr_feature.name) == 0)
+	    {
+              if (tdep->unknown_csrs_first_regnum == -1)
+                tdep->unknown_csrs_first_regnum = possible_regnum;
+              tdep->unknown_csrs_count++;
+            }
+          /* This means the register appears more than twice in the target
+             description.  Just let GDB add this as another register.
+             We'll have duplicates in the register name list, but there's
+             not much more we can do.  */
+          if (*regnum_ptr != -1)
+            return -1;
+
+          /* Record the number assigned to this register, then return the
+             number (so it actually gets assigned to this register).  */
+          *regnum_ptr = possible_regnum;
+          return possible_regnum;
+        }
+
+    }
+
   /* Any unknown registers in the CSR feature are recorded within a single
      block so we can easily identify these registers when making choices
      about register groups in riscv_register_reggroup_p.  */
@@ -3319,6 +3547,10 @@ riscv_gdbarch_init (struct gdbarch_info info,
     = tdesc_find_feature (tdesc, riscv_virtual_feature.name);
   const struct tdesc_feature *feature_csr
     = tdesc_find_feature (tdesc, riscv_csr_feature.name);
+  const struct tdesc_feature *feature_vpu
+    = tdesc_find_feature (tdesc, riscv_vreg_feature.name);
+  const struct tdesc_feature *feature_vector
+    = tdesc_find_feature (tdesc, riscv_vector_feature.name);
 
   if (feature_cpu == NULL)
     return NULL;
@@ -3393,6 +3625,14 @@ riscv_gdbarch_init (struct gdbarch_info info,
   if (feature_csr)
     riscv_check_tdesc_feature (tdesc_data, feature_csr, nullptr,
                                &riscv_csr_feature,
+                               &pending_aliases);
+  if (feature_vpu)
+    riscv_check_tdesc_feature (tdesc_data, feature_vpu, feature_csr,
+                               &riscv_vreg_feature,
+                               &pending_aliases);
+  else if (feature_vector)
+    riscv_check_tdesc_feature (tdesc_data, feature_vector, feature_csr,
+                               &riscv_vector_feature,
                                &pending_aliases);
 
   if (!valid_p)
@@ -3767,7 +4007,7 @@ initialisation process."),
 		       &showriscvcmdlist, "show riscv ", 0, &showlist);
 
 
-  use_compressed_breakpoints = AUTO_BOOLEAN_AUTO;
+  use_compressed_breakpoints = AUTO_BOOLEAN_FALSE;
   add_setshow_auto_boolean_cmd ("use-compressed-breakpoints", no_class,
 				&use_compressed_breakpoints,
 				_("\
@@ -3781,4 +4021,18 @@ this option can be used."),
 				show_use_compressed_breakpoints,
 				&setriscvcmdlist,
 				&showriscvcmdlist);
+
+  add_setshow_boolean_cmd ("prologue-schedule", no_class,
+			   &prologue_schedue,
+			   _("\
+Set analysising prologue for schedule."), _("	\
+Show anylysising prologue for schedule."), _("\
+The prologue may be scheduled in compiler, GDB can't parsing the prologue\n\
+in this situation. This option is used to enable GDB to parsing prologue with\n\
+checking the start and ra-stored. It may be not stable. Default off"),
+			   NULL,
+			   show_prologue_schedue,
+			   &setriscvcmdlist,
+			   &showriscvcmdlist);
+
 }

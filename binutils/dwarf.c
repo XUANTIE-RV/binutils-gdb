@@ -7961,7 +7961,7 @@ display_debug_frames (struct dwarf_section *section,
   Frame_Chunk *chunks = NULL, *forward_refs = NULL;
   Frame_Chunk *remembered_state = NULL;
   Frame_Chunk *rs;
-  bfd_boolean is_eh = strcmp (section->name, ".eh_frame") == 0;
+  bfd_boolean is_eh = strcmp (section->name, ".eh_frame") == 0 || const_strneq (section->name, ".eh_frame.");
   unsigned int max_regs = 0;
   const char *bad_reg = _("bad register: ");
   unsigned int saved_eh_addr_size = eh_addr_size;

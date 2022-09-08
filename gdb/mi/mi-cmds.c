@@ -162,7 +162,6 @@ static struct mi_cmd mi_cmds[] =
   DEF_MI_CMD_CLI ("target-attach", "attach", 1),
   DEF_MI_CMD_MI ("target-detach", mi_cmd_target_detach),
   DEF_MI_CMD_CLI ("target-disconnect", "disconnect", 0),
-  DEF_MI_CMD_CLI ("target-download", "load", 1),
   DEF_MI_CMD_MI ("target-file-delete", mi_cmd_target_file_delete),
   DEF_MI_CMD_MI ("target-file-get", mi_cmd_target_file_get),
   DEF_MI_CMD_MI ("target-file-put", mi_cmd_target_file_put),

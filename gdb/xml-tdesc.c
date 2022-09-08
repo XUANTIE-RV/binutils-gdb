@@ -181,7 +181,6 @@ tdesc_start_reg (struct gdb_xml_parser *parser,
   char *name, *group;
   const char *type;
   int bitsize, regnum, save_restore;
-
   int length = attributes.size ();
 
   name = (char *) attributes[ix++].value.get ();

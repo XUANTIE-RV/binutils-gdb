@@ -260,7 +260,6 @@ _start:
 	.cfi_offset tinfo, 7824
 	.cfi_offset tcontrol, 7828
 	.cfi_offset mcontext, 7840
-	.cfi_offset scontext, 7848
 	# aliases
 	.cfi_offset ubadaddr, 268
 	.cfi_offset sbadaddr, 1292

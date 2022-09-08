@@ -60,7 +60,7 @@ struct riscv_cl_insn
 #endif
 
 #ifndef DEFAULT_RISCV_ATTR
-#define DEFAULT_RISCV_ATTR 0
+#define DEFAULT_RISCV_ATTR 1
 #endif
 
 /* Let riscv_after_parse_args set the default value according to xlen.  */
@@ -231,21 +231,91 @@ riscv_multi_subset_supports (enum riscv_insn_class insn_class)
     case INSN_CLASS_D: return riscv_subset_supports ("d");
     case INSN_CLASS_D_AND_C:
       return riscv_subset_supports ("d") && riscv_subset_supports ("c");
+    case INSN_CLASS_D_AND_ZFH:
+      return riscv_subset_supports ("d") && riscv_subset_supports ("zfh");
 
     case INSN_CLASS_F_AND_C:
       return riscv_subset_supports ("f") && riscv_subset_supports ("c");
+    case INSN_CLASS_F_AND_ZFH:
+      return riscv_subset_supports ("f") && riscv_subset_supports ("zfh");
 
+    case INSN_CLASS_H: return riscv_subset_supports ("h");
     case INSN_CLASS_Q: return riscv_subset_supports ("q");
+    case INSN_CLASS_Q_AND_ZFH:
+      return riscv_subset_supports ("q") && riscv_subset_supports ("zfh");
 
-    case INSN_CLASS_V: return riscv_subset_supports ("v");
+    case INSN_CLASS_P_OR_ZPN:
+      return (riscv_subset_supports ("p")
+	      || riscv_subset_supports ("zpn"));
+    case INSN_CLASS_P_OR_ZPRVSFEXTRA:
+      return (riscv_subset_supports ("p")
+	      || riscv_subset_supports ("zprvsfextra"));
+    case INSN_CLASS_P_OR_ZPSFOPERAND:
+      return (riscv_subset_supports ("p")
+	      || riscv_subset_supports ("zpsfoperand"));
+
+    case INSN_CLASS_V_07:
+      return (riscv_lookup_subset_version (&riscv_subsets, "v", 0, 7) != NULL);
+    case INSN_CLASS_V:
+      return (riscv_lookup_subset_version (&riscv_subsets, "v", 1, 0) != NULL);
     case INSN_CLASS_V_AND_F:
-      return riscv_subset_supports ("v") && riscv_subset_supports ("f");
+      return (riscv_lookup_subset_version (&riscv_subsets, "v", 1, 0)
+	      && riscv_subset_supports ("f"));
     case INSN_CLASS_V_OR_ZVAMO:
       return (riscv_subset_supports ("a")
-	      && (riscv_subset_supports ("v")
+	      && (riscv_lookup_subset_version (&riscv_subsets, "v", 1, 0)
 		  || riscv_subset_supports ("zvamo")));
     case INSN_CLASS_V_OR_ZVLSSEG:
-      return riscv_subset_supports ("v") || riscv_subset_supports ("zvlsseg");
+      return (riscv_lookup_subset_version (&riscv_subsets, "v", 1, 0)
+	      || riscv_subset_supports ("zvlsseg"));
+
+    case INSN_CLASS_THEADC:
+      return (riscv_subset_supports ("xtheadc")
+	      || riscv_subset_supports ("xthead"));
+    case INSN_CLASS_THEADC_E:
+      return (riscv_subset_supports ("xtheadc")
+	      || riscv_subset_supports ("xtheade")
+	      || riscv_subset_supports ("xthead"));
+    case INSN_CLASS_THEADC_E_SE:
+      return (riscv_subset_supports ("xtheadc")
+	      || riscv_subset_supports ("xtheade")
+	      || riscv_subset_supports ("xtheadse")
+	      || riscv_subset_supports ("xthead"));
+    case INSN_CLASS_THEADE:
+      return (riscv_subset_supports ("xtheade")
+	      || riscv_subset_supports ("xthead"));
+    case INSN_CLASS_THEADVDOT:
+      return (riscv_lookup_subset_version (&riscv_subsets, "v", 1, 0)
+	      && riscv_subset_supports ("xtheadvdot"));
+
+    case INSN_CLASS_ZICBOM:
+      return riscv_subset_supports ("zicbom");
+    case INSN_CLASS_ZICBOZ:
+      return riscv_subset_supports ("zicboz");
+    case INSN_CLASS_ZICBOP:
+      return riscv_subset_supports ("zicbop");
+
+    case INSN_CLASS_ZICSR:
+      return riscv_subset_supports ("zicsr");
+    case INSN_CLASS_ZIFENCEI:
+      return riscv_subset_supports ("zifencei");
+    case INSN_CLASS_ZIHINTPAUSE:
+      return riscv_subset_supports ("zihintpause");
+
+    case INSN_CLASS_ZBB:
+      return riscv_subset_supports ("zbb");
+
+    case INSN_CLASS_ZBA:
+      return riscv_subset_supports ("zba");
+
+    case INSN_CLASS_ZBC:
+      return riscv_subset_supports ("zbc");
+
+    case INSN_CLASS_ZBS:
+      return riscv_subset_supports ("zbs");
+
+    case INSN_CLASS_SVINVAL:
+      return riscv_subset_supports ("svinval");
 
     default:
       as_fatal ("Unreachable");
@@ -336,6 +406,9 @@ riscv_set_arch (const char *s)
 /* Handle of the OPCODE hash table.  */
 static struct hash_control *op_hash = NULL;
 
+/* Handle of the OPCODE hash table of RVV 0.7.  */
+static struct hash_control *op_v_07_hash = NULL;
+
 /* Handle of the type of .insn hash table.  */
 static struct hash_control *insn_type_hash = NULL;
 
@@ -374,13 +447,14 @@ static bfd_boolean explicit_priv_attr = FALSE;
 
 /* Macros for encoding relaxation state for RVC branches and far jumps.  */
 #define RELAX_BRANCH_ENCODE(uncond, rvc, length)	\
-  ((relax_substateT) 					\
-   (0xc0000000						\
-    | ((uncond) ? 1 : 0)				\
-    | ((rvc) ? 2 : 0)					\
+  ((relax_substateT)					        \
+   (0xc0000000						        \
+    | ((uncond) ? 1 : 0)				        \
+    | ((rvc) ? 2 : 0)					        \
     | ((length) << 2)))
 #define RELAX_BRANCH_P(i) (((i) & 0xf0000000) == 0xc0000000)
 #define RELAX_BRANCH_LENGTH(i) (((i) >> 2) & 0xF)
+#define RELAX_BRANCH_FORCE_I(i) (((i) >> 16) & 0x1)
 #define RELAX_BRANCH_RVC(i) (((i) & 2) != 0)
 #define RELAX_BRANCH_UNCOND(i) (((i) & 1) != 0)
 
@@ -456,6 +530,19 @@ move_insn (struct riscv_cl_insn *insn, fragS *frag, long where)
       insn->fixp->fx_where = where;
     }
   install_insn (insn);
+}
+
+/* pow(2, n).  */
+static inline int pow2 (int n)
+{
+  int v = 1;
+  int i = 0;
+
+  for (i = 0; i < n; i++) {
+      v <<= 1;
+  }
+
+  return v;
 }
 
 /* Add INSN to the end of the output.  */
@@ -745,6 +832,13 @@ riscv_csr_address (const char *csr_name,
 		|| riscv_subset_supports ("zvlsseg"));
       need_check_version = FALSE;
       break;
+    case CSR_CLASS_THEAD:
+      result = (riscv_subset_supports ("theadc")
+		|| riscv_subset_supports ("theade")
+		|| riscv_subset_supports ("theadse")
+		|| riscv_subset_supports ("theadv"));
+      need_check_version = FALSE;
+      break;
     case CSR_CLASS_DEBUG:
       need_check_version = FALSE;
       break;
@@ -986,6 +1080,7 @@ validate_riscv_insn (const struct riscv_opcode *opc, int length)
       case 'a':	used_bits |= ENCODE_UJTYPE_IMM (-1U); break;
       case 'p':	used_bits |= ENCODE_SBTYPE_IMM (-1U); break;
       case 'q':	used_bits |= ENCODE_STYPE_IMM (-1U); break;
+      case 'f': used_bits |= ENCODE_STYPE_IMM (-1U); break;
       case 'u':	used_bits |= ENCODE_UTYPE_IMM (-1U); break;
       case 'z': break;
       case '[': break;
@@ -1044,6 +1139,70 @@ validate_riscv_insn (const struct riscv_opcode *opc, int length)
 	  }
 	break;
 
+      case 'X':
+	{
+	  switch (*p++)
+	    {
+	      case 'm': used_bits |= ENCODE_T_HEAD_EXT_MIMM(-1U); break;
+	      case 'l': used_bits |= ENCODE_T_HEAD_EXT_LIMM(-1U); break;
+	      case 'a': used_bits |= ENCODE_T_HEAD_LR_IMM(-1U); break;
+	      case '>':
+		{
+		  int at = -1;
+		  if (*p =='@')
+		    at = strtol(++p, (char **)&p, 10);
+		  else
+		    /* ignore.
+		     * */
+		    break;
+		  used_bits |= ENCODE_T_HEAD_IMM(-1U, 6, at);
+		  break;
+		}
+	      case 'I':
+		{
+		  int nbit = 0;
+		  int shift = 0;
+		  int at = -1;
+
+		  if (*p == 's')
+		    p++;
+
+		  nbit = strtol(p, (char **)&p, 10);
+		  if (*p == 'S')
+		    shift = strtol(++p, (char **)&p, 10);
+		  (void)shift;
+		  if (*p =='@')
+		    at = strtol(++p, (char **)&p, 10);
+		  else
+		    /* ignore.
+		     * */
+		    break;
+		  used_bits |= ENCODE_T_HEAD_IMM(-1U, nbit, at);
+		  break;
+		}
+	      case 'P': /* RV-P */
+	        switch (c = *p++)
+		  {
+		    case 'd': USE_BITS (OP_MASK_PD, OP_SH_PD); break;
+		    case 's': USE_BITS (OP_MASK_PS1, OP_SH_PS1); break;
+		    case 't': USE_BITS (OP_MASK_PS2, OP_SH_PS2); break;
+		    case 'r': USE_BITS (OP_MASK_PS3, OP_SH_PS3); break;
+		    case 'u': USE_BITS (OP_MASK_PS1, OP_SH_PS1);
+			      USE_BITS (OP_MASK_PS2, OP_SH_PS2); break;
+		    default:
+			    as_bad (_("internal: bad RISC-V opcode (unknown operand type `XP%c'): %s %s"),
+				    c, opc->name, opc->args);
+		  }
+		break;
+
+	    default:
+	      as_bad (_("internal: bad RISC-V opcode (unknown operand type `X%c'): %s %s"),
+		      c, opc->name, opc->args);
+	      return FALSE;
+	    }
+	}
+	break;
+
       default:
 	as_bad (_("internal: bad RISC-V opcode "
 		  "(unknown operand type `%c'): %s %s"),
@@ -1079,8 +1238,9 @@ init_opcode_hash (const struct riscv_opcode *opcodes,
   while (opcodes[i].name)
     {
       const char *name = opcodes[i].name;
-      const char *hash_error =
-	hash_insert (hash, name, (void *) &opcodes[i]);
+      const char *hash_error = NULL;
+
+      hash_error = hash_insert (hash, name, (void *) &opcodes[i]);
 
       if (hash_error != NULL)
 	{
@@ -1123,6 +1283,10 @@ md_begin (void)
     as_warn (_("Could not set architecture and machine"));
 
   op_hash = init_opcode_hash (riscv_opcodes, FALSE);
+  /* RVV 0.7.  */
+  if (riscv_lookup_subset_version (&riscv_subsets, "V", 0, 7) != NULL)
+    op_v_07_hash = init_opcode_hash (riscv_v_07_opcodes, FALSE);
+
   insn_type_hash = init_opcode_hash (riscv_insn_types, TRUE);
 
   reg_names_hash = hash_new ();
@@ -1194,6 +1358,7 @@ append_insn (struct riscv_cl_insn *ip, expressionS *address_expr,
 	  int j = reloc_type == BFD_RELOC_RISCV_JMP;
 	  int best_case = riscv_insn_length (ip->insn_opcode);
 	  unsigned worst_case = relaxed_branch_length (NULL, NULL, 0);
+
 	  add_relaxed_insn (ip, worst_case, best_case,
 			    RELAX_BRANCH_ENCODE (j, best_case == 2, worst_case),
 			    address_expr->X_add_symbol,
@@ -1241,15 +1406,21 @@ append_insn (struct riscv_cl_insn *ip, expressionS *address_expr,
 static void
 macro_build (expressionS *ep, const char *name, const char *fmt, ...)
 {
-  const struct riscv_opcode *mo;
+  const struct riscv_opcode *mo = NULL;
   struct riscv_cl_insn insn;
   bfd_reloc_code_real_type r;
+  expressionS ep_tmp;
   va_list args;
 
   va_start (args, fmt);
 
   r = BFD_RELOC_UNUSED;
-  mo = (struct riscv_opcode *) hash_find (op_hash, name);
+  if (riscv_lookup_subset_version (&riscv_subsets, "V", 0, 7) != NULL)
+    mo = (struct riscv_opcode *) hash_find (op_v_07_hash, name);
+
+  if (mo == NULL)
+    mo = (struct riscv_opcode *) hash_find (op_hash, name);
+
   gas_assert (mo);
 
   /* Find a non-RVC variant of the instruction.  append_insn will compress
@@ -1291,6 +1462,24 @@ macro_build (expressionS *ep, const char *name, const char *fmt, ...)
 	case ',':
 	  continue;
 
+	case 'S': /* float */
+	  INSERT_OPERAND (RS1, insn, va_arg (args, int));
+	  continue;
+
+	case 'X':
+	  {
+	    switch (*fmt++)
+	      {
+	      case 'j':
+		ep_tmp.X_op = O_constant;
+		ep_tmp.X_add_number = va_arg (args, int);
+		if (ep == NULL)
+		  ep = &ep_tmp;
+		r = va_arg (args, int);
+		break;
+	      }
+	    continue;
+	  }
 	case 'V': /* RVV */
 	  {
 	    switch (*fmt++)
@@ -1305,6 +1494,14 @@ macro_build (expressionS *ep, const char *name, const char *fmt, ...)
 
 	      case 't':
 		INSERT_OPERAND (VS2, insn, va_arg (args, int));
+		continue;
+
+	      case 'u':
+		{
+		  int reg = va_arg (args, int);
+		  INSERT_OPERAND (VS1, insn, reg);
+		  INSERT_OPERAND (VS2, insn, reg);
+		}
 		continue;
 
 	      case 'm':
@@ -1515,7 +1712,8 @@ vector_macro (struct riscv_cl_insn *ip)
       if (vtemp != 0)
 	{
 	  /* Masked.  Have vtemp to avoid overlap constraints.  */
-	  if (vd == vm)
+	  if (vd == vm
+	      || (riscv_lookup_subset_version (&riscv_subsets, "v", 0, 7) != NULL))
 	    {
 	      macro_build (NULL, "vmslt.vx", "Vd,Vt,s", vtemp, vs2, vs1);
 	      macro_build (NULL, "vmandnot.mm", "Vd,Vt,Vs", vd, vm, vtemp);
@@ -1550,7 +1748,8 @@ vector_macro (struct riscv_cl_insn *ip)
       if (vtemp != 0)
 	{
 	  /* Masked.  Have vtemp to avoid overlap constraints.  */
-	  if (vd == vm)
+	  if (vd == vm
+	      || (riscv_lookup_subset_version (&riscv_subsets, "v", 0, 7) != NULL))
 	    {
 	      macro_build (NULL, "vmsltu.vx", "Vd,Vt,s", vtemp, vs2, vs1);
 	      macro_build (NULL, "vmandnot.mm", "Vd,Vt,Vs", vd, vm, vtemp);
@@ -1657,6 +1856,11 @@ macro (struct riscv_cl_insn *ip, expressionS *imm_expr,
 		  BFD_RELOC_RISCV_PCREL_HI20, BFD_RELOC_RISCV_PCREL_LO12_I);
       break;
 
+    case M_FLH:
+      pcrel_load (rd, rs1, imm_expr, "flh",
+		  BFD_RELOC_RISCV_PCREL_HI20, BFD_RELOC_RISCV_PCREL_LO12_I);
+      break;
+
     case M_FLW:
       pcrel_load (rd, rs1, imm_expr, "flw",
 		  BFD_RELOC_RISCV_PCREL_HI20, BFD_RELOC_RISCV_PCREL_LO12_I);
@@ -1684,6 +1888,11 @@ macro (struct riscv_cl_insn *ip, expressionS *imm_expr,
 
     case M_SD:
       pcrel_store (rs2, rs1, imm_expr, "sd",
+		   BFD_RELOC_RISCV_PCREL_HI20, BFD_RELOC_RISCV_PCREL_LO12_S);
+      break;
+
+    case M_FSH:
+      pcrel_store (rs2, rs1, imm_expr, "fsh",
 		   BFD_RELOC_RISCV_PCREL_HI20, BFD_RELOC_RISCV_PCREL_LO12_S);
       break;
 
@@ -1867,49 +2076,91 @@ my_getVsetvliExpression (expressionS *ep, char *str)
 {
   unsigned int vsew_value = 0, vlmul_value = 0;
   unsigned int vta_value = 0, vma_value = 0;
+  unsigned int vlen_value = 0, vediv_value = 0;  /* RVV 0.7.   */
   bfd_boolean vsew_found = FALSE, vlmul_found = FALSE;
   bfd_boolean vta_found = FALSE, vma_found = FALSE;
+  bfd_boolean vlen_found = FALSE, vediv_found = FALSE; /* RVV 0.7.  */
 
-  if (arg_lookup (&str, riscv_vsew, ARRAY_SIZE (riscv_vsew), &vsew_value))
+  if (riscv_lookup_subset_version (&riscv_subsets, "V", 0, 7) == NULL)
     {
-      if (*str == ',')
-	++str;
-      if (vsew_found)
-	as_bad (_("multiple vsew constants"));
-      vsew_found = TRUE;
+      if (arg_lookup (&str, riscv_vsew, ARRAY_SIZE (riscv_vsew), &vsew_value))
+	{
+	  if (*str == ',')
+	    ++str;
+	  if (vsew_found)
+	    as_bad (_("multiple vsew constants"));
+	  vsew_found = TRUE;
+	}
+      if (arg_lookup (&str, riscv_vlmul, ARRAY_SIZE (riscv_vlmul), &vlmul_value))
+	{
+	  if (*str == ',')
+	    ++str;
+	  if (vlmul_found)
+	    as_bad (_("multiple vlmul constants"));
+	  vlmul_found = TRUE;
+	}
+      if (arg_lookup (&str, riscv_vta, ARRAY_SIZE (riscv_vta), &vta_value))
+	{
+	  if (*str == ',')
+	    ++str;
+	  if (vta_found)
+	    as_bad (_("multiple vta constants"));
+	  vta_found = TRUE;
+	}
+      if (arg_lookup (&str, riscv_vma, ARRAY_SIZE (riscv_vma), &vma_value))
+	{
+	  if (*str == ',')
+	    ++str;
+	  if (vma_found)
+	    as_bad (_("multiple vma constants"));
+	  vma_found = TRUE;
+	}
     }
-  if (arg_lookup (&str, riscv_vlmul, ARRAY_SIZE (riscv_vlmul), &vlmul_value))
+  else
     {
-      if (*str == ',')
-	++str;
-      if (vlmul_found)
-	as_bad (_("multiple vlmul constants"));
-      vlmul_found = TRUE;
-    }
-  if (arg_lookup (&str, riscv_vta, ARRAY_SIZE (riscv_vta), &vta_value))
-    {
-      if (*str == ',')
-	++str;
-      if (vta_found)
-	as_bad (_("multiple vta constants"));
-      vta_found = TRUE;
-    }
-  if (arg_lookup (&str, riscv_vma, ARRAY_SIZE (riscv_vma), &vma_value))
-    {
-      if (*str == ',')
-	++str;
-      if (vma_found)
-	as_bad (_("multiple vma constants"));
-      vma_found = TRUE;
+      /* RVV 0.7. */
+      if (arg_lookup (&str, riscv_vsew, ARRAY_SIZE (riscv_vsew), &vsew_value))
+	{
+	  if (*str == ',')
+	    ++str;
+	  if (vsew_found)
+	    as_bad (_("multiple vsew constants"));
+	  vsew_found = TRUE;
+	}
+
+      if (arg_lookup (&str, riscv_vlen, ARRAY_SIZE (riscv_vlen), &vlen_value))
+	{
+	  if (*str == ',')
+	    ++str;
+	  if (vlen_found)
+	    as_bad (_("multiple vlen constants"));
+	  vlen_found = TRUE;
+	}
+      if (arg_lookup (&str, riscv_vediv, ARRAY_SIZE (riscv_vediv), &vediv_value))
+	{
+	  if (*str == ',')
+	    ++str;
+	  if (vediv_found)
+	    as_bad (_("multiple vediv constants"));
+	  vediv_found = TRUE;
+	}
     }
 
-  if (vsew_found || vlmul_found || vta_found || vma_found)
+  if (riscv_lookup_subset_version (&riscv_subsets, "V", 0, 7) == NULL
+      && (vsew_found || vlmul_found || vta_found || vma_found))
     {
       ep->X_op = O_constant;
       ep->X_add_number = (vlmul_value << OP_SH_VLMUL)
 			 | (vsew_value << OP_SH_VSEW)
 			 | (vta_value << OP_SH_VTA)
 			 | (vma_value << OP_SH_VMA);
+      expr_end = str;
+    }
+  else if (riscv_lookup_subset_version (&riscv_subsets, "V", 0, 7) != NULL
+	   && (vlen_found || vediv_found || vsew_found))
+    {
+      ep->X_op = O_constant;
+      ep->X_add_number = (vediv_value << 5) | (vsew_value << 2) | (vlen_value);
       expr_end = str;
     }
   else
@@ -2095,7 +2346,7 @@ riscv_ip (char *str, struct riscv_cl_insn *ip, expressionS *imm_expr,
 		{
 		  if (!insn->match_func (insn, ip->insn_opcode,
 					 riscv_opts.check_constraints,
-					 &error))
+					 &error, xlen))
 		    break;
 
 		  /* For .insn, insn->match and insn->mask are 0.  */
@@ -2178,7 +2429,7 @@ riscv_ip (char *str, struct riscv_cl_insn *ip, expressionS *imm_expr,
 		  if (my_getSmallExpression (imm_expr, imm_reloc, s, p)
 		      || imm_expr->X_op != O_constant
 		      || imm_expr->X_add_number <= 0
-		      || imm_expr->X_add_number >= 64)
+		      || ((unsigned long) imm_expr->X_add_number >= xlen))
 		    break;
 		  ip->insn_opcode |= ENCODE_RVC_IMM (imm_expr->X_add_number);
 		rvc_imm_done:
@@ -2950,6 +3201,184 @@ riscv_ip (char *str, struct riscv_cl_insn *ip, expressionS *imm_expr,
 		}
 	      break;
 
+	    case 'f': /* Prefetch offset, pseudo S-type but lower 5-bits zero.  */
+	      if (riscv_handle_implicit_zero_offset (imm_expr, s))
+		continue;
+	      my_getExpression (imm_expr, s);
+	      check_absolute_expr (ip, imm_expr, FALSE);
+	      if (((unsigned) (imm_expr->X_add_number) & 0x1fU)
+		  || imm_expr->X_add_number >= (signed) RISCV_IMM_REACH / 2
+		  || imm_expr->X_add_number < -(signed) RISCV_IMM_REACH / 2)
+		as_bad (_("improper prefetch offset (%ld)"),
+			(long) imm_expr->X_add_number);
+	      ip->insn_opcode |=
+		ENCODE_STYPE_IMM ((unsigned) (imm_expr->X_add_number) &
+				  ~ 0x1fU);
+	      imm_expr->X_op = O_absent;
+	      s = expr_end;
+	      continue;
+
+            case 'X':
+              switch (*++args)
+		{
+		  case '>':
+		    {
+		      int at = -1;
+
+		      if (*++args == '@')
+			  at = strtol (++args, (char **)&args, 10);
+
+		      /* args will plus 1 in the for loop.  */
+		      args -= 1;
+
+		      my_getExpression (imm_expr, s);
+
+		      if (at == -1) {
+			  /* constant.  */
+			  if (imm_expr->X_op != O_constant)
+			    break;
+			  /* Ignore the imm.  */
+			  s = expr_end;
+			  continue;
+		      }
+
+		      if (imm_expr->X_op != O_constant
+			  || (imm_expr->X_add_number < 0)
+			  || (imm_expr->X_add_number >= xlen)) {
+			  break;
+		      }
+
+		      INSERT_BITS (ip->insn_opcode, imm_expr->X_add_number,
+				   xlen - 1, at);
+		      imm_expr->X_op = O_absent;
+		      s = expr_end;
+		    }
+		  continue;
+		  case 'I':
+		    {
+		      int nbits = 0;
+		      int shift = 0;
+		      int at = -1;
+		      int sign = 0;
+
+		      if (*++args == 's')
+			{
+			  /* signed number */
+			  sign = 1;
+			  args++;
+			}
+
+		      nbits = strtol (args, (char **)&args, 10);
+		      if (*args == 'S')
+			shift = strtol (++args, (char **)&args, 10);
+		      if (*args == '@')
+			  at = strtol (++args, (char **)&args, 10);
+
+		      /* args will plus 1 in the for loop.  */
+		      args -= 1;
+
+		      my_getExpression (imm_expr, s);
+
+		      if (at == -1) {
+			  /* constant.  */
+			  if (imm_expr->X_op != O_constant
+			      || imm_expr->X_add_number != nbits)
+			    break;
+			  /* Ignore the imm.  */
+			  s = expr_end;
+			  continue;
+		      }
+
+		      if (shift > 0)
+			imm_expr->X_add_number >>= shift;
+		      else if (shift < 0)
+			imm_expr->X_add_number <<= -shift;
+
+		      if (imm_expr->X_op != O_constant
+			  || (!sign
+			      && !VALID_T_HEAD_EXT_IMM(imm_expr->X_add_number, nbits, at))
+			  || (sign
+			      && (imm_expr->X_add_number < (0 - pow2(nbits-1))
+				  || imm_expr->X_add_number > (pow2(nbits - 1) - 1)))) {
+			  break;
+		      }
+
+		      INSERT_BITS (ip->insn_opcode, imm_expr->X_add_number,
+				   pow2(nbits) - 1, at);
+		      imm_expr->X_op = O_absent;
+		      s = expr_end;
+		    }
+		    continue;
+		  case 'm':
+		    my_getExpression (imm_expr, s);
+		    if (imm_expr->X_op != O_constant
+		        || !VALID_T_HEAD_EXT_MIMM (imm_expr->X_add_number))
+		      break;
+		    INSERT_OPERAND (T_HEAD_EXT_MSB, *ip, imm_expr->X_add_number);
+		    imm_expr->X_op = O_absent;
+		    s = expr_end;
+		    continue;
+		  case 'l':
+		    my_getExpression (imm_expr, s);
+		    if (imm_expr->X_op != O_constant
+		        || !VALID_T_HEAD_EXT_LIMM (imm_expr->X_add_number))
+		      break;
+		    INSERT_OPERAND (T_HEAD_EXT_LSB, *ip, imm_expr->X_add_number);
+		    imm_expr->X_op = O_absent;
+		    s = expr_end;
+		    continue;
+		  case 'a':
+		    my_getExpression (imm_expr, s);
+		    if (imm_expr->X_op != O_constant
+		        || !VALID_T_HEAD_LR_IMM (imm_expr->X_add_number))
+		      break;
+		    INSERT_OPERAND (T_HEAD_LR_IMM, *ip, imm_expr->X_add_number);
+		    imm_expr->X_op = O_absent;
+		    s = expr_end;
+		    continue;
+		  case 'P': /* RVP */
+		    switch (*++args)
+		      {
+		        case 'd': /* PD */
+			  if (!reg_lookup (&s, RCLASS_GPR, &regno))
+			    break;
+			  INSERT_OPERAND (PD, *ip, regno);
+			continue;
+
+		        case 's': /* PS1 */
+			  if (!reg_lookup (&s, RCLASS_GPR, &regno))
+			    break;
+			  INSERT_OPERAND (PS1, *ip, regno);
+			  continue;
+
+		        case 't': /* PS2 */
+		          if (!reg_lookup (&s, RCLASS_GPR, &regno))
+		            break;
+		          INSERT_OPERAND (PS2, *ip, regno);
+
+		          continue;
+
+		        case 'r': /* PS3 */
+		          if (!reg_lookup (&s, RCLASS_GPR, &regno))
+		            break;
+		          INSERT_OPERAND (PS3, *ip, regno);
+
+		          continue;
+
+			case 'u': /* RS1 == RS2 */
+			  if (!reg_lookup (&s, RCLASS_GPR, &regno))
+			    break;
+			  INSERT_OPERAND (PS1, *ip, regno);
+			  INSERT_OPERAND (PS2, *ip, regno);
+			  continue;
+
+
+		        default:
+			  break;
+		      }
+		}
+	      break;
+
 	    default:
 	      as_fatal (_("internal error: bad argument type %c"), *args);
 	    }
@@ -2983,8 +3412,14 @@ md_assemble (char *str)
       if (!riscv_set_default_priv_spec (NULL))
        return;
     }
+  const char *error = NULL;
 
-  const char *error = riscv_ip (str, &insn, &imm_expr, &imm_reloc, op_hash);
+  if (riscv_lookup_subset_version (&riscv_subsets, "V", 0, 7) != NULL)
+    error = riscv_ip (str, &insn, &imm_expr, &imm_reloc, op_v_07_hash);
+
+  if (riscv_lookup_subset_version (&riscv_subsets, "V", 0, 7) == NULL
+      || error)
+    error = riscv_ip (str, &insn, &imm_expr, &imm_reloc, op_hash);
 
   if (error)
     {
@@ -3028,6 +3463,8 @@ enum options
   OPTION_MPRIV_SPEC,
   OPTION_CHECK_CONSTRAINTS,
   OPTION_NO_CHECK_CONSTRAINTS,
+  OPTION_THEAD_ID,
+  OPTION_NO_THEAD_ID,
   OPTION_END_OF_ENUM
 };
 
@@ -3048,6 +3485,8 @@ struct option md_longopts[] =
   {"mpriv-spec", required_argument, NULL, OPTION_MPRIV_SPEC},
   {"mcheck-constraints", no_argument, NULL, OPTION_CHECK_CONSTRAINTS},
   {"mno-check-constraints", no_argument, NULL, OPTION_NO_CHECK_CONSTRAINTS},
+  {"mwith-thead-id", required_argument, NULL, OPTION_THEAD_ID},
+  {"mwithout-thead-id", required_argument, NULL, OPTION_NO_THEAD_ID},
 
   {NULL, no_argument, NULL, 0}
 };
@@ -3108,6 +3547,10 @@ md_parse_option (int c, const char *arg)
 	riscv_set_abi (64, FLOAT_ABI_DOUBLE, FALSE);
       else if (strcmp (arg, "lp64q") == 0)
 	riscv_set_abi (64, FLOAT_ABI_QUAD, FALSE);
+      else if (strcmp (arg, "lp64v") == 0)
+	riscv_set_abi (64, FLOAT_ABI_DOUBLE, FALSE);
+      else if (strcmp (arg, "lp64dv") == 0)
+	riscv_set_abi (64, FLOAT_ABI_DOUBLE, FALSE);
       else
 	return 0;
       break;
@@ -3237,6 +3680,8 @@ riscv_after_parse_args (void)
      range of registers in a .cfi_return_column directive.  */
   if (flag_dwarf_cie_version == -1)
     flag_dwarf_cie_version = 3;
+
+  /* Setup V version.  */
 }
 
 long
@@ -3311,7 +3756,9 @@ md_apply_fix (fixS *fixP, valueT *valP, segT seg ATTRIBUTE_UNUSED)
 	 in .eh_frame. Othrewise, the value may be adjusted twice.*/
       if (fixP->fx_addsy && fixP->fx_subsy
 	  && (sub_segment = S_GET_SEGMENT (fixP->fx_subsy))
-	  && strcmp (sub_segment->name, ".eh_frame") == 0
+	  && (strcmp (sub_segment->name, ".eh_frame") == 0
+	      || (TARGET_MULTIPLE_EH_FRAME_SECTIONS && flag_eh_frame_sections
+		  && strncmp (sub_segment->name, ".eh_frame.", 10) == 0))
 	  && S_GET_VALUE (fixP->fx_subsy)
 	     == fixP->fx_frag->fr_address + fixP->fx_where)
 	{
@@ -3471,6 +3918,9 @@ md_apply_fix (fixS *fixP, valueT *valP, segT seg ATTRIBUTE_UNUSED)
       break;
 
     case BFD_RELOC_RISCV_ALIGN:
+      break;
+
+    case BFD_RELOC_NONE:
       break;
 
     default:
@@ -4179,6 +4629,15 @@ s_riscv_attribute (int ignored ATTRIBUTE_UNUSED)
     }
 }
 
+static void
+s_riscv_align (int arg)
+{
+  s_align_ptwo (arg);
+
+  frag_wane (frag_now);
+  frag_new (0);
+}
+
 /* Pseudo-op table.  */
 
 static const pseudo_typeS riscv_pseudo_table[] =
@@ -4195,6 +4654,7 @@ static const pseudo_typeS riscv_pseudo_table[] =
   {"sleb128", s_riscv_leb128, 1},
   {"insn", s_riscv_insn, 0},
   {"attribute", s_riscv_attribute, 0},
+  {"align", s_riscv_align, 0},
 
   { NULL, NULL, 0 },
 };

@@ -10336,6 +10336,16 @@ $as_echo "#define HAVE_LINUX_BTRACE 1" >>confdefs.h
 
 fi
 
+# Add macro for where has been modified by csky
+case "${target}" in
+  riscv* )
+
+$as_echo "#define CSKYMODIFY_CONFIG 1" >>confdefs.h
+      ;;
+  *)
+      ;;
+esac
+
 if test "$bfd_cv_have_sys_procfs_type_lwpid_t" != yes; then
   { $as_echo "$as_me:${as_lineno-$LINENO}: checking for lwpid_t in thread_db.h" >&5
 $as_echo_n "checking for lwpid_t in thread_db.h... " >&6; }

@@ -5639,6 +5639,16 @@ case "${host}" in
     ;;
 esac
 
+# Add macro for where has been modified by csky
+case "${target}" in
+  riscv* )
+
+$as_echo "#define CSKYMODIFY_CONFIG 1" >>confdefs.h
+      ;;
+  *)
+      ;;
+esac
+
 # Check whether --enable-largefile was given.
 if test "${enable_largefile+set}" = set; then :
   enableval=$enable_largefile;

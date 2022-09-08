@@ -169,11 +169,16 @@ inline_frame_this_id (struct frame_info *this_frame,
      apply to all frames, all the time.  That would fix the ambiguity
      of null_frame_id (between "no/any frame" and "the outermost
      frame").  This will take work.  */
-  gdb_assert (frame_id_p (*this_id));
+
+  /* Here, when an inline frame got a null frame caller, there may be
+     any abnormal situation arised. Just error out and backtrace stopped.  */
+  if (!frame_id_p (*this_id))
+    error ("An inline frame get null frame caller, backtrace stopped.");
 
   /* For now, require we don't match outer_frame_id either (see
      comment above).  */
-  gdb_assert (!frame_id_eq (*this_id, outer_frame_id));
+  if (frame_id_eq (*this_id, outer_frame_id))
+    error ("An inline frame get outer frame caller, backtrace stopped.");
 
   /* Future work NOTE: Alexandre Oliva applied a patch to GCC 4.3
      which generates DW_AT_entry_pc for inlined functions when

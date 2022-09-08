@@ -76,6 +76,7 @@ extern int riscv_parse_long_option (const char *);
 
 #define md_pre_output_hook riscv_pre_output_hook()
 extern void riscv_pre_output_hook (void);
+#define GAS_SORT_RELOCS 1
 
 /* Let the linker resolve all the relocs due to relaxation.  */
 #define tc_fix_adjustable(fixp) 0
@@ -122,6 +123,8 @@ extern void riscv_elf_final_processing (void);
 
 #define md_end riscv_md_end
 #define CONVERT_SYMBOLIC_ATTRIBUTE riscv_convert_symbolic_attribute
+
+#define TARGET_MULTIPLE_EH_FRAME_SECTIONS 1
 
 extern void riscv_md_end (void);
 extern int riscv_convert_symbolic_attribute (const char *);

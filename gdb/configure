@@ -15563,7 +15563,6 @@ _ACEOF
 
 fi
 
-
 # Check if the compiler supports the `long long' type.
 
 { $as_echo "$as_me:${as_lineno-$LINENO}: checking for long long support in compiler" >&5

@@ -391,6 +391,9 @@ COMMON int do_not_pad_sections_to_alignment;
 /* TRUE if we should produce a listing.  */
 extern int listing;
 
+/* True if we should generate a multiple eh_frame sections object file.  */
+COMMON int flag_eh_frame_sections;
+
 /* Type of debugging information we should generate.  We currently support
    stabs, ECOFF, and DWARF2.
 

@@ -268,7 +268,6 @@ Contents of the .* section:
   DW_CFA_offset_extended_sf: r6052 \(tinfo\) at cfa\+7824
   DW_CFA_offset_extended_sf: r6053 \(tcontrol\) at cfa\+7828
   DW_CFA_offset_extended_sf: r6056 \(mcontext\) at cfa\+7840
-  DW_CFA_offset_extended_sf: r6058 \(scontext\) at cfa\+7848
   DW_CFA_offset_extended_sf: r4163 \(utval\) at cfa\+268
   DW_CFA_offset_extended_sf: r4419 \(stval\) at cfa\+1292
   DW_CFA_offset_extended_sf: r4480 \(satp\) at cfa\+1536

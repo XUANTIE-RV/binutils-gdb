@@ -725,6 +725,9 @@ if test ${ac_default_generate_riscv_attr} = unset; then
       elf)
 	ac_default_generate_riscv_attr=1
 	;;
+      linux*)
+	ac_default_generate_riscv_attr=1
+	;;
       *)
 	ac_default_generate_riscv_attr=0
 	;;

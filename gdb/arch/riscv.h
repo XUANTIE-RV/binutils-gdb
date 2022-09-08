@@ -46,6 +46,9 @@ struct riscv_gdbarch_features
      that there are no f-registers.  No other value is valid.  */
   int flen = 0;
 
+  /* When Vector Support.  */
+  int vlen = 0;
+
   /* Equality operator.  */
   bool operator== (const struct riscv_gdbarch_features &rhs) const
   {

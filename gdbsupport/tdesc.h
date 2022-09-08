@@ -127,6 +127,15 @@ struct tdesc_reg : tdesc_element
   {
     return !(*this == other);
   }
+#ifdef CSKYMODIFY_CONFIG
+  tdesc_reg (struct tdesc_feature *feature, const std::string &name_,
+             int regnum, int save_restore_, const char *group_,
+             int bitsize_, const char *type_, const char *env_);
+
+  /* For TEE debug, some registers have two value, TEE and REE, which
+     can be diffed from "env", contents is "ree" or "tee".  */
+  std::string env;
+#endif
 };
 
 typedef std::unique_ptr<tdesc_reg> tdesc_reg_up;
@@ -446,5 +455,12 @@ private:
   /* The current indentation depth.  */
   int m_depth;
 };
+
+#ifdef CSKYMODIFY_CONFIG
+void
+csky_tdesc_create_reg (struct tdesc_feature *feature, const char *name,
+                       int regnum, int save_restore, const char *group,
+                       int bitsize, const char *type, const char *env);
+#endif
 
 #endif /* COMMON_TDESC_H */

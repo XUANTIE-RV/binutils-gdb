@@ -6455,7 +6455,7 @@ process_section_headers (Filedata * filedata)
       else if ((do_debugging || do_debug_info)
 	       && const_strneq (name, ".gnu.linkonce.wi."))
 	request_dump_bynumber (&filedata->dump, i, DEBUG_DUMP);
-      else if (do_debug_frames && streq (name, ".eh_frame"))
+      else if (do_debug_frames && (streq (name, ".eh_frame") || const_strneq (name, ".eh_frame.")))
 	request_dump_bynumber (&filedata->dump, i, DEBUG_DUMP);
       else if (do_gdb_index && (streq (name, ".gdb_index")
 				|| streq (name, ".debug_names")))
@@ -14740,6 +14740,9 @@ display_debug_section (int shndx, Elf_Internal_Shdr * section, Filedata * fileda
 
   if (const_strneq (name, ".gnu.linkonce.wi."))
     name = ".debug_info";
+
+  if (const_strneq (name, ".eh_frame."))
+    name = ".eh_frame";
 
   /* See if we know how to display the contents of this section.  */
   for (i = 0; i < max; i++)

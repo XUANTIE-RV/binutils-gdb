@@ -292,6 +292,7 @@ extern int print_insn_rl78_g14		(bfd_vma, disassemble_info *);
 
 extern disassembler_ftype arc_get_disassembler (bfd *);
 extern disassembler_ftype cris_get_disassembler (bfd *);
+extern disassembler_ftype riscv_get_disassembler (bfd *);
 
 extern void print_aarch64_disassembler_options (FILE *);
 extern void print_i386_disassembler_options (FILE *);

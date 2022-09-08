@@ -31,6 +31,11 @@
 # define NFPREG 33
 #endif
 
+#include "asm/ptrace.h"
+#ifndef NT_RISCV_VECTOR
+# define NT_RISCV_VECTOR 0x900
+#endif
+
 /* See nat/riscv-linux-tdesc.h.  */
 
 struct riscv_gdbarch_features
@@ -78,6 +83,37 @@ riscv_linux_read_features (int tid)
 	features.flen = flen;
       break;
     }
+
+  /* If Vector support.  */
+  {
+    struct iovec iov_v;
+    struct __riscv_v_state regs_v;
+
+    features.vlen = 0;
+
+    iov_v.iov_base = &regs_v;
+    iov_v.iov_len = sizeof(struct __riscv_v_state);
+
+    if (ptrace (PTRACE_GETREGSET, tid, NT_RISCV_VECTOR,
+                  (PTRACE_TYPE_ARG3) &iov_v) == -1)
+        {
+          switch (errno)
+            {
+            case EINVAL:
+              printf (" ptrace EINVAL\n");
+              break;
+            case EIO:
+              printf (" ptrace EIO\n");
+              features.vlen = 0;
+              break;
+            default:
+              perror_with_name (_("Couldn't get registers"));
+              break;
+            }
+        }
+      else
+        features.vlen = 128;
+  }
 
   return features;
 }

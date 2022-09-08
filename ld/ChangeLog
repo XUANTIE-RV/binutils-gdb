@@ -1,3 +1,91 @@
+2020-09-03  Nelson Chu  <nelson.chu@sifive.com>
+
+	* testsuite/ld-riscv-elf/attr-merge-priv-spec-failed-01.d: Remove
+	the useless `warnings` keywords.
+	* testsuite/ld-riscv-elf/attr-merge-priv-spec-failed-02.d: Likewise.
+	* testsuite/ld-riscv-elf/attr-merge-priv-spec-failed-03.d: Likewise.
+	* testsuite/ld-riscv-elf/attr-merge-priv-spec-failed-04.d: Likewise.
+	* testsuite/ld-riscv-elf/attr-merge-priv-spec-failed-05.d: Likewise.
+	* testsuite/ld-riscv-elf/attr-merge-priv-spec-failed-06.d: Likewise.
+
+2020-09-03  Nelson Chu  <nelson.chu@sifive.com>
+
+	* testsuite/ld-riscv-elf/attr-merge-arch-failed-01.d: Update the
+	message from error to warning.
+	* testsuite/ld-riscv-elf/attr-merge-arch-failed-02.d: New testcases.
+	* testsuite/ld-riscv-elf/attr-merge-arch-failed-02a.s: Likewise.
+	* testsuite/ld-riscv-elf/attr-merge-arch-failed-02b.s: Likewise.
+	* testsuite/ld-riscv-elf/attr-merge-arch-failed-02c.s: Likewise.
+	* testsuite/ld-riscv-elf/attr-merge-arch-failed-02d.s: Likewise.
+	* testsuite/ld-riscv-elf/ld-riscv-elf.exp: Updated.
+
+2020-09-03  Kito Cheng  <kito.cheng@sifive.com>
+
+	* testsuite/ld-riscv-elf/attr-merge-arch-failed-01.d: Updated.
+	* testsuite/ld-riscv-elf/attr-merge-arch-failed-01a.s: Likewise.
+	* testsuite/ld-riscv-elf/attr-merge-arch-failed-01b.s: Likewise.
+
+2020-09-03  Alan Modra  <amodra@gmail.com>
+
+	* testsuite/ld-scripts/sysroot-prefix.exp (single_sysroot_prefix_test):
+	Log $scriptname.
+
+2020-08-30  H.J. Lu  <hongjiu.lu@intel.com>
+
+	* testsuite/ld-elf/dwarf.exp: Append $NOSANTIZE_CFLAGS to CFLAGS.
+	* testsuite/ld-elf/shared.exp: Likewise.
+	* testsuite/ld-elfvsb/elfvsb.exp: Likewise.
+	* testsuite/ld-shared/shared.exp: Likewise.
+	* testsuite/ld-size/size.exp: Likewise.
+
+2020-08-28  Jozef Lawrynowicz  <jozef.l@mittosystems.com>
+
+	* emultempl/msp430.em (input_section_exists): New.
+	(check_array_section_alignment): New.
+	(gld${EMULATION_NAME}_finish): New.
+	* scripttempl/elf32msp430.sc: Add ALIGN directives before the
+	definition of __*_array_start symbols.
+	* testsuite/ld-msp430-elf/finiarray-warn.ld: New test.
+	* testsuite/ld-msp430-elf/finiarray-warn.r: New test.
+	* testsuite/ld-msp430-elf/initarray-nowarn.ld: New test.
+	* testsuite/ld-msp430-elf/initarray-warn.ld: New test.
+	* testsuite/ld-msp430-elf/initarray-warn.r: New test.
+	* testsuite/ld-msp430-elf/initarray.s: New test.
+	* testsuite/ld-msp430-elf/msp430-elf.exp: Run new tests.
+	* testsuite/ld-msp430-elf/preinitarray-warn.ld: New test.
+	* testsuite/ld-msp430-elf/preinitarray-warn.r: New test.
+
+2020-08-28  Jozef Lawrynowicz  <jozef.l@mittosystems.com>
+
+	* ldmisc.c (vfinfo): Support new "%pU" format specifier.
+
+2020-08-28  Cooper Qu  <cooper.qu@linux.alibaba.com>
+
+	* emulparams/cskyelf.sh: Support attribute section.
+	* testsuite/ld-csky/tls-le-v1.d: Match .csky.attributes section.
+	* ld/testsuite/ld-csky/tls-le.d: Likewise.
+	* testsuite/ld-elf/non-contiguous.ld: Ignore .csky.attributes
+	section.
+
+2020-08-28  Nick Clifton  <nickc@redhat.com>
+
+	PR 19011
+	* testsuite/lib/ld-lib.exp (ld_link_defsyms): For PE based targets
+	define the __main and ___main symbols in terms of the main symbol.
+
+2020-08-28  Alan Modra  <amodra@gmail.com>
+
+	PR 19011
+	* testsuite/ld-plugin/plugin.exp: Use modified CFLAGS throughout
+	file.  Add --image-base for pecoff.
+
+2020-08-28  Nelson Chu  <nelson.chu@sifive.com>
+
+	testsuite/ld-riscv-elf/lib-nopic-01a.s: Use R_RISCV_JAL rather
+	than R_RISCV_CALL.
+	testsuite/ld-riscv-elf/lib-nopic-01b.d: Likewise.
+	testsuite/ld-riscv-elf/lib-nopic-01b.s: Likewise.
+
 2020-07-24  Nick Clifton  <nickc@redhat.com>
 
 	2.35 Release:

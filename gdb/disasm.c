@@ -270,7 +270,6 @@ gdb_pretty_print_disassembler::pretty_print_insn (const struct disasm_insn *insn
 
 	size = m_di.print_insn (pc);
 	end_pc = pc + size;
-
 	for (;pc < end_pc; ++pc)
 	  {
 	    read_code (pc, &data, 1);

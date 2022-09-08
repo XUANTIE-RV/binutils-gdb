@@ -424,10 +424,10 @@ restore_section_callback (bfd *ibfd, asection *isec, void *args)
     error (_("Failed to read bfd file %s: '%s'."), bfd_get_filename (ibfd), 
 	   bfd_errmsg (bfd_get_error ()));
 
-  printf_filtered ("Restoring section %s (0x%lx to 0x%lx)",
-		   bfd_section_name (isec), 
-		   (unsigned long) sec_start, 
-		   (unsigned long) sec_end);
+  printf_filtered ("Restoring section %s (0x%llx to 0x%llx)",
+                   bfd_section_name (isec),
+                   (unsigned long long) sec_start,
+                   (unsigned long long) sec_end);
 
   if (data->load_offset != 0 || data->load_start != 0 || data->load_end != 0)
     printf_filtered (" into memory (%s to %s)\n",
@@ -477,11 +477,11 @@ restore_binary_file (const char *filename, struct callback_data *data)
   if (data->load_start > 0)
     len -= data->load_start;
 
-  printf_filtered 
-    ("Restoring binary file %s into memory (0x%lx to 0x%lx)\n", 
-     filename, 
-     (unsigned long) (data->load_start + data->load_offset),
-     (unsigned long) (data->load_start + data->load_offset + len));
+  printf_filtered
+    ("Restoring binary file %s into memory (0x%llx to 0x%llx)\n",
+     filename,
+     (unsigned long long) (data->load_start + data->load_offset),
+     (unsigned long long) (data->load_start + data->load_offset + len));
 
   /* Now set the file pos to the requested load start pos.  */
   if (fseek (file.get (), data->load_start, SEEK_SET) != 0)
@@ -546,10 +546,10 @@ restore_command (const char *args, int from_tty)
     }
 
   if (info_verbose)
-    printf_filtered ("Restore file %s offset 0x%lx start 0x%lx end 0x%lx\n",
-		     filename.get (), (unsigned long) data.load_offset,
-		     (unsigned long) data.load_start, 
-		     (unsigned long) data.load_end);
+    printf_filtered ("Restore file %s offset 0x%llx start 0x%llx end 0x%llx\n",
+                     filename.get (), (unsigned long long) data.load_offset,
+                     (unsigned long long) data.load_start,
+                     (unsigned long long) data.load_end);
 
   if (binary_flag)
     {

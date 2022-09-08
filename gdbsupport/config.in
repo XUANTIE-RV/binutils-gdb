@@ -420,3 +420,6 @@
 
 /* Define as `fork' if `vfork' does not work. */
 #undef vfork
+
+/* Define for diff where has been modified by csky. */
+#undef CSKYMODIFY_CONFIG

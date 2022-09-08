@@ -85,6 +85,12 @@ riscv_parse_subset (riscv_parse_subset_t *,
 extern const char *
 riscv_supported_std_ext (void);
 
+const char * const *
+riscv_supported_std_z_ext_strtab(void);
+
+const char * const *
+riscv_supported_std_s_ext_strtab(void);
+
 extern void
 riscv_release_subset_list (riscv_subset_list_t *);
 

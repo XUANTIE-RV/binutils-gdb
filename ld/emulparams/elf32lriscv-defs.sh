@@ -19,6 +19,7 @@ fi
 # Enable shared library support for everything except an embedded elf target.
 case "$target" in
   riscv*-elf)
+    SCRIPT_NAME=elfriscv
     ;;
   *)
     GENERATE_SHLIB_SCRIPT=yes
