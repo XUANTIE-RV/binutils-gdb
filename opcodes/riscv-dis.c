@@ -46,6 +46,7 @@ struct riscv_private_data
 static const char * const *riscv_gpr_names;
 static const char * const *riscv_fpr_names;
 static const char * const *riscv_vecr_names;
+static const char * const *riscv_mr_names;
 
 /* Other options.  */
 static int no_aliases;	/* If set disassemble as most general inst.  */
@@ -56,6 +57,7 @@ set_default_riscv_dis_options (void)
   riscv_gpr_names = riscv_gpr_names_abi;
   riscv_fpr_names = riscv_fpr_names_abi;
   riscv_vecr_names = riscv_vecr_names_numeric;
+  riscv_mr_names = riscv_mr_names_numeric;
   no_aliases = 0;
 }
 
@@ -520,14 +522,11 @@ print_insn_args (const char *d, insn_t l, bfd_vma pc, disassemble_info *info)
 	      {
 		case '>':
 		  {
-		      int nbit = 0;
-		      int shift = 0;
 		      int at = -1;
 		      int value = l;
-		      int sign = 0;
 
 		      if (*++d == '@')
-			at= strtol (++d, &d, 10);
+			at= strtol (++d, (char **)&d, 10);
 
 		      /* d will puls 1 in the for loop.  */
 		      d -= 1;
@@ -555,11 +554,11 @@ print_insn_args (const char *d, insn_t l, bfd_vma pc, disassemble_info *info)
 			  d++;
 			}
 
-		      nbit = strtol (d, &d, 10);
+		      nbit = strtol (d, (char **)&d, 10);
 		      if (*d == 'S')
-			shift = strtol (++d, &d, 10);
+			shift = strtol (++d, (char **)&d, 10);
 		      if (*d == '@')
-			at= strtol (++d, &d, 10);
+			at= strtol (++d, (char **)&d, 10);
 
 		      /* d will puls 1 in the for loop.  */
 		      d -= 1;
@@ -582,6 +581,35 @@ print_insn_args (const char *d, insn_t l, bfd_vma pc, disassemble_info *info)
 		      break;
 		  }
 		  break;
+		case 'U':
+		  {
+		      int nbit = 0;
+		      int at = -1;
+		      int total = 0;
+		      int value = 0;
+
+		      total = strtol (++d, (char **)&d, 10);
+
+		      do
+			{
+			  if (*d != '|')
+			    break;
+			  d++;
+			  nbit = strtol(d, (char **)&d, 10);
+			  if (*d != '@')
+			    break;
+			  d++;
+			  at = strtol(d, (char **)&d, 10);
+			  value |= (int)EXTRACT_T_HEAD_IMM (l, nbit, at) << (total - nbit);
+			  total -= nbit;
+			}while((*d != '\0' && *d != ',') && total > 0);
+
+		      /* d will puls 1 in the for loop.  */
+		      d -= 1;
+
+		      print (info->stream, "%d", value);
+		      break;
+		  }
 		case 'm':
 		  print (info->stream, "%d", (int)EXTRACT_T_HEAD_EXT_MIMM (l));
 		  break;
@@ -614,7 +642,28 @@ print_insn_args (const char *d, insn_t l, bfd_vma pc, disassemble_info *info)
 		      }
 		  }
 		  break;
-
+		case 'M':
+		  {
+		    switch (*++d)
+		      {
+			case 'd':
+			  print (info->stream, "%s",
+				 riscv_mr_names[EXTRACT_OPERAND (MD, l)]);
+			  break;
+			case 's':
+			  print (info->stream, "%s",
+				 riscv_mr_names[EXTRACT_OPERAND (MS2, l)]);
+			  break;
+			case 't':
+			  print (info->stream, "%s",
+				 riscv_mr_names[EXTRACT_OPERAND (MS1, l)]);
+			  break;
+			case 'r':
+			  print (info->stream, "%s",
+				 riscv_gpr_names[8+EXTRACT_OPERAND (MRS1, l)]);
+			  break;
+		      }
+		  }
 		default:
 		  break;
 	      }

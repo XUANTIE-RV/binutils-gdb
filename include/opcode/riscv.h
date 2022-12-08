@@ -34,7 +34,7 @@ static inline unsigned int riscv_insn_length (insn_t insn)
     return 2;
   if ((insn & 0x1f) != 0x1f) /* Base ISA and extensions in 32-bit space.  */
     return 4;
-  if ((insn & 0x7f) == 0x7f) /* p extensions.  */
+  if ((insn & 0x7f) == 0x7f) /* DROPED. p extensions.  */
     return 4;
   if ((insn & 0x3f) == 0x1f) /* 48-bit extensions.  */
     return 6;
@@ -396,6 +396,17 @@ static const char * const riscv_vediv[4] =
 #define OP_MASK_PS3             0x1f
 #define OP_SH_PS3               27
 
+/* T-Head Matrix fields.  */
+#define OP_MASK_MS1             0x7
+#define OP_SH_MS1               18
+#define OP_MASK_MS2             0x7
+#define OP_SH_MS2               21
+#define OP_MASK_MRS1            0x7
+#define OP_SH_MRS1              15
+#define OP_MASK_MD              0x7
+#define OP_SH_MD                7
+#define OP_MASK_CFG_INDEX       0x7
+#define OP_SH_CFG_INDEX         28
 
 /* ABI names for selected x-registers.  */
 
@@ -412,6 +423,7 @@ static const char * const riscv_vediv[4] =
 #define NFPR 32
 #define NVECR 32
 #define NVECM 1
+#define NMR 8
 
 /* These fake label defines are use by both the assembler, and
    libopcodes.  The assembler uses this when it needs to generate a fake
@@ -469,6 +481,7 @@ enum riscv_insn_class
   INSN_CLASS_THEADC_E_SE,
   INSN_CLASS_THEADE,
   INSN_CLASS_THEADVDOT,
+  INSN_CLASS_THEAD_MATRIX,
   INSN_CLASS_V_07,
   INSN_CLASS_ZICBOM,
   INSN_CLASS_ZICBOZ,
@@ -676,6 +689,7 @@ extern const char * const riscv_fpr_names_numeric[NFPR];
 extern const char * const riscv_fpr_names_abi[NFPR];
 extern const char * const riscv_vecr_names_numeric[NVECR];
 extern const char * const riscv_vecm_names_numeric[NVECM];
+extern const char * const riscv_mr_names_numeric[NMR];
 
 extern const struct riscv_opcode riscv_opcodes[];
 extern const struct riscv_opcode riscv_v_07_opcodes[];

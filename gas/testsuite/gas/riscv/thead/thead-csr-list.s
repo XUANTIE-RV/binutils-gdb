@@ -205,3 +205,14 @@ csrr a0, msbepa
 csrr a0, msbepa2
 csrr a0, ssbepa
 csrr a0, ssbepa2
+
+# New For matrix
+csrr a0, xmrstart
+csrr a0, xmcsr
+csrr a0, xmxrm
+csrr a0, xmxsat
+csrr a0, xmsize
+csrr a0, xmregsize
+csrr a0, xmlenb
+csrr a0, xmisa
+

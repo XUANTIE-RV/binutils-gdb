@@ -287,6 +287,8 @@ riscv_multi_subset_supports (enum riscv_insn_class insn_class)
     case INSN_CLASS_THEADVDOT:
       return (riscv_lookup_subset_version (&riscv_subsets, "v", 1, 0)
 	      && riscv_subset_supports ("xtheadvdot"));
+    case INSN_CLASS_THEAD_MATRIX:
+      return riscv_subset_supports ("xtheadmatrix");
 
     case INSN_CLASS_ZICBOM:
       return riscv_subset_supports ("zicbom");
@@ -716,6 +718,7 @@ enum reg_class
   RCLASS_FPR,
   RCLASS_VECR,
   RCLASS_VECM,
+  RCLASS_MR,
   RCLASS_MAX,
 
   RCLASS_CSR
@@ -1180,6 +1183,28 @@ validate_riscv_insn (const struct riscv_opcode *opc, int length)
 		  used_bits |= ENCODE_T_HEAD_IMM(-1U, nbit, at);
 		  break;
 		}
+	      case 'U':
+		{
+		  int total = 0;
+		  int nbits = 0;
+		  int at = -1;
+		  /* XU7|5@20|2@10.  */
+		  total = strtol(p, (char**)&p, 10);
+
+		  do {
+		      if (*p != '|')
+			break;
+		      p++;
+		      nbits = strtol(p, (char**)&p, 10);
+		      if (*p != '@')
+			break;
+		      p++;
+		      at = strtol(p, (char**)&p, 10);
+		      used_bits |= ENCODE_T_HEAD_IMM(-1U, nbits, at);
+		      total -= nbits;
+		  } while((*p != '\0' && *p != ',') || total > 0);
+		  continue;
+		}
 	      case 'P': /* RV-P */
 	        switch (c = *p++)
 		  {
@@ -1192,6 +1217,19 @@ validate_riscv_insn (const struct riscv_opcode *opc, int length)
 		    default:
 			    as_bad (_("internal: bad RISC-V opcode (unknown operand type `XP%c'): %s %s"),
 				    c, opc->name, opc->args);
+		  }
+		break;
+	      case 'M':
+		switch(c = *p++)
+		  {
+		    case 'd': USE_BITS (OP_MASK_MD, OP_SH_MD); break;
+		    case 's': USE_BITS (OP_MASK_MS2, OP_SH_MS2); break;
+		    case 't': USE_BITS (OP_MASK_MS1, OP_SH_MS1); break;
+		    case 'r': USE_BITS (OP_MASK_MRS1, OP_SH_MRS1); break;
+		    default:
+			    as_bad (_("internal: bad RISC-V opcode (unknown operand type `XM%c'): %s %s"),
+				    c, opc->name, opc->args);
+	
 		  }
 		break;
 
@@ -1296,6 +1334,7 @@ md_begin (void)
   hash_reg_names (RCLASS_FPR, riscv_fpr_names_abi, NFPR);
   hash_reg_names (RCLASS_VECR, riscv_vecr_names_numeric, NVECR);
   hash_reg_names (RCLASS_VECM, riscv_vecm_names_numeric, NVECM);
+  hash_reg_names (RCLASS_MR, riscv_mr_names_numeric, NMR);
   /* Add "fp" as an alias for "s0".  */
   hash_reg_name (RCLASS_GPR, "fp", 8);
 
@@ -3309,6 +3348,42 @@ riscv_ip (char *str, struct riscv_cl_insn *ip, expressionS *imm_expr,
 		      s = expr_end;
 		    }
 		    continue;
+		  case 'U':
+		      {
+			int total = 0;
+			int nbits = 0;
+			int at = -1;
+			insn_t encode = 0;
+			/* XU7|5@20|2@10.  */
+			args += 1;
+			args += sscanf(args, "%d", &total);
+
+			my_getExpression (imm_expr, s);
+			if (imm_expr->X_op != O_constant)
+			  break;
+			if (imm_expr->X_add_number & ~((1 << total) -1))
+			  break;
+
+			do {
+			    if (*args != '|')
+			      break;
+			    args++;
+			    nbits = strtol(args,(char **) &args, 10);
+			    if (*args != '@')
+			      break;
+			    args++;
+			    at = strtol(args, (char **)&args, 10);
+
+			    encode |= (((imm_expr->X_add_number) >> (total-nbits))
+				       & ((1 << nbits) - 1)) << at;
+			    total = total - nbits;
+			} while((*args != '\0' && *args != ',') && total > 0);
+		        /* args will plus 1 in the for loop.  */
+			args--;
+			ip->insn_opcode |= encode;
+			s = expr_end;
+			continue;
+		      }
 		  case 'm':
 		    my_getExpression (imm_expr, s);
 		    if (imm_expr->X_op != O_constant
@@ -3376,6 +3451,37 @@ riscv_ip (char *str, struct riscv_cl_insn *ip, expressionS *imm_expr,
 		        default:
 			  break;
 		      }
+		  case 'M':
+		    switch (*++args)
+		      {
+		      case 'd': 
+		          if (!reg_lookup (&s, RCLASS_MR, &regno))
+		            break;
+		          INSERT_OPERAND (MD, *ip, regno);
+			  continue;
+		      case 's':
+		          if (!reg_lookup (&s, RCLASS_MR, &regno))
+		            break;
+		          INSERT_OPERAND (MS2, *ip, regno);
+			  continue;
+		      case 't':
+		          if (!reg_lookup (&s, RCLASS_MR, &regno))
+		            break;
+		          INSERT_OPERAND (MS1, *ip, regno);
+			  continue;
+		      case 'r':
+		          if (!reg_lookup (&s, RCLASS_GPR, &regno)
+			      || (regno < 8 || regno > 15)){
+			    printf("regno: %d\n", regno);
+		            break;
+			  }
+			  regno = regno - 8;
+		          INSERT_OPERAND (MRS1, *ip, regno);
+			  continue;
+		      default:
+			  break;
+		  }
+
 		}
 	      break;
 
