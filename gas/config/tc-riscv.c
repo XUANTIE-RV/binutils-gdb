@@ -299,7 +299,7 @@ riscv_multi_subset_supports (enum riscv_insn_class insn_class)
     case INSN_CLASS_ZICSR:
       return riscv_subset_supports ("zicsr");
     case INSN_CLASS_ZIFENCEI:
-      return riscv_subset_supports ("zifencei");
+      return riscv_subset_supports ("i") || riscv_subset_supports ("zifencei");
     case INSN_CLASS_ZIHINTPAUSE:
       return riscv_subset_supports ("zihintpause");
 

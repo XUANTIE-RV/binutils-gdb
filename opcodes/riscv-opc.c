@@ -848,7 +848,7 @@ const struct riscv_opcode riscv_opcodes[] =
 {"pause",       0, INSN_CLASS_ZIHINTPAUSE,   "",  MATCH_PAUSE, MASK_PAUSE, match_opcode, 0 },
 {"fence",       0, INSN_CLASS_I,   "",  MATCH_FENCE | MASK_PRED | MASK_SUCC, MASK_FENCE | MASK_RD | MASK_RS1 | MASK_IMM, match_opcode, INSN_ALIAS },
 {"fence",       0, INSN_CLASS_I,   "P,Q",  MATCH_FENCE, MASK_FENCE | MASK_RD | MASK_RS1 | (MASK_IMM & ~MASK_PRED & ~MASK_SUCC), match_opcode, 0 },
-{"fence.i",     0, INSN_CLASS_I,   "",  MATCH_FENCE_I, MASK_FENCE | MASK_RD | MASK_RS1 | MASK_IMM, match_opcode, 0 },
+{"fence.i",     0, INSN_CLASS_ZIFENCEI,   "",  MATCH_FENCE_I, MASK_FENCE | MASK_RD | MASK_RS1 | MASK_IMM, match_opcode, 0 },
 {"fence.tso",   0, INSN_CLASS_I,   "",  MATCH_FENCE_TSO, MASK_FENCE_TSO | MASK_RD | MASK_RS1, match_opcode, INSN_ALIAS },
 {"rdcycle",     0, INSN_CLASS_I,   "d",  MATCH_RDCYCLE, MASK_RDCYCLE, match_opcode, INSN_ALIAS },
 {"rdinstret",   0, INSN_CLASS_I,   "d",  MATCH_RDINSTRET, MASK_RDINSTRET, match_opcode, INSN_ALIAS },
@@ -2900,6 +2900,7 @@ const struct riscv_ext_version riscv_ext_version_table[] =
 {"xtheadv", ISA_SPEC_CLASS_NONE, 0, 1},
 
 {"zihintpause", ISA_SPEC_CLASS_NONE, 1, 0},
+{"zifencei", ISA_SPEC_CLASS_NONE, 2, 0},
 
 {"b",     ISA_SPEC_CLASS_NONE, 1, 0},
 {"zbb",   ISA_SPEC_CLASS_NONE, 1, 0},
