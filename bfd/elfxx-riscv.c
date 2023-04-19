@@ -1479,6 +1479,7 @@ static const char * const riscv_std_z_ext_strtab[] =
 {
   "zicbom", "zicbop", "zicboz", "zicsr", "zihintpause",
   "zfh",
+  "zmmul",
   "zba", "zbb", "zbc", "zbs",
   "zpn", "zprvsfextra", "zpsfoperand",
   "zvamo", "zvlsseg",

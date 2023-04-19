@@ -986,15 +986,15 @@ const struct riscv_opcode riscv_opcodes[] =
 {"amominu.d.aqrl", 64, INSN_CLASS_A , "d,t,0(s)",  MATCH_AMOMINU_D | MASK_AQRL, MASK_AMOMINU_D | MASK_AQRL, match_opcode, INSN_DREF|INSN_8_BYTE },
 
 /* Multiply/Divide instruction subset */
-{"mul",       0, INSN_CLASS_M,   "d,s,t",  MATCH_MUL, MASK_MUL, match_opcode, 0 },
-{"mulh",      0, INSN_CLASS_M,   "d,s,t",  MATCH_MULH, MASK_MULH, match_opcode, 0 },
-{"mulhu",     0, INSN_CLASS_M,   "d,s,t",  MATCH_MULHU, MASK_MULHU, match_opcode, 0 },
-{"mulhsu",    0, INSN_CLASS_M,   "d,s,t",  MATCH_MULHSU, MASK_MULHSU, match_opcode, 0 },
+{"mul",       0, INSN_CLASS_ZMMUL,   "d,s,t",  MATCH_MUL, MASK_MUL, match_opcode, 0 },
+{"mulh",      0, INSN_CLASS_ZMMUL,   "d,s,t",  MATCH_MULH, MASK_MULH, match_opcode, 0 },
+{"mulhu",     0, INSN_CLASS_ZMMUL,   "d,s,t",  MATCH_MULHU, MASK_MULHU, match_opcode, 0 },
+{"mulhsu",    0, INSN_CLASS_ZMMUL,   "d,s,t",  MATCH_MULHSU, MASK_MULHSU, match_opcode, 0 },
 {"div",       0, INSN_CLASS_M,   "d,s,t",  MATCH_DIV, MASK_DIV, match_opcode, 0 },
 {"divu",      0, INSN_CLASS_M,   "d,s,t",  MATCH_DIVU, MASK_DIVU, match_opcode, 0 },
 {"rem",       0, INSN_CLASS_M,   "d,s,t",  MATCH_REM, MASK_REM, match_opcode, 0 },
 {"remu",      0, INSN_CLASS_M,   "d,s,t",  MATCH_REMU, MASK_REMU, match_opcode, 0 },
-{"mulw",     64, INSN_CLASS_M, "d,s,t",  MATCH_MULW, MASK_MULW, match_opcode, 0 },
+{"mulw",     64, INSN_CLASS_ZMMUL, "d,s,t",  MATCH_MULW, MASK_MULW, match_opcode, 0 },
 {"divw",     64, INSN_CLASS_M, "d,s,t",  MATCH_DIVW, MASK_DIVW, match_opcode, 0 },
 {"divuw",    64, INSN_CLASS_M, "d,s,t",  MATCH_DIVUW, MASK_DIVUW, match_opcode, 0 },
 {"remw",     64, INSN_CLASS_M, "d,s,t",  MATCH_REMW, MASK_REMW, match_opcode, 0 },
@@ -2906,6 +2906,8 @@ const struct riscv_ext_version riscv_ext_version_table[] =
 {"zba",   ISA_SPEC_CLASS_NONE, 1, 0},
 {"zbc",   ISA_SPEC_CLASS_NONE, 1, 0},
 {"zbs",   ISA_SPEC_CLASS_NONE, 1, 0},
+
+{"zmmul",   ISA_SPEC_CLASS_NONE, 1, 0},
 /* Terminate the list.  */
 {NULL, 0, 0, 0}
 };
