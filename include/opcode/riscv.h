@@ -401,10 +401,10 @@ static const char * const riscv_vediv[4] =
 #define OP_SH_MS1               18
 #define OP_MASK_MS2             0x7
 #define OP_SH_MS2               21
-#define OP_MASK_MRS1            0x7
-#define OP_SH_MRS1              15
 #define OP_MASK_MD              0x7
-#define OP_SH_MD                7
+#define OP_SH_MD                15
+#define OP_MASK_MS3             0x7
+#define OP_SH_MS3               7
 #define OP_MASK_CFG_INDEX       0x7
 #define OP_SH_CFG_INDEX         28
 

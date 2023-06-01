@@ -658,9 +658,9 @@ print_insn_args (const char *d, insn_t l, bfd_vma pc, disassemble_info *info)
 			  print (info->stream, "%s",
 				 riscv_mr_names[EXTRACT_OPERAND (MS1, l)]);
 			  break;
-			case 'r':
+			case 'u':
 			  print (info->stream, "%s",
-				 riscv_gpr_names[8+EXTRACT_OPERAND (MRS1, l)]);
+				 riscv_mr_names[EXTRACT_OPERAND (MS3, l)]);
 			  break;
 		      }
 		  }
