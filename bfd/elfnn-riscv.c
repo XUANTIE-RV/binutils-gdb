@@ -2640,6 +2640,18 @@ struct riscv_subset_compact_version
 
 static const struct riscv_subset_compact_version riscv_subset_compact_version_table[] =
 {
+  /* i extension: v2.0 is older. The newer is v2.1  */
+  {"i", {2, 1}, {2, 0}},
+
+  /* a extension: v2.0 is older. The newer is v2.2  */
+  {"a", {2, 1}, {2, 0}},
+
+  /* f extension: v2.0 is older. The newer is v2.2  */
+  {"f", {2, 2}, {2, 0}},
+
+  /* d extension: v2.0 is older. The newer is v2.2  */
+  {"d", {2, 2}, {2, 0}},
+
   /* V extension: 2.0 is built from v2.32. The actul version is v0.7  */
   {"v", {0, 7}, {2, 0}},
 
