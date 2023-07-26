@@ -1319,6 +1319,18 @@ static struct riscv_implicit_subset riscv_implicit_subsets[] =
   {"a", "zalrsc",	check_implicit_always},
 
   {"xsfvcp", "zve32x",  check_implicit_always},
+  {"shcounterenw", "h", check_implicit_always},
+  {"shgatpa", "h", check_implicit_always},
+  {"shtvala", "h", check_implicit_always},
+  {"shvsatpa", "h", check_implicit_always},
+  {"shvstvala", "h", check_implicit_always},
+  {"shvstvecd", "h", check_implicit_always},
+  {"sscounterenw", "zicsr", check_implicit_always},
+  {"sstvala", "zicsr", check_implicit_always},
+  {"sstvecd", "zicsr", check_implicit_always},
+  {"ssu64xl", "zicsr", check_implicit_always},
+  {"svade", "zicsr", check_implicit_always},
+  {"svbare", "zicsr", check_implicit_always},
   {NULL, NULL, NULL}
 };
 
@@ -1377,6 +1389,11 @@ static struct riscv_supported_ext riscv_supported_std_ext[] =
 
 static struct riscv_supported_ext riscv_supported_std_z_ext[] =
 {
+  {"zic64b",		ISA_SPEC_CLASS_DRAFT,		1, 0,  0 },
+  {"ziccamoa",		ISA_SPEC_CLASS_DRAFT,		1, 0,  0 },
+  {"ziccif",		ISA_SPEC_CLASS_DRAFT,		1, 0,  0 },
+  {"zicclsm",		ISA_SPEC_CLASS_DRAFT,		1, 0,  0 },
+  {"ziccrse",		ISA_SPEC_CLASS_DRAFT,		1, 0,  0 },
   {"zicbom",		ISA_SPEC_CLASS_DRAFT,		1, 0,  0 },
   {"zicbop",		ISA_SPEC_CLASS_DRAFT,		1, 0,  0 },
   {"zicboz",		ISA_SPEC_CLASS_DRAFT,		1, 0,  0 },
@@ -1391,6 +1408,8 @@ static struct riscv_supported_ext riscv_supported_std_z_ext[] =
   {"zihintpause",	ISA_SPEC_CLASS_DRAFT,		2, 0,  0 },
   {"zihpm",		ISA_SPEC_CLASS_DRAFT,		2, 0,  0 },
   {"zmmul",		ISA_SPEC_CLASS_DRAFT,		1, 0,  0 },
+  {"za64rs",		ISA_SPEC_CLASS_DRAFT,		1, 0,  0 },
+  {"za128rs",		ISA_SPEC_CLASS_DRAFT,		1, 0,  0 },
   {"zaamo",		ISA_SPEC_CLASS_DRAFT,		1, 0,  0 },
   {"zabha",		ISA_SPEC_CLASS_DRAFT,		1, 0,  0 },
   {"zacas",		ISA_SPEC_CLASS_DRAFT,		1, 0,  0 },
@@ -1475,17 +1494,30 @@ static struct riscv_supported_ext riscv_supported_std_z_ext[] =
 
 static struct riscv_supported_ext riscv_supported_std_s_ext[] =
 {
+  {"shcounterenw",	ISA_SPEC_CLASS_DRAFT,		1, 0, 0 },
+  {"shgatpa",		ISA_SPEC_CLASS_DRAFT,		1, 0, 0 },
+  {"shtvala",		ISA_SPEC_CLASS_DRAFT,		1, 0, 0 },
+  {"shvsatpa",		ISA_SPEC_CLASS_DRAFT,		1, 0, 0 },
+  {"shvstvala",		ISA_SPEC_CLASS_DRAFT,		1, 0, 0 },
+  {"shvstvecd",		ISA_SPEC_CLASS_DRAFT,		1, 0, 0 },
   {"smaia",		ISA_SPEC_CLASS_DRAFT,		1, 0, 0 },
   {"smcsrind",		ISA_SPEC_CLASS_DRAFT,		1, 0, 0 },
   {"smcntrpmf",		ISA_SPEC_CLASS_DRAFT,		1, 0, 0 },
   {"smepmp",		ISA_SPEC_CLASS_DRAFT,		1, 0, 0 },
   {"smstateen",		ISA_SPEC_CLASS_DRAFT,		1, 0, 0 },
   {"ssaia",		ISA_SPEC_CLASS_DRAFT,		1, 0, 0 },
+  {"ssccptr",		ISA_SPEC_CLASS_DRAFT,		1, 0, 0 },
   {"sscsrind",		ISA_SPEC_CLASS_DRAFT,		1, 0, 0 },
   {"sscofpmf",		ISA_SPEC_CLASS_DRAFT,		1, 0, 0 },
+  {"sscounterenw",	ISA_SPEC_CLASS_DRAFT,		1, 0, 0 },
   {"ssstateen",		ISA_SPEC_CLASS_DRAFT,		1, 0, 0 },
   {"sstc",		ISA_SPEC_CLASS_DRAFT,		1, 0, 0 },
+  {"sstvala",		ISA_SPEC_CLASS_DRAFT,		1, 0, 0 },
+  {"sstvecd",		ISA_SPEC_CLASS_DRAFT,		1, 0, 0 },
+  {"ssu64xl",		ISA_SPEC_CLASS_DRAFT,		1, 0, 0 },
+  {"svade",		ISA_SPEC_CLASS_DRAFT,		1, 0, 0 },
   {"svadu",		ISA_SPEC_CLASS_DRAFT,		1, 0, 0 },
+  {"svbare",		ISA_SPEC_CLASS_DRAFT,		1, 0, 0 },
   {"svinval",		ISA_SPEC_CLASS_DRAFT,		1, 0, 0 },
   {"svnapot",		ISA_SPEC_CLASS_DRAFT,		1, 0, 0 },
   {"svpbmt",		ISA_SPEC_CLASS_DRAFT,		1, 0, 0 },
