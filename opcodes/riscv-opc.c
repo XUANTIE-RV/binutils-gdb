@@ -110,6 +110,18 @@ const char * const riscv_vma[2] =
   "mu", "ma"
 };
 
+/* XTheadVector, List of vsetvli vlmul constants.  */
+const char * const riscv_vlen[4] =
+{
+    "m1", "m2", "m4", "m8"
+};
+
+/* XTheadVector, List of vsetvli vediv constants.  */
+const char * const riscv_vediv[4] =
+{
+    "d1", "d2", "d4", "d8"
+};
+
 /* The FLI.[HSDQ] symbolic constants (NULL for numeric constant).  */
 const char * const riscv_fli_symval[32] =
 {

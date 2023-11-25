@@ -2309,8 +2309,57 @@ my_getVsetvliExpression (expressionS *ep, char *str)
 {
   unsigned int vsew_value = 0, vlmul_value = 0;
   unsigned int vta_value = 0, vma_value = 0;
+  unsigned int vlen_value = 0, vediv_value = 0; /* XTheadVector.  */
   bfd_boolean vsew_found = FALSE, vlmul_found = FALSE;
   bfd_boolean vta_found = FALSE, vma_found = FALSE;
+  bfd_boolean vlen_found = FALSE, vediv_found = FALSE; /* XTheadVector.  */
+
+  /* Vsetvl has a different expression for XTheadVector.  */
+  if (riscv_subset_supports (&riscv_rps_as, "xtheadvector"))
+    {
+      if (arg_lookup (&str, riscv_vsew, ARRAY_SIZE (riscv_vsew),
+		      &vsew_value))
+	{
+	  if (*str == ',')
+	    ++str;
+	  if (vsew_found)
+	    as_bad (_("multiple vsew constants"));
+	  vsew_found = TRUE;
+	}
+
+      if (arg_lookup (&str, riscv_vlen, ARRAY_SIZE (riscv_vlen),
+		      &vlen_value))
+	{
+	  if (*str == ',')
+	    ++str;
+	  if (vlen_found)
+	    as_bad (_("multiple vlen constants"));
+	  vlen_found = TRUE;
+	}
+      if (arg_lookup (&str, riscv_vediv, ARRAY_SIZE (riscv_vediv),
+		      &vediv_value))
+	{
+	  if (*str == ',')
+	    ++str;
+	  if (vediv_found)
+	    as_bad (_("multiple vediv constants"));
+	  vediv_found = TRUE;
+	}
+
+      if (vlen_found || vediv_found || vsew_found)
+	{
+	  ep->X_op = O_constant;
+	  ep->X_add_number
+	    = (vediv_value << 5) | (vsew_value << 2) | (vlen_value);
+	  expr_parse_end = str;
+	}
+      else
+	{
+	  my_getExpression (ep, str);
+	  str = expr_parse_end;
+	}
+      return;
+    }
 
   if (arg_lookup (&str, riscv_vsew, ARRAY_SIZE (riscv_vsew), &vsew_value))
     {
