@@ -3624,7 +3624,7 @@ _bfd_riscv_relax_call (bfd *abfd, asection *sec, asection *sym_sec,
   if (VALID_UJTYPE_IMM (foff))
     {
       if (sym_sec->output_section == sec->output_section
-	  && sym_sec->output_section != bfd_abs_section_ptr)
+	  && !bfd_is_abs_section (sym_sec->output_section))
 	max_alignment = (bfd_vma) 1 << sym_sec->output_section->alignment_power;
       foff += ((bfd_signed_vma) foff < 0 ? -max_alignment : max_alignment);
     }
@@ -3744,9 +3744,9 @@ _bfd_riscv_relax_lui (bfd *abfd,
 	bfd_link_hash_lookup (link_info->hash, RISCV_GP_SYMBOL, FALSE, FALSE,
 			      TRUE);
       if (h->u.def.section->output_section == sym_sec->output_section
-	  && sym_sec->output_section != bfd_abs_section_ptr)
+	  && !bfd_is_abs_section (sym_sec->output_section))
 	max_alignment = (bfd_vma) 1 << sym_sec->output_section->alignment_power;
-      else if (!undefined_weak && sym_sec->output_section != bfd_abs_section_ptr)
+      else if (!undefined_weak && !bfd_is_abs_section (sym_sec->output_section))
 	{
 	  /* Otherwise, consider the alignment of sections in [gp-2K,gp+2K). */
 	  bfd_vma new_max_alignment = _bfd_riscv_get_max_alignment_in_gp (sym_sec, gp);
@@ -4014,9 +4014,9 @@ _bfd_riscv_relax_pc  (bfd *abfd ATTRIBUTE_UNUSED,
 	bfd_link_hash_lookup (link_info->hash, RISCV_GP_SYMBOL, FALSE, FALSE,
 			      TRUE);
       if (h->u.def.section->output_section == sym_sec->output_section
-	  && sym_sec->output_section != bfd_abs_section_ptr)
+	  && !bfd_is_abs_section (sym_sec->output_section))
 	max_alignment = (bfd_vma) 1 << sym_sec->output_section->alignment_power;
-      else if (!undefined_weak && sym_sec->output_section != bfd_abs_section_ptr)
+      else if (!undefined_weak && !bfd_is_abs_section (sym_sec->output_section))
 	{
 	  /* Otherwise, consider the alignment of sections in [gp-2K,gp+2K). */
 	  bfd_vma new_max_alignment = _bfd_riscv_get_max_alignment_in_gp (sym_sec, gp);
