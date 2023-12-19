@@ -34,7 +34,7 @@ static inline unsigned int riscv_insn_length (insn_t insn)
     return 2;
   if ((insn & 0x1f) != 0x1f) /* Base ISA and extensions in 32-bit space.  */
     return 4;
-  if ((insn & 0x7f) == 0x7f) /* p extensions.  */
+  if ((insn & 0x7f) == 0x7f) /* DROPED. p extensions.  */
     return 4;
   if ((insn & 0x3f) == 0x1f) /* 48-bit extensions.  */
     return 6;
@@ -112,6 +112,8 @@ static const char * const riscv_vediv[4] =
   (RV_X(x, 2, 5) | (-RV_X(x, 12, 1) << 5))
 #define EXTRACT_RVC_LUI_IMM(x) \
   (EXTRACT_RVC_IMM (x) << RISCV_IMM_BITS)
+#define EXTRACT_RVC_UIMM2(x) \
+  ((RV_X(x, 5, 1) << 1) | (RV_X(x, 6, 1)))
 #define EXTRACT_RVC_SIMM3(x) \
   (RV_X(x, 10, 2) | (-RV_X(x, 12, 1) << 2))
 #define EXTRACT_RVC_UIMM8(x) \
@@ -158,8 +160,6 @@ static const char * const riscv_vediv[4] =
   (RV_X(x, 15, 5) | (-RV_X(x, 19, 1) << 5))
 #define EXTRACT_RVV_VI_UIMM(x) \
   (RV_X(x, 15, 5))
-#define EXTRACT_RVV_OFFSET(x) \
-  (RV_X(x, 29, 3))
 #define EXTRACT_RVV_VC_IMM(x) \
   (RV_X(x, 20, 11))
 
@@ -177,6 +177,8 @@ static const char * const riscv_vediv[4] =
   ((RV_X(x, 0, 5) << 2) | (RV_X(x, 5, 1) << 12))
 #define ENCODE_RVC_LUI_IMM(x) \
   ENCODE_RVC_IMM ((x) >> RISCV_IMM_BITS)
+#define ENCODE_RVC_UIMM2(x) \
+  ((RV_X(x, 0, 1) << 6) | (RV_X(x, 1, 1) << 5))
 #define ENCODE_RVC_SIMM3(x) \
   (RV_X(x, 0, 3) << 10)
 #define ENCODE_RVC_UIMM8(x) \
@@ -224,6 +226,7 @@ static const char * const riscv_vediv[4] =
 #define VALID_RVC_IMM(x) (EXTRACT_RVC_IMM(ENCODE_RVC_IMM(x)) == (x))
 #define VALID_RVC_LUI_IMM(x) (ENCODE_RVC_LUI_IMM(x) != 0 && EXTRACT_RVC_LUI_IMM(ENCODE_RVC_LUI_IMM(x)) == (x))
 #define VALID_RVC_SIMM3(x) (EXTRACT_RVC_SIMM3(ENCODE_RVC_SIMM3(x)) == (x))
+#define VALID_RVC_UIMM2(x) (EXTRACT_RVC_UIMM2(ENCODE_RVC_UIMM2(x)) == (x))
 #define VALID_RVC_UIMM8(x) (EXTRACT_RVC_UIMM8(ENCODE_RVC_UIMM8(x)) == (x))
 #define VALID_RVC_ADDI4SPN_IMM(x) (EXTRACT_RVC_ADDI4SPN_IMM(ENCODE_RVC_ADDI4SPN_IMM(x)) == (x))
 #define VALID_RVC_ADDI16SP_IMM(x) (EXTRACT_RVC_ADDI16SP_IMM(ENCODE_RVC_ADDI16SP_IMM(x)) == (x))
@@ -305,6 +308,10 @@ static const char * const riscv_vediv[4] =
 #define OP_SH_AQ		26
 #define OP_MASK_RL		0x1
 #define OP_SH_RL		25
+#define OP_MASK_MATRIX_NF       0x7
+#define OP_SH_MATRIX_NF         20
+#define OP_MASK_VECTOR_NF       0x7
+#define OP_SH_VECTOR_NF         29
 
 #define OP_MASK_CUSTOM_IMM	0x7fU
 #define OP_SH_CUSTOM_IMM	25
@@ -396,6 +403,17 @@ static const char * const riscv_vediv[4] =
 #define OP_MASK_PS3             0x1f
 #define OP_SH_PS3               27
 
+/* T-Head Matrix fields.  */
+#define OP_MASK_MS1             0x7
+#define OP_SH_MS1               18
+#define OP_MASK_MS2             0x7
+#define OP_SH_MS2               21
+#define OP_MASK_MD              0x7
+#define OP_SH_MD                15
+#define OP_MASK_MS3             0x7
+#define OP_SH_MS3               7
+#define OP_MASK_CFG_INDEX       0x7
+#define OP_SH_CFG_INDEX         28
 
 /* ABI names for selected x-registers.  */
 
@@ -412,6 +430,7 @@ static const char * const riscv_vediv[4] =
 #define NFPR 32
 #define NVECR 32
 #define NVECM 1
+#define NMR 8
 
 /* These fake label defines are use by both the assembler, and
    libopcodes.  The assembler uses this when it needs to generate a fake
@@ -445,6 +464,12 @@ enum riscv_insn_class
 
   INSN_CLASS_I,
   INSN_CLASS_C,
+  INSN_CLASS_C_OR_ZCA,
+  INSN_CLASS_ZCB,
+  INSN_CLASS_F_AND_C_OR_ZCF,
+  INSN_CLASS_D_AND_C_OR_ZCD,
+  INSN_CLASS_ZCMP,
+  INSN_CLASS_ZCMT,
   INSN_CLASS_A,
   INSN_CLASS_M,
   INSN_CLASS_F,
@@ -457,6 +482,10 @@ enum riscv_insn_class
   INSN_CLASS_D_AND_C,
   INSN_CLASS_D_AND_ZFH,
   INSN_CLASS_Q_AND_ZFH,
+  INSN_CLASS_ZFA,
+  INSN_CLASS_D_AND_ZFA,
+  INSN_CLASS_Q_AND_ZFA,
+  INSN_CLASS_ZFH_AND_ZFA,
   INSN_CLASS_V_AND_F,
   INSN_CLASS_V_OR_ZVAMO,
   INSN_CLASS_V_OR_ZVLSSEG,
@@ -469,18 +498,27 @@ enum riscv_insn_class
   INSN_CLASS_THEADC_E_SE,
   INSN_CLASS_THEADE,
   INSN_CLASS_THEADVDOT,
+  INSN_CLASS_THEAD_MATRIX,
   INSN_CLASS_V_07,
   INSN_CLASS_ZICBOM,
   INSN_CLASS_ZICBOZ,
   INSN_CLASS_ZICBOP,
   INSN_CLASS_ZICSR,
   INSN_CLASS_ZIFENCEI,
+  INSN_CLASS_ZIHINTNTL,
+  INSN_CLASS_ZIHINTNTL_AND_C_OR_ZCA,
   INSN_CLASS_ZIHINTPAUSE,
+  INSN_CLASS_ZAWRS,
   INSN_CLASS_ZFH,
   INSN_CLASS_ZBA,
   INSN_CLASS_ZBB,
   INSN_CLASS_ZBC,
   INSN_CLASS_ZBS,
+  INSN_CLASS_ZICOND,
+  INSN_CLASS_F_AND_ZFH_OR_ZFBFMIN_OR_ZVFBFWMA,
+  INSN_CLASS_F_AND_ZFBFMIN,
+  INSN_CLASS_F_AND_V_AND_ZVFBFMIN,
+  INSN_CLASS_F_AND_V_AND_ZVFBFWMA,
   INSN_CLASS_ZMMUL,
 };
 
@@ -677,6 +715,8 @@ extern const char * const riscv_fpr_names_numeric[NFPR];
 extern const char * const riscv_fpr_names_abi[NFPR];
 extern const char * const riscv_vecr_names_numeric[NVECR];
 extern const char * const riscv_vecm_names_numeric[NVECM];
+extern const char * const riscv_mr_names_numeric[NMR];
+extern const char * const riscv_fli_value[64];
 
 extern const struct riscv_opcode riscv_opcodes[];
 extern const struct riscv_opcode riscv_v_07_opcodes[];

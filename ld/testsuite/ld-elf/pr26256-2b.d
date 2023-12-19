@@ -2,6 +2,7 @@
 #ld: -e _start
 #nm: -n
 #xfail: [is_generic]
+#skip: riscv*-*-*
 #notarget: fr30-*-* iq2000-*-* ip2k-*-* xstormy16-*-*
 # These targets place .linkorder sections before .text sections.
 

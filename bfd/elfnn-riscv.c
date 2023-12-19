@@ -3692,7 +3692,30 @@ _bfd_riscv_get_max_alignment (asection *sec)
   return (bfd_vma) 1 << max_alignment_power;
 }
 
-/* Relax non-PIC global variable references.  */
+/* Traverse all output sections and return the max alignment
+   in [gp-2K, gp+2K) .  */
+
+static bfd_vma
+_bfd_riscv_get_max_alignment_in_gp (asection *sec, bfd_vma gp)
+{
+  unsigned int max_alignment_power = 0;
+  asection *o;
+
+  if (sec == NULL)
+    return 0;
+
+  for (o = sec->output_section->owner->sections; o != NULL; o = o->next)
+    {
+      if ((VALID_ITYPE_IMM (sec_addr(o) - gp)
+	   || VALID_ITYPE_IMM (sec_addr(o) + o->size - gp))
+	  && (o->alignment_power > max_alignment_power))
+	max_alignment_power = o->alignment_power;
+    }
+
+  return (bfd_vma) 1 << max_alignment_power;
+}
+
+/* Relax non-PIC global variable references to GP-relative references.  */
 
 static bfd_boolean
 _bfd_riscv_relax_lui (bfd *abfd,
@@ -3723,6 +3746,13 @@ _bfd_riscv_relax_lui (bfd *abfd,
       if (h->u.def.section->output_section == sym_sec->output_section
 	  && sym_sec->output_section != bfd_abs_section_ptr)
 	max_alignment = (bfd_vma) 1 << sym_sec->output_section->alignment_power;
+      else if (!undefined_weak && sym_sec->output_section != bfd_abs_section_ptr)
+	{
+	  /* Otherwise, consider the alignment of sections in [gp-2K,gp+2K). */
+	  bfd_vma new_max_alignment = _bfd_riscv_get_max_alignment_in_gp (sym_sec, gp);
+	  if (new_max_alignment)
+	    max_alignment = new_max_alignment;
+	}
     }
 
   /* Is the reference in range of x0 or gp?
@@ -3986,6 +4016,13 @@ _bfd_riscv_relax_pc  (bfd *abfd ATTRIBUTE_UNUSED,
       if (h->u.def.section->output_section == sym_sec->output_section
 	  && sym_sec->output_section != bfd_abs_section_ptr)
 	max_alignment = (bfd_vma) 1 << sym_sec->output_section->alignment_power;
+      else if (!undefined_weak && sym_sec->output_section != bfd_abs_section_ptr)
+	{
+	  /* Otherwise, consider the alignment of sections in [gp-2K,gp+2K). */
+	  bfd_vma new_max_alignment = _bfd_riscv_get_max_alignment_in_gp (sym_sec, gp);
+	  if (new_max_alignment)
+	    max_alignment = new_max_alignment;
+	}
     }
 
   /* Is the reference in range of x0 or gp?

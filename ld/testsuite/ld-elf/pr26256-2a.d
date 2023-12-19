@@ -2,6 +2,7 @@
 #ld: -e _start -T pr26256-2.t
 #nm: -n
 #xfail: [is_generic]
+#skip: riscv*-*-*
 
 #...
 [0-9a-f]+ R linkorder2

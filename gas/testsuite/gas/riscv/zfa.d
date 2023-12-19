@@ -1,0 +1,93 @@
+#as: -march=rv64ifdq_zfa_zfh
+#objdump: -d -Mno-fli-float
+
+.*:[ 	]+file format .*
+
+Disassembly of section .text:
+
+0+000 <target>:
+[ 	]+[0-9a-f]+:[ 	]+f41000d3[ 	]+fli\.h[ 		]+ft1,0
+[ 	]+[0-9a-f]+:[ 	]+f41080d3[ 	]+fli\.h[ 		]+ft1,min
+[ 	]+[0-9a-f]+:[ 	]+f41100d3[ 	]+fli\.h[ 		]+ft1,2
+[ 	]+[0-9a-f]+:[ 	]+f41d80d3[ 	]+fli\.h[ 		]+ft1,27
+[ 	]+[0-9a-f]+:[ 	]+f41e00d3[ 	]+fli\.h[ 		]+ft1,28
+[ 	]+[0-9a-f]+:[ 	]+f41e80d3[ 	]+fli\.h[ 		]+ft1,29
+[ 	]+[0-9a-f]+:[ 	]+f41080d3[ 	]+fli\.h[ 		]+ft1,min
+[ 	]+[0-9a-f]+:[ 	]+f41f00d3[ 	]+fli\.h[ 		]+ft1,inf
+[ 	]+[0-9a-f]+:[ 	]+f41f80d3[ 	]+fli\.h[ 		]+ft1,nan
+[ 	]+[0-9a-f]+:[ 	]+f01000d3[ 	]+fli\.s[ 		]+ft1,0
+[ 	]+[0-9a-f]+:[ 	]+f01080d3[ 	]+fli\.s[ 		]+ft1,min
+[ 	]+[0-9a-f]+:[ 	]+f01100d3[ 	]+fli\.s[ 		]+ft1,2
+[ 	]+[0-9a-f]+:[ 	]+f01d80d3[ 	]+fli\.s[ 		]+ft1,27
+[ 	]+[0-9a-f]+:[ 	]+f01e00d3[ 	]+fli\.s[ 		]+ft1,28
+[ 	]+[0-9a-f]+:[ 	]+f01e80d3[ 	]+fli\.s[ 		]+ft1,29
+[ 	]+[0-9a-f]+:[ 	]+f01080d3[ 	]+fli\.s[ 		]+ft1,min
+[ 	]+[0-9a-f]+:[ 	]+f01f00d3[ 	]+fli\.s[ 		]+ft1,inf
+[ 	]+[0-9a-f]+:[ 	]+f01f80d3[ 	]+fli\.s[ 		]+ft1,nan
+[ 	]+[0-9a-f]+:[ 	]+f21000d3[ 	]+fli\.d[ 		]+ft1,0
+[ 	]+[0-9a-f]+:[ 	]+f21080d3[ 	]+fli\.d[ 		]+ft1,min
+[ 	]+[0-9a-f]+:[ 	]+f21100d3[ 	]+fli\.d[ 		]+ft1,2
+[ 	]+[0-9a-f]+:[ 	]+f21d80d3[ 	]+fli\.d[ 		]+ft1,27
+[ 	]+[0-9a-f]+:[ 	]+f21e00d3[ 	]+fli\.d[ 		]+ft1,28
+[ 	]+[0-9a-f]+:[ 	]+f21e80d3[ 	]+fli\.d[ 		]+ft1,29
+[ 	]+[0-9a-f]+:[ 	]+f21080d3[ 	]+fli\.d[ 		]+ft1,min
+[ 	]+[0-9a-f]+:[ 	]+f21f00d3[ 	]+fli\.d[ 		]+ft1,inf
+[ 	]+[0-9a-f]+:[ 	]+f21f80d3[ 	]+fli\.d[ 		]+ft1,nan
+[ 	]+[0-9a-f]+:[ 	]+f61000d3[ 	]+fli\.q[ 		]+ft1,0
+[ 	]+[0-9a-f]+:[ 	]+f61080d3[ 	]+fli\.q[ 		]+ft1,min
+[ 	]+[0-9a-f]+:[ 	]+f61100d3[ 	]+fli\.q[ 		]+ft1,2
+[ 	]+[0-9a-f]+:[ 	]+f61d80d3[ 	]+fli\.q[ 		]+ft1,27
+[ 	]+[0-9a-f]+:[ 	]+f61e00d3[ 	]+fli\.q[ 		]+ft1,28
+[ 	]+[0-9a-f]+:[ 	]+f61e80d3[ 	]+fli\.q[ 		]+ft1,29
+[ 	]+[0-9a-f]+:[ 	]+f61080d3[ 	]+fli\.q[ 		]+ft1,min
+[ 	]+[0-9a-f]+:[ 	]+f61f00d3[ 	]+fli\.q[ 		]+ft1,inf
+[ 	]+[0-9a-f]+:[ 	]+f61f80d3[ 	]+fli\.q[ 		]+ft1,nan
+[ 	]+[0-9a-f]+:[ 	]+2c3100d3[ 	]+fmin\.h[ 		]+ft1,ft2,ft3
+[ 	]+[0-9a-f]+:[ 	]+2c3120d3[ 	]+fminm\.h[ 		]+ft1,ft2,ft3
+[ 	]+[0-9a-f]+:[ 	]+283100d3[ 	]+fmin\.s[ 		]+ft1,ft2,ft3
+[ 	]+[0-9a-f]+:[ 	]+283120d3[ 	]+fminm\.s[ 		]+ft1,ft2,ft3
+[ 	]+[0-9a-f]+:[ 	]+2a3100d3[ 	]+fmin\.d[ 		]+ft1,ft2,ft3
+[ 	]+[0-9a-f]+:[ 	]+2a3120d3[ 	]+fminm\.d[ 		]+ft1,ft2,ft3
+[ 	]+[0-9a-f]+:[ 	]+2e3100d3[ 	]+fmin\.q[ 		]+ft1,ft2,ft3
+[ 	]+[0-9a-f]+:[ 	]+2e3120d3[ 	]+fminm\.q[ 		]+ft1,ft2,ft3
+[ 	]+[0-9a-f]+:[ 	]+2c3110d3[ 	]+fmax\.h[ 		]+ft1,ft2,ft3
+[ 	]+[0-9a-f]+:[ 	]+2c3130d3[ 	]+fmaxm\.h[ 		]+ft1,ft2,ft3
+[ 	]+[0-9a-f]+:[ 	]+283110d3[ 	]+fmax\.s[ 		]+ft1,ft2,ft3
+[ 	]+[0-9a-f]+:[ 	]+283130d3[ 	]+fmaxm\.s[ 		]+ft1,ft2,ft3
+[ 	]+[0-9a-f]+:[ 	]+2a3110d3[ 	]+fmax\.d[ 		]+ft1,ft2,ft3
+[ 	]+[0-9a-f]+:[ 	]+2a3130d3[ 	]+fmaxm\.d[ 		]+ft1,ft2,ft3
+[ 	]+[0-9a-f]+:[ 	]+2e3110d3[ 	]+fmax\.q[ 		]+ft1,ft2,ft3
+[ 	]+[0-9a-f]+:[ 	]+2e3130d3[ 	]+fmaxm\.q[ 		]+ft1,ft2,ft3
+[ 	]+[0-9a-f]+:[ 	]+4445f553[ 	]+fround\.h[ 		]+fa0,fa1
+[ 	]+[0-9a-f]+:[ 	]+44459553[ 	]+fround\.h[ 		]+fa0,fa1,rtz
+[ 	]+[0-9a-f]+:[ 	]+4045f553[ 	]+fround\.s[ 		]+fa0,fa1
+[ 	]+[0-9a-f]+:[ 	]+40459553[ 	]+fround\.s[ 		]+fa0,fa1,rtz
+[ 	]+[0-9a-f]+:[ 	]+4245f553[ 	]+fround\.d[ 		]+fa0,fa1
+[ 	]+[0-9a-f]+:[ 	]+42459553[ 	]+fround\.d[ 		]+fa0,fa1,rtz
+[ 	]+[0-9a-f]+:[ 	]+4645f553[ 	]+fround\.q[ 		]+fa0,fa1
+[ 	]+[0-9a-f]+:[ 	]+46459553[ 	]+fround\.q[ 		]+fa0,fa1,rtz
+[ 	]+[0-9a-f]+:[ 	]+4455f553[ 	]+froundnx\.h[ 		]+fa0,fa1
+[ 	]+[0-9a-f]+:[ 	]+44559553[ 	]+froundnx\.h[ 		]+fa0,fa1,rtz
+[ 	]+[0-9a-f]+:[ 	]+4055f553[ 	]+froundnx\.s[ 		]+fa0,fa1
+[ 	]+[0-9a-f]+:[ 	]+40559553[ 	]+froundnx\.s[ 		]+fa0,fa1,rtz
+[ 	]+[0-9a-f]+:[ 	]+4255f553[ 	]+froundnx\.d[ 		]+fa0,fa1
+[ 	]+[0-9a-f]+:[ 	]+42559553[ 	]+froundnx\.d[ 		]+fa0,fa1,rtz
+[ 	]+[0-9a-f]+:[ 	]+4655f553[ 	]+froundnx\.q[ 		]+fa0,fa1
+[ 	]+[0-9a-f]+:[ 	]+46559553[ 	]+froundnx\.q[ 		]+fa0,fa1,rtz
+[ 	]+[0-9a-f]+:[ 	]+c2809553[ 	]+fcvtmod\.w\.d[ 	]+a0,ft1,rtz
+[ 	]+[0-9a-f]+:[ 	]+a4209553[ 	]+flt\.h[ 		]+a0,ft1,ft2
+[ 	]+[0-9a-f]+:[ 	]+a420d553[ 	]+fltq\.h[ 		]+a0,ft1,ft2
+[ 	]+[0-9a-f]+:[ 	]+a0209553[ 	]+flt\.s[ 		]+a0,ft1,ft2
+[ 	]+[0-9a-f]+:[ 	]+a020d553[ 	]+fltq\.s[ 		]+a0,ft1,ft2
+[ 	]+[0-9a-f]+:[ 	]+a2209553[ 	]+flt\.d[ 		]+a0,ft1,ft2
+[ 	]+[0-9a-f]+:[ 	]+a220d553[ 	]+fltq\.d[ 		]+a0,ft1,ft2
+[ 	]+[0-9a-f]+:[ 	]+a6209553[ 	]+flt\.q[ 		]+a0,ft1,ft2
+[ 	]+[0-9a-f]+:[ 	]+a620d553[ 	]+fltq\.q[ 		]+a0,ft1,ft2
+[ 	]+[0-9a-f]+:[ 	]+a4208553[ 	]+fle\.h[ 		]+a0,ft1,ft2
+[ 	]+[0-9a-f]+:[ 	]+a420c553[ 	]+fleq\.h[ 		]+a0,ft1,ft2
+[ 	]+[0-9a-f]+:[ 	]+a0208553[ 	]+fle\.s[ 		]+a0,ft1,ft2
+[ 	]+[0-9a-f]+:[ 	]+a020c553[ 	]+fleq\.s[ 		]+a0,ft1,ft2
+[ 	]+[0-9a-f]+:[ 	]+a2208553[ 	]+fle\.d[ 		]+a0,ft1,ft2
+[ 	]+[0-9a-f]+:[ 	]+a220c553[ 	]+fleq\.d[ 		]+a0,ft1,ft2
+[ 	]+[0-9a-f]+:[ 	]+a6208553[ 	]+fle\.q[ 		]+a0,ft1,ft2
+[ 	]+[0-9a-f]+:[ 	]+a620c553[ 	]+fleq\.q[ 		]+a0,ft1,ft2

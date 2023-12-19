@@ -8,7 +8,7 @@ case "$target" in
   riscv*-linux*)
     case "$EMULATION_NAME" in
       *32*)
-	LIBPATH_SUFFIX="32/ilp32 32" ;;
+	LIBPATH_SUFFIX="32/ilp32 32 32xthead/ilp32 32xthead" ;;
     esac
     ;;
 esac

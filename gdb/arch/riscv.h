@@ -52,8 +52,15 @@ struct riscv_gdbarch_features
   /* Equality operator.  */
   bool operator== (const struct riscv_gdbarch_features &rhs) const
   {
+    return (xlen == rhs.xlen && flen == rhs.flen && vlen == rhs.vlen);
+  }
+#else
+  /* Equality operator.  */
+  bool operator== (const struct riscv_gdbarch_features &rhs) const
+  {
     return (xlen == rhs.xlen && flen == rhs.flen);
   }
+#endif
 
   /* Inequality operator.  */
   bool operator!= (const struct riscv_gdbarch_features &rhs) const

@@ -1318,6 +1318,7 @@ riscv_parse_prefixed_ext (riscv_parse_subset_t *rps,
   static int order = 1;
   unsigned major_version = 0;
   unsigned minor_version = 0;
+  int i = 0;
   const char *last_name;
   const char *order_string = "imafdqlcbjtpvn";
   riscv_isa_ext_class_t class;
@@ -1325,7 +1326,7 @@ riscv_parse_prefixed_ext (riscv_parse_subset_t *rps,
 
   if (order == 1)
     {
-      for (int i = 0; order_string[i] != '\0'; i++)
+      for (i = 0; order_string[i] != '\0'; i++)
 	{
 	  if (orders[order_string[i] - 'a'] == 0)
 	    orders[order_string[i] - 'a'] = order++;
@@ -1360,6 +1361,48 @@ riscv_parse_prefixed_ext (riscv_parse_subset_t *rps,
 				      &minor_version, FALSE,
 				      &use_default_version);
       *q = '\0';
+
+      /* Acoording to zc spec, the zce extension is intended to be used for
+         microcontrollers, and includes all relevant zc extensions:
+         * Specifying Zce without F includes Zca, Zcb, Zcmp, Zcmt
+         * Specifying Zce with F includes Zca, Zcb, Zcmp, Zcmt and Zcf.
+         Therefore common ISA strings can be updated as follows to include
+         the relevant Zc extensions, for example:
+         * RV32IMC becomes RV32IM_Zce
+         * RV32IMCF becomes RV32IMF_Zce */
+      if (class == RV_ISA_CLASS_Z && strcasecmp (subset, "zce") == 0)
+        {
+          if (riscv_lookup_subset (rps->subset_list, "f"))
+            {
+              /* add Zca, Zcb, Zcmp, Zcmt.  */
+              rps->get_default_version ("zca", &major_version, &minor_version);
+              riscv_add_subset (rps->subset_list, "zca", major_version,
+                                minor_version);
+              riscv_add_subset (rps->subset_list, "zcb", major_version,
+                                minor_version);
+              riscv_add_subset (rps->subset_list, "zcmp", major_version,
+                                minor_version);
+              riscv_add_subset (rps->subset_list, "zcmt", major_version,
+                                minor_version);
+            }
+          else
+            {
+              /* add Zca, Zcb, Zcmp, Zcmt.  */
+              rps->get_default_version ("zca", &major_version, &minor_version);
+              riscv_add_subset (rps->subset_list, "zca", major_version,
+                                minor_version);
+              riscv_add_subset (rps->subset_list, "zcb", major_version,
+                                minor_version);
+              riscv_add_subset (rps->subset_list, "zcf", major_version,
+                                minor_version);
+              riscv_add_subset (rps->subset_list, "zcmp", major_version,
+                                minor_version);
+              riscv_add_subset (rps->subset_list, "zcmt", major_version,
+                                minor_version);
+            }
+          p += 3;
+          return p;
+        }
 
       /* Check that the name is valid.
 	 For 'x', anything goes but it cannot simply be 'x'.
@@ -1477,12 +1520,14 @@ riscv_parse_prefixed_ext (riscv_parse_subset_t *rps,
 
 static const char * const riscv_std_z_ext_strtab[] =
 {
-  "zicbom", "zicbop", "zicboz", "zicsr", "zifencei", "zihintpause",
+  "zicbom", "zicbop", "zicboz", "zicond", "zicsr", "zifencei", "zihintntl", "zihintpause",
   "zmmul",
-  "zfh",
+  "zawrs", "zfa", "zfbfmin", "zfh",
+  "zca", "zcb", "zcd", "zce", "zcf", "zcmp", "zcmt",
   "zba", "zbb", "zbc", "zbs",
+  "zkt",
   "zpn", "zprvsfextra", "zpsfoperand",
-  "zvamo", "zvlsseg",
+  "zvamo", "zvfbfmin", "zvfbfwma", "zvlsseg",
   NULL
 };
 
@@ -1490,7 +1535,12 @@ static const char * const riscv_std_z_ext_strtab[] =
 
 static const char * const riscv_std_s_ext_strtab[] =
 {
+  "sscofpmf",
+  "sstc",
+  "smstateen",
+  "svnapot",
   "svinval",
+  "svpbmt",
   NULL,
 };
 

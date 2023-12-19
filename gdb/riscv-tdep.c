@@ -490,6 +490,30 @@ static const struct riscv_register_feature riscv_vector_feature =
    { RISCV_CSR_VLENB_REGNUM, { "vlenb"}, RISCV_REG_OPTIONAL},
  }
 };
+
+static const struct riscv_register_feature riscv_matrix_feature =
+{
+ "org.gnu.gdb.riscv.matrix", false,
+ {
+   { RISCV_M0_REGNUM + 0, { "m0"}, RISCV_REG_REQUIRED },
+   { RISCV_M0_REGNUM + 1, { "m1"}, RISCV_REG_REQUIRED },
+   { RISCV_M0_REGNUM + 2, { "m2"}, RISCV_REG_REQUIRED },
+   { RISCV_M0_REGNUM + 3, { "m3"}, RISCV_REG_REQUIRED },
+   { RISCV_M0_REGNUM + 4, { "m4"}, RISCV_REG_REQUIRED },
+   { RISCV_M0_REGNUM + 5, { "m5"}, RISCV_REG_REQUIRED },
+   { RISCV_M0_REGNUM + 6, { "m6"}, RISCV_REG_REQUIRED },
+   { RISCV_M0_REGNUM + 7, { "m7"}, RISCV_REG_REQUIRED },
+
+
+   { RISCV_CSR_XMRSTART_REGNUM, { "xmrstart"}, RISCV_REG_OPTIONAL},
+   { RISCV_CSR_XMCSR_REGNUM, { "xmcsr"}, RISCV_REG_OPTIONAL },
+   { RISCV_CSR_XMSIZE_REGNUM, { "xmsize"}, RISCV_REG_OPTIONAL },
+   { RISCV_CSR_XMLENB_REGNUM, { "xmlenb"}, RISCV_REG_OPTIONAL },
+   { RISCV_CSR_XMLENB_REGNUM, { "xrlenb"}, RISCV_REG_OPTIONAL },
+   { RISCV_CSR_XMISA_REGNUM, { "xmisa"}, RISCV_REG_OPTIONAL },
+ }
+};
+
 /* Controls whether we place compressed breakpoints or not.  When in auto
    mode GDB tries to determine if the target supports compressed
    breakpoints, and uses them if it does.  */
@@ -3333,6 +3357,9 @@ riscv_dwarf_reg_to_regnum (struct gdbarch *gdbarch, int reg)
   else if (reg >= RISCV_DWARF_REGNUM_V0 && reg <= RISCV_DWARF_REGNUM_V31)
     return RISCV_V0_REGNUM + (reg - RISCV_DWARF_REGNUM_V0);
 
+  else if (reg >= RISCV_DWARF_REGNUM_M0 && reg <= RISCV_DWARF_REGNUM_M7)
+    return RISCV_M0_REGNUM + (reg - RISCV_DWARF_REGNUM_M0);
+
   return -1;
 }
 
@@ -3551,6 +3578,8 @@ riscv_gdbarch_init (struct gdbarch_info info,
     = tdesc_find_feature (tdesc, riscv_vreg_feature.name);
   const struct tdesc_feature *feature_vector
     = tdesc_find_feature (tdesc, riscv_vector_feature.name);
+  const struct tdesc_feature *feature_matrix
+    = tdesc_find_feature (tdesc, riscv_matrix_feature.name);
 
   if (feature_cpu == NULL)
     return NULL;
@@ -3633,6 +3662,10 @@ riscv_gdbarch_init (struct gdbarch_info info,
   else if (feature_vector)
     riscv_check_tdesc_feature (tdesc_data, feature_vector, feature_csr,
                                &riscv_vector_feature,
+                               &pending_aliases);
+  if (feature_matrix)
+    riscv_check_tdesc_feature (tdesc_data, feature_matrix, feature_csr,
+                               &riscv_matrix_feature,
                                &pending_aliases);
 
   if (!valid_p)
