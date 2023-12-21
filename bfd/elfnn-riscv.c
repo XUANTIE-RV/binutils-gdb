@@ -3701,7 +3701,9 @@ _bfd_riscv_get_max_alignment_in_gp (asection *sec, bfd_vma gp)
   unsigned int max_alignment_power = 0;
   asection *o;
 
-  if (sec == NULL)
+  /* There are maybe some *UND* symbol sections goto here.  */
+  if (sec == NULL || sec->output_section == NULL
+      || sec->output_section->owner == NULL)
     return 0;
 
   for (o = sec->output_section->owner->sections; o != NULL; o = o->next)
