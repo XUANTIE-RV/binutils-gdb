@@ -1192,6 +1192,7 @@ static struct riscv_implicit_subset riscv_implicit_subsets[] =
   {"v", "zve64d",	check_implicit_always},
   {"v", "zvl128b",	check_implicit_always},
   {"zabha", "a",	check_implicit_always},
+  {"zvfbfmin", "zve32f",	check_implicit_always},
   {"zvfh", "zvfhmin",	check_implicit_always},
   {"zvfh", "zfhmin",	check_implicit_always},
   {"zvfhmin", "zve32f",	check_implicit_always},
