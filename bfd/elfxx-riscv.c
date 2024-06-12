@@ -1407,6 +1407,7 @@ static struct riscv_supported_ext riscv_supported_std_z_ext[] =
   {"zihintntl",		ISA_SPEC_CLASS_DRAFT,		1, 0,  0 },
   {"zihintpause",	ISA_SPEC_CLASS_DRAFT,		2, 0,  0 },
   {"zihpm",		ISA_SPEC_CLASS_DRAFT,		2, 0,  0 },
+  {"zimop",		ISA_SPEC_CLASS_DRAFT,		1, 0,  0 },
   {"zmmul",		ISA_SPEC_CLASS_DRAFT,		1, 0,  0 },
   {"za64rs",		ISA_SPEC_CLASS_DRAFT,		1, 0,  0 },
   {"za128rs",		ISA_SPEC_CLASS_DRAFT,		1, 0,  0 },
