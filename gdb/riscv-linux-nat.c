@@ -36,9 +36,21 @@
 
 #ifdef CSKYMODIFY_CONFIG
 #include "asm/ptrace.h"
+#ifdef __riscv
+#include "linux/version.h"
+#include "linux/elf.h"
+#endif /* __riscv  */
+
 #ifndef NT_RISCV_VECTOR
 # define NT_RISCV_VECTOR 0x900
 #endif
+
+#if ((LINUX_VERSION_CODE >> 16) >= 6)
+/* Use struct __riscv_v_regset_state with kernel version V6.6,
+ * else use struct __riscv_v_state with kernel version V5.10.  */
+#define USE__RISCV_V_REGSET_STATE 1
+#endif
+
 #endif
 
 /* RISC-V Linux native additions to the default linux support.  */
@@ -204,6 +216,7 @@ fill_fpregset (const struct regcache *regcache, prfpregset_t *fpregs,
 }
 
 #ifdef CSKYMODIFY_CONFIG
+#ifndef USE__RISCV_V_REGSET_STATE
 /* Copy vector register REGNUM (or all vector regs if REGNUM == -1)
    from REGCACHE into regset VREGS.  */
 
@@ -271,6 +284,83 @@ supply_vregset_regnum (struct regcache *regcache,
   else if (regnum == RISCV_CSR_VTYPE_REGNUM)
     regcache->raw_supply (RISCV_CSR_VTYPE_REGNUM, &(vregs->vtype));
 }
+#else /* defined USE__RISCV_V_REGSET_STATE */
+/* Copy vector register REGNUM (or all vector regs if REGNUM == -1)
+   from REGCACHE into regset VREGS.  */
+
+static void
+fill_vregset_regnum (const struct regcache *regcache,
+                     struct __riscv_v_regset_state *vregs, int regnum)
+{
+  if (regnum == -1)
+    {
+      /* We only support the vector registers, VSTART, VL, VTYPE, VCSR,
+       * VLENB here.  */
+      for (int i = RISCV_V0_REGNUM; i < RISCV_V31_REGNUM; i++)
+        regcache->raw_collect (i, vregs->vreg
+           + (i - RISCV_V0_REGNUM) * register_size (regcache->arch (),
+                                                    RISCV_V0_REGNUM));
+
+      regcache->raw_collect (RISCV_CSR_VSTART_REGNUM, &(vregs->vstart));
+      regcache->raw_collect (RISCV_CSR_VL_REGNUM, &(vregs->vl));
+      regcache->raw_collect (RISCV_CSR_VTYPE_REGNUM, &(vregs->vtype));
+      regcache->raw_collect (RISCV_CSR_VCSR_REGNUM, &(vregs->vcsr));
+      regcache->raw_collect (RISCV_CSR_VLENB_REGNUM, &(vregs->vlenb));
+    }
+  else if (regnum >= RISCV_V0_REGNUM && regnum <= RISCV_V31_REGNUM)
+    regcache->raw_collect (regnum, vregs->vreg
+      + (regnum - RISCV_V0_REGNUM) * register_size (regcache->arch (),
+                                                    RISCV_V0_REGNUM));
+  else if (regnum == RISCV_CSR_VSTART_REGNUM)
+    regcache->raw_collect (RISCV_CSR_VSTART_REGNUM, &(vregs->vstart));
+  else if (regnum == RISCV_CSR_VL_REGNUM)
+    regcache->raw_collect (RISCV_CSR_VL_REGNUM, &(vregs->vl));
+  else if (regnum == RISCV_CSR_VTYPE_REGNUM)
+    regcache->raw_collect (RISCV_CSR_VTYPE_REGNUM, &(vregs->vtype));
+  else if (regnum == RISCV_CSR_VCSR_REGNUM)
+    regcache->raw_collect (RISCV_CSR_VCSR_REGNUM, &(vregs->vcsr));
+  else if (regnum == RISCV_CSR_VLENB_REGNUM)
+    regcache->raw_collect (RISCV_CSR_VLENB_REGNUM, &(vregs->vlenb));
+}
+
+/* Copy vector point register REGNUM (or all vector regs if REGNUM == -1)
+   from regset VPREGS into REGCACHE.  */
+
+static void
+supply_vregset_regnum (struct regcache *regcache,
+                       const struct __riscv_v_regset_state *vregs, int regnum)
+{
+  if (regnum == -1)
+    {
+      /* We only support the vector registers, VSTART, VL, VTYPE, VCSR,
+       * VLENB here.  */
+      for (int i = RISCV_V0_REGNUM; i < RISCV_V31_REGNUM; i++)
+        regcache->raw_supply (i, vregs->vreg
+          + (i - RISCV_V0_REGNUM) * register_size (regcache->arch (),
+                                                   RISCV_V0_REGNUM));
+
+      regcache->raw_supply (RISCV_CSR_VSTART_REGNUM, &(vregs->vstart));
+      regcache->raw_supply (RISCV_CSR_VL_REGNUM, &(vregs->vl));
+      regcache->raw_supply (RISCV_CSR_VTYPE_REGNUM, &(vregs->vtype));
+      regcache->raw_supply (RISCV_CSR_VCSR_REGNUM, &(vregs->vcsr));
+      regcache->raw_supply (RISCV_CSR_VLENB_REGNUM, &(vregs->vlenb));
+    }
+  else if (regnum >= RISCV_V0_REGNUM && regnum <= RISCV_V31_REGNUM)
+    regcache->raw_supply (regnum, vregs->vreg
+      + (regnum - RISCV_V0_REGNUM) * register_size (regcache->arch (),
+                                                    RISCV_V0_REGNUM));
+  else if (regnum == RISCV_CSR_VSTART_REGNUM)
+    regcache->raw_supply (RISCV_CSR_VSTART_REGNUM, &(vregs->vstart));
+  else if (regnum == RISCV_CSR_VL_REGNUM)
+    regcache->raw_supply (RISCV_CSR_VL_REGNUM, &(vregs->vl));
+  else if (regnum == RISCV_CSR_VTYPE_REGNUM)
+    regcache->raw_supply (RISCV_CSR_VTYPE_REGNUM, &(vregs->vtype));
+  else if (regnum == RISCV_CSR_VCSR_REGNUM)
+    regcache->raw_supply (RISCV_CSR_VCSR_REGNUM, &(vregs->vcsr));
+  else if (regnum == RISCV_CSR_VLENB_REGNUM)
+    regcache->raw_supply (RISCV_CSR_VLENB_REGNUM, &(vregs->vlenb));
+}
+#endif /* defined USE__RISCV_V_REGSET_STATE */
 #endif
 
 /* Return a target description for the current target.  */
@@ -340,6 +430,7 @@ riscv_linux_nat_target::fetch_registers (struct regcache *regcache, int regnum)
     }
 
 #ifdef CSKYMODIFY_CONFIG
+#ifndef USE__RISCV_V_REGSET_STATE
   if ((regnum >= RISCV_V0_REGNUM && regnum <= RISCV_V31_REGNUM)
       || (regnum == RISCV_CSR_VSTART_REGNUM)
       || (regnum == RISCV_CSR_VXSAT_REGNUM)
@@ -361,6 +452,39 @@ riscv_linux_nat_target::fetch_registers (struct regcache *regcache, int regnum)
       else
 	supply_vregset_regnum (regcache, &vregs, regnum);
     }
+#else /* defined USE__RISCV_V_REGSET_STATE */
+  if ((regnum >= RISCV_V0_REGNUM && regnum <= RISCV_V31_REGNUM)
+      || (regnum == RISCV_CSR_VSTART_REGNUM)
+      || (regnum == RISCV_CSR_VL_REGNUM)
+      || (regnum == RISCV_CSR_VTYPE_REGNUM)
+      || (regnum == RISCV_CSR_VCSR_REGNUM)
+      || (regnum == RISCV_CSR_VLENB_REGNUM)
+      || (regnum == -1))
+    {
+      /* struct __riscv_v_regset_state is defined in asm/ptrace.h */
+      struct __riscv_v_regset_state *vregs;
+      struct iovec iov;
+
+      vregs = (struct __riscv_v_regset_state *) malloc
+	      (sizeof (struct __riscv_v_regset_state)
+	       + 32 * register_size (regcache->arch (),
+                                     RISCV_V0_REGNUM));
+      if (vregs == NULL)
+         perror_with_name (_("Failed to malloc space for vregs"));
+
+      iov.iov_base = vregs;
+      iov.iov_len = sizeof (struct __riscv_v_regset_state)
+                    + 32 * register_size (regcache->arch (),
+                                          RISCV_V0_REGNUM);
+
+      if (ptrace (PTRACE_GETREGSET, tid, NT_RISCV_VECTOR,
+                  (PTRACE_TYPE_ARG3) &iov) == -1)
+        perror_with_name (_("Couldn't get vregisters"));
+      else
+        supply_vregset_regnum (regcache, vregs, regnum);
+      free(vregs);
+    }
+#endif /* defined USE__RISCV_V_REGSET_STATE */
 #endif
 
   /* Access to other CSRs has potential security issues, don't support them for
@@ -426,6 +550,7 @@ riscv_linux_nat_target::store_registers (struct regcache *regcache, int regnum)
     }
 
 #ifdef CSKYMODIFY_CONFIG
+#ifndef USE__RISCV_V_REGSET_STATE
   if ((regnum >= RISCV_V0_REGNUM && regnum <= RISCV_V31_REGNUM)
       || (regnum == RISCV_CSR_VSTART_REGNUM)
       || (regnum == RISCV_CSR_VXSAT_REGNUM)
@@ -453,6 +578,45 @@ riscv_linux_nat_target::store_registers (struct regcache *regcache, int regnum)
 	    perror_with_name (_("Couldn't set vregisters"));
 	}
     }
+#else  /* defined USE__RISCV_V_REGSET_STATE */
+  if ((regnum >= RISCV_V0_REGNUM && regnum <= RISCV_V31_REGNUM)
+      || (regnum == RISCV_CSR_VSTART_REGNUM)
+      || (regnum == RISCV_CSR_VL_REGNUM)
+      || (regnum == RISCV_CSR_VTYPE_REGNUM)
+      || (regnum == RISCV_CSR_VCSR_REGNUM)
+      || (regnum == RISCV_CSR_VLENB_REGNUM)
+      || (regnum == -1))
+    {
+      /* struct __riscv_v_regset_state is defined in asm/ptrace.h */
+      struct __riscv_v_regset_state *vregs;
+      struct iovec iov;
+
+      vregs = (struct __riscv_v_regset_state *) malloc
+              (sizeof (struct __riscv_v_regset_state)
+               + 32 * register_size (regcache->arch (),
+                                     RISCV_V0_REGNUM));
+      if (vregs == NULL)
+         perror_with_name (_("Failed to malloc space for vregs"));
+
+      iov.iov_base = vregs;
+      iov.iov_len = sizeof (struct __riscv_v_regset_state)
+               + 32 * register_size (regcache->arch (),
+                                     RISCV_V0_REGNUM);
+
+      if (ptrace (PTRACE_GETREGSET, tid, NT_RISCV_VECTOR,
+                  (PTRACE_TYPE_ARG3) &iov) == -1)
+        perror_with_name (_("Couldn't get vregisters"));
+      else
+        {
+          fill_vregset_regnum (regcache, vregs, regnum);
+
+          if (ptrace (PTRACE_SETREGSET, tid, NT_RISCV_VECTOR,
+                      (PTRACE_TYPE_ARG3) &iov) == -1)
+            perror_with_name (_("Couldn't set vregisters"));
+        }
+      free(vregs);
+    }
+#endif /* defined USE__RISCV_V_REGSET_STATE */
 #endif
 
   /* Access to CSRs has potential security issues, don't support them for

@@ -24,7 +24,29 @@
 #include "../features/riscv/64bit-cpu.c"
 #include "../features/riscv/32bit-fpu.c"
 #include "../features/riscv/64bit-fpu.c"
+
+#ifdef CSKYMODIFY_CONFIG
+#ifdef __riscv
+#include "linux/version.h"
+#endif /*__riscv */
+
+#if ((LINUX_VERSION_CODE >> 16) >= 6)
+/* Use struct __riscv_v_regset_state with kernel version V6.6,
+ * else use struct __riscv_v_state with kernel version V5.10.  */
+#define USE__RISCV_V_REGSET_STATE 1
+#endif
+
+#ifndef USE__RISCV_V_REGSET_STATE
 #include "../features/riscv/128bit-vpu.c"
+#else
+#include "../features/riscv/128bit-vector.c"
+#include "../features/riscv/256bit-vector.c"
+#include "../features/riscv/512bit-vector.c"
+#include "../features/riscv/64bit-vector-csr.c"
+#include "../features/riscv/32bit-vector-csr.c"
+#endif
+
+#endif
 
 #ifndef GDBSERVER
 #define STATIC_IN_GDB static
@@ -74,9 +96,28 @@ riscv_create_target_description (const struct riscv_gdbarch_features features)
   else if (features.flen == 8)
     regnum = create_feature_riscv_64bit_fpu (tdesc, regnum);
 
-  /* If T-HEAD vector128 support.  */
+#ifdef CSKYMODIFY_CONFIG
+#ifndef USE__RISCV_V_REGSET_STATE
+  /* If XuanTie vector128 support.  */
   if (features.vlen == 128)
     regnum = create_feature_riscv_128bit_vpu (tdesc, regnum);
+#else /* defined USE__RISCV_V_REGSET_STATE.  */
+  if (features.vlen == 16 || features.vlen == 32
+      || features.vlen == 64) {
+    if (features.xlen == 4)
+      regnum = create_feature_riscv_32bit_vector_csr (tdesc, regnum);
+    else if (features.xlen == 8)
+      regnum = create_feature_riscv_64bit_vector_csr (tdesc, regnum);
+  }
+
+  if (features.vlen == 16)
+    regnum = create_feature_riscv_128bit_vector (tdesc, regnum);
+  else if (features.vlen == 32)
+    regnum = create_feature_riscv_256bit_vector (tdesc, regnum);
+  else if (features.vlen == 64)
+    regnum = create_feature_riscv_512bit_vector (tdesc, regnum);
+#endif /* defined USE__RISCV_V_REGSET_STATE.  */
+#endif
 
   return tdesc;
 }

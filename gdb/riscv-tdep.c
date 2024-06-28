@@ -75,7 +75,6 @@ static inline bool is_ ## INSN_NAME ## _insn (long insn) \
 #undef DECLARE_INSN
 
 static bool prologue_schedue = false;
-
 /* Cached information about a frame.  */
 
 struct riscv_unwind_cache
@@ -272,6 +271,24 @@ static const struct riscv_register_feature riscv_xreg_feature =
    { RISCV_ZERO_REGNUM + 13, { "a3", "x13" }, RISCV_REG_REQUIRED },
    { RISCV_ZERO_REGNUM + 14, { "a4", "x14" }, RISCV_REG_REQUIRED },
    { RISCV_ZERO_REGNUM + 15, { "a5", "x15" }, RISCV_REG_REQUIRED },
+#ifndef CSKYMODIFY_CONFIG
+   { RISCV_ZERO_REGNUM + 16, { "a6", "x16" }, RISCV_REG_REQUIRED },
+   { RISCV_ZERO_REGNUM + 17, { "a7", "x17" }, RISCV_REG_REQUIRED },
+   { RISCV_ZERO_REGNUM + 18, { "s2", "x18" }, RISCV_REG_REQUIRED },
+   { RISCV_ZERO_REGNUM + 19, { "s3", "x19" }, RISCV_REG_REQUIRED },
+   { RISCV_ZERO_REGNUM + 20, { "s4", "x20" }, RISCV_REG_REQUIRED },
+   { RISCV_ZERO_REGNUM + 21, { "s5", "x21" }, RISCV_REG_REQUIRED },
+   { RISCV_ZERO_REGNUM + 22, { "s6", "x22" }, RISCV_REG_REQUIRED },
+   { RISCV_ZERO_REGNUM + 23, { "s7", "x23" }, RISCV_REG_REQUIRED },
+   { RISCV_ZERO_REGNUM + 24, { "s8", "x24" }, RISCV_REG_REQUIRED },
+   { RISCV_ZERO_REGNUM + 25, { "s9", "x25" }, RISCV_REG_REQUIRED },
+   { RISCV_ZERO_REGNUM + 26, { "s10", "x26" }, RISCV_REG_REQUIRED },
+   { RISCV_ZERO_REGNUM + 27, { "s11", "x27" }, RISCV_REG_REQUIRED },
+   { RISCV_ZERO_REGNUM + 28, { "t3", "x28" }, RISCV_REG_REQUIRED },
+   { RISCV_ZERO_REGNUM + 29, { "t4", "x29" }, RISCV_REG_REQUIRED },
+   { RISCV_ZERO_REGNUM + 30, { "t5", "x30" }, RISCV_REG_REQUIRED },
+   { RISCV_ZERO_REGNUM + 31, { "t6", "x31" }, RISCV_REG_REQUIRED },
+#else
    { RISCV_ZERO_REGNUM + 16, { "a6", "x16" }, RISCV_REG_OPTIONAL },
    { RISCV_ZERO_REGNUM + 17, { "a7", "x17" }, RISCV_REG_OPTIONAL },
    { RISCV_ZERO_REGNUM + 18, { "s2", "x18" }, RISCV_REG_OPTIONAL },
@@ -288,6 +305,7 @@ static const struct riscv_register_feature riscv_xreg_feature =
    { RISCV_ZERO_REGNUM + 29, { "t4", "x29" }, RISCV_REG_OPTIONAL },
    { RISCV_ZERO_REGNUM + 30, { "t5", "x30" }, RISCV_REG_OPTIONAL },
    { RISCV_ZERO_REGNUM + 31, { "t6", "x31" }, RISCV_REG_OPTIONAL },
+#endif
    { RISCV_ZERO_REGNUM + 32, { "pc" }, RISCV_REG_REQUIRED }
  }
 };
@@ -391,6 +409,7 @@ riscv_create_csr_aliases ()
     }
 }
 
+#ifdef CSKYMODIFY_CONFIG
 /* The v-registers feature set.  */
 static const struct riscv_register_feature riscv_vreg_feature =
 {
@@ -513,7 +532,7 @@ static const struct riscv_register_feature riscv_matrix_feature =
    { RISCV_CSR_XMISA_REGNUM, { "xmisa"}, RISCV_REG_OPTIONAL },
  }
 };
-
+#endif
 /* Controls whether we place compressed breakpoints or not.  When in auto
    mode GDB tries to determine if the target supports compressed
    breakpoints, and uses them if it does.  */
@@ -532,6 +551,7 @@ show_use_compressed_breakpoints (struct ui_file *file, int from_tty,
 		      "to %s.\n"), value);
 }
 
+#ifdef CSKYMODIFY_CONFIG
 static void
 show_prologue_schedue(struct ui_file *file, int from_tty,
 				 struct cmd_list_element *c,
@@ -540,6 +560,7 @@ show_prologue_schedue(struct ui_file *file, int from_tty,
   fprintf_filtered (file,
 		    _("The prologue_schedue is set to %s.\n"), value);
 }
+#endif
 
 /* The set and show lists for 'set riscv' and 'show riscv' prefixes.  */
 
@@ -640,6 +661,7 @@ riscv_is_fp_regno_p (int regno)
 	  && regno <= RISCV_LAST_FP_REGNUM);
 }
 
+#ifdef CSKYMODIFY_CONFIG
 /* Return true if REGNO is a control and status register.  */
 static bool
 riscv_is_gpr_regno_p (int regno)
@@ -654,6 +676,7 @@ riscv_is_csr_regno_p (int regno)
   return (regno >= RISCV_FIRST_CSR_REGNUM
 	  && regno <= RISCV_LAST_CSR_REGNUM);
 }
+#endif
 
 /* Implement the breakpoint_kind_from_pc gdbarch method.  */
 
@@ -781,6 +804,7 @@ riscv_register_name (struct gdbarch *gdbarch, int regnum)
     return NULL;
   if (tdep->duplicate_fcsr_regnum == regnum)
     return NULL;
+#ifdef CSKYMODIFY_CONFIG
   if (tdep->duplicate_vstart_regnum == regnum)
     return NULL;
   if (tdep->duplicate_vxsat_regnum == regnum)
@@ -795,6 +819,7 @@ riscv_register_name (struct gdbarch *gdbarch, int regnum)
     return NULL;
   if (tdep->duplicate_vlenb_regnum == regnum)
     return NULL;
+#endif
 
   /* The remaining registers are different.  For all other registers on the
      machine we prefer to see the names that the target description
@@ -897,6 +922,7 @@ riscv_register_type (struct gdbarch *gdbarch, int regnum)
 	type = builtin_type (gdbarch)->builtin_data_ptr;
     }
 
+#ifdef CSKYMODIFY_CONFIG
   /* If type is not builtin_int0, use it.  */
   if (type->length != 0)
     return type;
@@ -922,6 +948,7 @@ riscv_register_type (struct gdbarch *gdbarch, int regnum)
 
   /* FIXME: if a vector reg has no type.  */
   /* TODO:... */
+#endif
 
   return type;
 }
@@ -1171,9 +1198,11 @@ riscv_register_reggroup_p (struct gdbarch  *gdbarch, int regnum,
       || gdbarch_register_name (gdbarch, regnum)[0] == '\0')
     return 0;
 
+#ifdef CSKYMODIFY_CONFIG
   /* Just make gprs and pc as general_reggroup.  */
   if (reggroup == general_reggroup)
     return regnum < RISCV_FIRST_FP_REGNUM;
+#endif
 
   if (regnum > RISCV_LAST_REGNUM)
     {
@@ -1199,8 +1228,13 @@ riscv_register_reggroup_p (struct gdbarch  *gdbarch, int regnum,
 
   if (reggroup == all_reggroup)
     {
+#ifndef CSKYMODIFY_CONFIG
+      if (regnum < RISCV_FIRST_CSR_REGNUM || regnum == RISCV_PRIV_REGNUM)
+	return 1;
+#else
       if (regnum < RISCV_FIRST_CSR_REGNUM || regnum >= RISCV_PRIV_REGNUM)
         return 1;
+#endif
       if (riscv_is_regnum_a_named_csr (regnum))
         return 1;
       return 0;
@@ -1233,7 +1267,11 @@ riscv_register_reggroup_p (struct gdbarch  *gdbarch, int regnum,
       return 0;
     }
   else if (reggroup == vector_reggroup)
+#ifndef CSKYMODIFY_CONFIG
+    return 0;
+#else
     return (regnum >= RISCV_V0_REGNUM && regnum <= RISCV_V31_REGNUM);
+#endif
   else
     return 0;
 }
@@ -1665,7 +1703,11 @@ riscv_insn::decode (struct gdbarch *gdbarch, CORE_ADDR pc)
       else if (is_c_swsp_insn (ival))
 	decode_css_type_insn (SW, ival, EXTRACT_RVC_SWSP_IMM (ival));
       else if (xlen != 4 && is_c_sdsp_insn (ival))
+#ifdef CSKYMODIFY_CONFIG
 	decode_css_type_insn (SD, ival, EXTRACT_RVC_SDSP_IMM (ival));
+#else
+	decode_css_type_insn (SW, ival, EXTRACT_RVC_SDSP_IMM (ival));
+#endif
       /* C_JR and C_MV have the same opcode.  If RS2 is 0, then this is a C_JR.
 	 So must try to match C_JR first as it ahs more bits in mask.  */
       else if (is_c_jr_insn (ival))
@@ -1704,8 +1746,10 @@ riscv_scan_prologue (struct gdbarch *gdbarch,
 {
   CORE_ADDR cur_pc, next_pc, after_prologue_pc;
   CORE_ADDR end_prologue_addr = 0;
+#ifdef CSKYMODIFY_CONFIG
   int prologue_started = 0;
   int ra_stored = 0;
+#endif
 
   /* Find an upper limit on the function prologue using the debug
      information.  If the debug information could not be used to provide
@@ -1750,7 +1794,9 @@ riscv_scan_prologue (struct gdbarch *gdbarch,
           gdb_assert (insn.rs1 () < RISCV_NUM_INTEGER_REGS);
           regs[insn.rd ()]
             = pv_add_constant (regs[insn.rs1 ()], insn.imm_signed ());
+#ifdef CSKYMODIFY_CONFIG
 	  prologue_started = 1;
+#endif
 	}
       else if ((insn.opcode () == riscv_insn::SW
 		|| insn.opcode () == riscv_insn::SD)
@@ -1767,8 +1813,10 @@ riscv_scan_prologue (struct gdbarch *gdbarch,
           stack.store (pv_add_constant (regs[insn.rs1 ()], insn.imm_signed ()),
                         (insn.opcode () == riscv_insn::SW ? 4 : 8),
                         regs[insn.rs2 ()]);
+#ifdef CSKYMODIFY_CONFIG
 	  if (insn.rs2() == RISCV_RA_REGNUM)
 	    ra_stored = 1;
+#endif
 	}
       else if (insn.opcode () == riscv_insn::ADDI
 	       && insn.rd () == RISCV_FP_REGNUM
@@ -1829,9 +1877,13 @@ riscv_scan_prologue (struct gdbarch *gdbarch,
           gdb_assert (insn.rs2 () < RISCV_NUM_INTEGER_REGS);
           regs[insn.rd ()] = pv_add (regs[insn.rs1 ()], regs[insn.rs2 ()]);
         }
+#ifdef CSKYMODIFY_CONFIG
       else if (!prologue_schedue
 	       || (prologue_started
 		   && ra_stored))
+#else
+      else
+#endif
 	{
 	  end_prologue_addr = cur_pc;
 	  break;
@@ -3138,7 +3190,10 @@ riscv_frame_cache (struct frame_info *this_frame, void **this_cache)
   /* Scan the prologue, filling in the cache.  */
   start_addr = get_frame_func (this_frame);
   pc = get_frame_pc (this_frame);
-
+#ifdef CSKYMODIFY_CONFIG
+  if (start_addr == 0 && pc > 0x1000)
+    start_addr = pc;
+#endif
   riscv_scan_prologue (gdbarch, start_addr, pc, cache);
 
   /* We can now calculate the frame base address.  */
@@ -3354,11 +3409,13 @@ riscv_dwarf_reg_to_regnum (struct gdbarch *gdbarch, int reg)
   else if (RISCV_DWARF_REGNUM_CSR_BEGIN <= reg && reg <= RISCV_DWARF_REGNUM_CSR_END)
     return RISCV_FIRST_CSR_REGNUM + (reg - RISCV_DWARF_REGNUM_CSR_BEGIN);
 
+#ifdef CSKYMODIFY_CONFIG
   else if (reg >= RISCV_DWARF_REGNUM_V0 && reg <= RISCV_DWARF_REGNUM_V31)
     return RISCV_V0_REGNUM + (reg - RISCV_DWARF_REGNUM_V0);
 
   else if (reg >= RISCV_DWARF_REGNUM_M0 && reg <= RISCV_DWARF_REGNUM_M7)
     return RISCV_M0_REGNUM + (reg - RISCV_DWARF_REGNUM_M0);
+#endif
 
   return -1;
 }
@@ -3464,6 +3521,7 @@ riscv_tdesc_unknown_reg (struct gdbarch *gdbarch, tdesc_feature *feature,
 	}
     }
 
+#ifdef CSKYMODIFY_CONFIG
   if (strcmp (tdesc_feature_name (feature), riscv_vreg_feature.name) == 0
       || strcmp (tdesc_feature_name (feature), riscv_vector_feature.name) == 0
       || strcmp (tdesc_feature_name (feature), riscv_csr_feature.name) == 0)
@@ -3511,6 +3569,7 @@ riscv_tdesc_unknown_reg (struct gdbarch *gdbarch, tdesc_feature *feature,
         }
 
     }
+#endif
 
   /* Any unknown registers in the CSR feature are recorded within a single
      block so we can easily identify these registers when making choices
@@ -3574,12 +3633,14 @@ riscv_gdbarch_init (struct gdbarch_info info,
     = tdesc_find_feature (tdesc, riscv_virtual_feature.name);
   const struct tdesc_feature *feature_csr
     = tdesc_find_feature (tdesc, riscv_csr_feature.name);
+#ifdef CSKYMODIFY_CONFIG
   const struct tdesc_feature *feature_vpu
     = tdesc_find_feature (tdesc, riscv_vreg_feature.name);
   const struct tdesc_feature *feature_vector
     = tdesc_find_feature (tdesc, riscv_vector_feature.name);
   const struct tdesc_feature *feature_matrix
     = tdesc_find_feature (tdesc, riscv_matrix_feature.name);
+#endif
 
   if (feature_cpu == NULL)
     return NULL;
@@ -3655,6 +3716,7 @@ riscv_gdbarch_init (struct gdbarch_info info,
     riscv_check_tdesc_feature (tdesc_data, feature_csr, nullptr,
                                &riscv_csr_feature,
                                &pending_aliases);
+#ifdef CSKYMODIFY_CONFIG
   if (feature_vpu)
     riscv_check_tdesc_feature (tdesc_data, feature_vpu, feature_csr,
                                &riscv_vreg_feature,
@@ -3667,7 +3729,7 @@ riscv_gdbarch_init (struct gdbarch_info info,
     riscv_check_tdesc_feature (tdesc_data, feature_matrix, feature_csr,
                                &riscv_matrix_feature,
                                &pending_aliases);
-
+#endif
   if (!valid_p)
     {
       if (riscv_debug_gdbarch)
@@ -4039,8 +4101,9 @@ initialisation process."),
 		       _("RISC-V specific commands."),
 		       &showriscvcmdlist, "show riscv ", 0, &showlist);
 
-
-  use_compressed_breakpoints = AUTO_BOOLEAN_FALSE;
+#ifdef CSKYMODIFY_CONFIG
+  use_compressed_breakpoints = AUTO_BOOLEAN_TRUE;
+#endif
   add_setshow_auto_boolean_cmd ("use-compressed-breakpoints", no_class,
 				&use_compressed_breakpoints,
 				_("\
