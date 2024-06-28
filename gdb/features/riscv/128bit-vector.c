@@ -1,14 +1,14 @@
 /* THIS FILE IS GENERATED.  -*- buffer-read-only: t -*- vi:set ro:
-  Original: 128bit-vpu.xml */
+  Original: 128bit-vector.xml */
 
 #include "gdbsupport/tdesc.h"
 
 static int
-create_feature_riscv_128bit_vpu (struct target_desc *result, long regnum)
+create_feature_riscv_128bit_vector (struct target_desc *result, long regnum)
 {
   struct tdesc_feature *feature;
 
-  feature = tdesc_create_feature (result, "org.gnu.gdb.riscv.vpu");
+  feature = tdesc_create_feature (result, "org.gnu.gdb.riscv.vector");
   tdesc_type *element_type;
   element_type = tdesc_named_type (feature, "ieee_single");
   tdesc_create_vector (feature, "v4f", element_type, 4);
@@ -46,6 +46,7 @@ create_feature_riscv_128bit_vpu (struct target_desc *result, long regnum)
   field_type = tdesc_named_type (feature, "uint128");
   tdesc_add_field (type_with_fields, "uint128", field_type);
 
+  regnum = 4162;
   tdesc_create_reg (feature, "v0", regnum++, 1, NULL, 128, "vec128");
   tdesc_create_reg (feature, "v1", regnum++, 1, NULL, 128, "vec128");
   tdesc_create_reg (feature, "v2", regnum++, 1, NULL, 128, "vec128");
@@ -78,10 +79,5 @@ create_feature_riscv_128bit_vpu (struct target_desc *result, long regnum)
   tdesc_create_reg (feature, "v29", regnum++, 1, NULL, 128, "vec128");
   tdesc_create_reg (feature, "v30", regnum++, 1, NULL, 128, "vec128");
   tdesc_create_reg (feature, "v31", regnum++, 1, NULL, 128, "vec128");
-  tdesc_create_reg (feature, "vstart", regnum++, 1, NULL, 64, "int");
-  tdesc_create_reg (feature, "vxsat", regnum++, 1, NULL, 64, "int");
-  tdesc_create_reg (feature, "vxrm", regnum++, 1, NULL, 64, "int");
-  tdesc_create_reg (feature, "vl", regnum++, 1, NULL, 64, "int");
-  tdesc_create_reg (feature, "vtype", regnum++, 1, NULL, 64, "int");
   return regnum;
 }

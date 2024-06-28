@@ -31,9 +31,23 @@
 # define NFPREG 33
 #endif
 
+#ifdef CSKYMODIFY_CONFIG
 #include "asm/ptrace.h"
+#ifdef __riscv
+#include "linux/version.h"
+#include "linux/elf.h"
+#endif /* __riscv  */
+
 #ifndef NT_RISCV_VECTOR
 # define NT_RISCV_VECTOR 0x900
+#endif
+
+#if ((LINUX_VERSION_CODE >> 16) >= 6)
+/* Use struct __riscv_v_regset_state with kernel version V6.6,
+ * else use struct __riscv_v_state with kernel version V5.10.  */
+#define USE__RISCV_V_REGSET_STATE 1
+#endif
+
 #endif
 
 /* See nat/riscv-linux-tdesc.h.  */
@@ -84,6 +98,8 @@ riscv_linux_read_features (int tid)
       break;
     }
 
+#ifdef CSKYMODIFY_CONFIG
+#ifndef USE__RISCV_V_REGSET_STATE
   /* If Vector support.  */
   {
     struct iovec iov_v;
@@ -114,6 +130,21 @@ riscv_linux_read_features (int tid)
       else
         features.vlen = 128;
   }
+#else /* defined USE__RISCV_V_REGSET_STATE */
+  {
+    struct iovec iov_v;
+    struct __riscv_v_regset_state regs_v;
+
+    iov_v.iov_base = &regs_v;
+    iov_v.iov_len = sizeof(struct __riscv_v_regset_state);
+    if (ptrace (PTRACE_GETREGSET, tid, NT_RISCV_VECTOR,
+                (PTRACE_TYPE_ARG3) &iov_v) == -1)
+      features.vlen = 0;
+    else
+      features.vlen = regs_v.vlenb;
+  }
+#endif  /* defined USE__RISCV_V_REGSET_STATE */
+#endif
 
   return features;
 }

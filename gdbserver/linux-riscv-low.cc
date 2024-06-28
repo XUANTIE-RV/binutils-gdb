@@ -32,9 +32,19 @@
 
 #ifdef CSKYMODIFY_CONFIG
 #include "asm/ptrace.h"
+#include "linux/version.h"
+#include "linux/elf.h"
 #ifndef NT_RISCV_VECTOR
 # define NT_RISCV_VECTOR 0x900
 #endif
+
+#if ((LINUX_VERSION_CODE >> 16) >= 6)
+/* Use struct __riscv_v_regset_state with kernel version V6.6,
+ * else use struct __riscv_v_state with kernel version V5.10.  */
+#define USE__RISCV_V_REGSET_STATE
+#endif
+
+
 #endif
 
 /* Linux target op definitions for the RISC-V architecture.  */
@@ -92,6 +102,7 @@ void
 riscv_target::low_arch_setup ()
 {
   static const char *expedite_regs[] = { "sp", "pc", NULL };
+  const regs_info *regs_info = get_regs_info();
 
   const riscv_gdbarch_features features
     = riscv_linux_read_features (lwpid_of (current_thread));
@@ -100,6 +111,11 @@ riscv_target::low_arch_setup ()
   if (!tdesc->expedite_regs)
     init_target_desc (tdesc, expedite_regs);
   current_process ()->tdesc = tdesc;
+#ifdef USE__RISCV_V_REGSET_STATE
+  if (features.vlen)
+    regs_info->regsets_info->regsets[4].size =
+      sizeof (struct __riscv_v_regset_state) + 32 * features.vlen;
+#endif
 }
 
 /* Collect GPRs from REGCACHE into BUF.  */
@@ -177,6 +193,7 @@ riscv_fill_vpregset (struct regcache *regcache, void *buf)
   gdb_byte *regbuf = (gdb_byte *) buf;
   int i;
 
+#ifndef USE__RISCV_V_REGSET_STATE
   for (i = 0; i < 32; i++, regbuf += vlen)
     collect_register (regcache, regno + i, regbuf);
 
@@ -189,6 +206,23 @@ riscv_fill_vpregset (struct regcache *regcache, void *buf)
   collect_register_by_name (regcache, "vl", regbuf);
   regbuf += 8;
   collect_register_by_name (regcache, "vtype", regbuf);
+#else  /* defined USE__RISCV_V_REGSET_STATE */
+  int xlen = sizeof (elf_greg_t);
+
+  collect_register_by_name (regcache, "vstart", regbuf);
+  regbuf += xlen;
+  collect_register_by_name (regcache, "vl", regbuf);
+  regbuf += xlen;
+  collect_register_by_name (regcache, "vtype", regbuf);
+  regbuf += xlen;
+  collect_register_by_name (regcache, "vcsr", regbuf);
+  regbuf += xlen;
+  collect_register_by_name (regcache, "vlenb", regbuf);
+  regbuf += xlen;
+
+  for (i = 0; i < 32; i++, regbuf += vlen)
+    collect_register (regcache, regno + i, regbuf);
+#endif  /* defined USE__RISCV_V_REGSET_STATE */
 }
 
 /* Supply VPRs from BUF into REGCACHE.  */
@@ -202,6 +236,7 @@ riscv_store_vpregset (struct regcache *regcache, const void *buf)
   const gdb_byte *regbuf = (const gdb_byte *) buf;
   int i;
 
+#ifndef USE__RISCV_V_REGSET_STATE
   for (i = 0; i < 32; i++, regbuf += vlen)
     supply_register (regcache, regno + i, regbuf);
 
@@ -214,6 +249,23 @@ riscv_store_vpregset (struct regcache *regcache, const void *buf)
   supply_register_by_name (regcache, "vl", regbuf);
   regbuf += 8;
   supply_register_by_name (regcache, "vtype", regbuf);
+#else /* defined USE__RISCV_V_REGSET_STATE */
+  int xlen = sizeof (elf_greg_t);
+
+  supply_register_by_name (regcache, "vstart", regbuf);
+  regbuf += xlen;
+  supply_register_by_name (regcache, "vl", regbuf);
+  regbuf += xlen;
+  supply_register_by_name (regcache, "vtype", regbuf);
+  regbuf += xlen;
+  supply_register_by_name (regcache, "vcsr", regbuf);
+  regbuf += xlen;
+  supply_register_by_name (regcache, "vlenb", regbuf);
+  regbuf += xlen;
+
+  for (i = 0; i < 32; i++, regbuf += vlen)
+    supply_register (regcache, regno + i, regbuf);
+#endif  /* defined USE__RISCV_V_REGSET_STATE */
 }
 
 #endif
@@ -236,9 +288,16 @@ static struct regset_info riscv_regsets[] = {
     sizeof (struct __riscv_mc_f_ext_state), OPTIONAL_REGS,
     riscv_fill_fpregset, riscv_store_fpregset },
 #ifdef CSKYMODIFY_CONFIG
+#ifndef USE__RISCV_V_REGSET_STATE
   { PTRACE_GETREGSET, PTRACE_SETREGSET, NT_RISCV_VECTOR,
     sizeof (struct __riscv_v_state), OPTIONAL_REGS,
     riscv_fill_vpregset, riscv_store_vpregset },
+#else /* defined USE__RISCV_V_REGSET_STATE */
+  /* Vlenb = 0 */
+  { PTRACE_GETREGSET, PTRACE_SETREGSET, NT_RISCV_VECTOR,
+    0, OPTIONAL_REGS,
+    riscv_fill_vpregset, riscv_store_vpregset },
+#endif /* defined USE__RISCV_V_REGSET_STATE */
 #endif
   NULL_REGSET
 };
