@@ -465,6 +465,9 @@ riscv_linux_nat_target::fetch_registers (struct regcache *regcache, int regnum)
       struct __riscv_v_regset_state *vregs;
       struct iovec iov;
 
+      if (register_size (regcache->arch (), RISCV_V0_REGNUM) == 0)
+	return 0;
+
       vregs = (struct __riscv_v_regset_state *) malloc
 	      (sizeof (struct __riscv_v_regset_state)
 	       + 32 * register_size (regcache->arch (),
@@ -590,6 +593,9 @@ riscv_linux_nat_target::store_registers (struct regcache *regcache, int regnum)
       /* struct __riscv_v_regset_state is defined in asm/ptrace.h */
       struct __riscv_v_regset_state *vregs;
       struct iovec iov;
+
+      if (register_size (regcache->arch (), RISCV_V0_REGNUM) == 0)
+	return 0;
 
       vregs = (struct __riscv_v_regset_state *) malloc
               (sizeof (struct __riscv_v_regset_state)
