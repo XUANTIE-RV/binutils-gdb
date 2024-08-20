@@ -2,6 +2,8 @@
 
 * Add support for RISC-V Zimop, Zcmop extensions with version 1.0.
 
+* Add support for RISC-V Zcmp (cm.mva01s, cm.mvsa01) with version 1.0.
+
 * Assembler macros as well as the bodies of .irp / .irpc can now use the
   syntax \+ to access the number of times a given macro has been executed.
   This is similar to the already existing \@ syntax, except that the count is
