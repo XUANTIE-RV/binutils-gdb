@@ -1332,6 +1332,8 @@ static struct riscv_implicit_subset riscv_implicit_subsets[] =
   {"svade", "zicsr", check_implicit_always},
   {"svbare", "zicsr", check_implicit_always},
   {"zcmop", "zca", check_implicit_always},
+  {"zcmt", "zca", check_implicit_always},
+  {"zcmt", "zicsr", check_implicit_always},
   {NULL, NULL, NULL}
 };
 
@@ -1492,6 +1494,7 @@ static struct riscv_supported_ext riscv_supported_std_z_ext[] =
   {"zcd",		ISA_SPEC_CLASS_DRAFT,		1, 0,  0 },
   {"zcmop",		ISA_SPEC_CLASS_DRAFT,		1, 0,  0 },
   {"zcmp",		ISA_SPEC_CLASS_DRAFT,		1, 0,  0 },
+  {"zcmt",		ISA_SPEC_CLASS_DRAFT,		1, 0,  0 },
   {NULL, 0, 0, 0, 0}
 };
 
@@ -2794,6 +2797,8 @@ riscv_multi_subset_supports (riscv_parse_subset_t *rps,
       return riscv_subset_supports (rps, "zcmop");
     case INSN_CLASS_ZCMP:
       return riscv_subset_supports (rps, "zcmp");
+    case INSN_CLASS_ZCMT:
+      return riscv_subset_supports (rps, "zcmt");
     case INSN_CLASS_SVINVAL:
       return riscv_subset_supports (rps, "svinval");
     case INSN_CLASS_H:
@@ -3082,6 +3087,8 @@ riscv_multi_subset_supports_ext (riscv_parse_subset_t *rps,
       return "zcmop";
     case INSN_CLASS_ZCMP:
       return "zcmp";
+    case INSN_CLASS_ZCMT:
+      return "zcmt";
     case INSN_CLASS_SVINVAL:
       return "svinval";
     case INSN_CLASS_H:
