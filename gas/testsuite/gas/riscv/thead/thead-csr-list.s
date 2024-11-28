@@ -342,3 +342,4 @@ csrr a0, mhint4
 # New for C907/C910v2
 csrr a0, twcounter
 csrr a0, mapbaddr2
+csrr a0, sinstret

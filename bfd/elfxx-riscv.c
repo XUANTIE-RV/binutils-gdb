@@ -1538,8 +1538,8 @@ static const char * const riscv_std_s_ext_strtab[] =
   "sscofpmf",
   "sstc",
   "smstateen",
-  "svnapot",
   "svinval",
+  "svnapot",
   "svpbmt",
   NULL,
 };

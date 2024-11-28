@@ -2658,6 +2658,9 @@ static const struct riscv_subset_compact_version riscv_subset_compact_version_ta
   /* zfh extension: 0.1 is built from thead tool v2.4 and before. The actul version is v1.0  */
   {"zfh", {1, 0}, {0, 1}},
 
+  /* zfa extension: 0.1 is built from thead tool v2.6 and before. The actul version is v1.0  */
+  {"zfa", {1, 0}, {0, 1}},
+
   /* End of the table.  */
   {NULL, {0, 0}, {0, 0}},
 };

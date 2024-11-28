@@ -1377,8 +1377,7 @@ md_begin (void)
 
   op_hash = init_opcode_hash (riscv_opcodes, FALSE);
   /* RVV 0.7.  */
-  if (riscv_lookup_subset_version (&riscv_subsets, "V", 0, 7) != NULL)
-    op_v_07_hash = init_opcode_hash (riscv_v_07_opcodes, FALSE);
+  op_v_07_hash = init_opcode_hash (riscv_v_07_opcodes, FALSE);
 
   insn_type_hash = init_opcode_hash (riscv_insn_types, TRUE);
 
@@ -3868,6 +3867,7 @@ md_pcrel_from (fixS *fixP)
 
 typedef struct
 {
+  segT seg;
   bfd_vma address;
   symbolS *symbol;
   bfd_vma target;
@@ -3879,7 +3879,9 @@ cmp_address(const void *p1, const void *p2)
   riscv_pcrel_hi_reloc const *hi_reloc1 = p1;
   riscv_pcrel_hi_reloc const *hi_reloc2 = p2;
 
-  return hi_reloc1->address - hi_reloc2->address;
+  return (hi_reloc2->seg == hi_reloc1->seg) ?
+	  hi_reloc2->address - hi_reloc1->address
+	  : hi_reloc2->seg - hi_reloc1->seg;
 }
 
 static riscv_pcrel_hi_reloc *pcrel_hi_reloc_records_ptr = NULL;
@@ -3914,7 +3916,7 @@ riscv_pcrel_hi_reloc_records_free(void)
 }
 
 static bfd_boolean
-riscv_pcrel_hi_reloc_record (bfd_vma addr, symbolS *sym, bfd_vma target)
+riscv_pcrel_hi_reloc_record (segT seg, bfd_vma addr, symbolS *sym, bfd_vma target)
 {
   size_t index = pcrel_hi_reloc_count;
   if (pcrel_hi_reloc_count == pcrel_hi_reloc_max) {
@@ -3922,15 +3924,16 @@ riscv_pcrel_hi_reloc_record (bfd_vma addr, symbolS *sym, bfd_vma target)
       return FALSE;
   }
 
-  pcrel_hi_reloc_records_ptr[index] = (riscv_pcrel_hi_reloc){addr, sym, target};
+  pcrel_hi_reloc_records_ptr[index] = (riscv_pcrel_hi_reloc){seg, addr, sym, target};
   pcrel_hi_reloc_count++;
+  qsort(pcrel_hi_reloc_records_ptr, pcrel_hi_reloc_count, sizeof(riscv_pcrel_hi_reloc), cmp_address);
   return TRUE;
 }
 
 static const riscv_pcrel_hi_reloc *
-riscv_pcrel_hi_reloc_find (bfd_vma addr)
+riscv_pcrel_hi_reloc_find (segT seg, bfd_vma addr)
 {
-  riscv_pcrel_hi_reloc hi_reloc = {addr, NULL};
+  riscv_pcrel_hi_reloc hi_reloc = {seg, addr, NULL, 0};
   return bsearch(&hi_reloc, pcrel_hi_reloc_records_ptr, pcrel_hi_reloc_count, sizeof(riscv_pcrel_hi_reloc), cmp_address);
 }
 
@@ -4017,8 +4020,36 @@ md_apply_fix (fixS *fixP, valueT *valP, segT seg)
     case BFD_RELOC_RISCV_CFA:
       if (fixP->fx_addsy && fixP->fx_subsy)
 	{
-	  fixP->fx_next = xmemdup (fixP, sizeof (*fixP), sizeof (*fixP));
-	  fixP->fx_next->fx_addsy = fixP->fx_subsy;
+          if (!riscv_opts.relax && fixP->fx_r_type != BFD_RELOC_RISCV_CFA)
+            {
+              if (S_GET_SEGMENT (fixP->fx_addsy)
+                  == S_GET_SEGMENT (fixP->fx_subsy))
+                {
+                  bfd_vma left = S_GET_VALUE (fixP->fx_addsy);
+                  bfd_vma right = S_GET_VALUE (fixP->fx_subsy);
+                  if (fixP->fx_r_type == BFD_RELOC_8)
+                    {
+                      *buf = (bfd_byte) (left - right);
+                    }
+                  else if (fixP->fx_r_type == BFD_RELOC_16)
+                    {
+                      bfd_putl16 (left - right, buf);
+                    }
+                  else if (fixP->fx_r_type == BFD_RELOC_32)
+                    {
+                      bfd_putl32 (left - right, buf);
+                    }
+                  else if (fixP->fx_r_type == BFD_RELOC_64)
+                    {
+                      bfd_putl64 (left - right, buf);
+                    }
+	          fixP->fx_subsy = NULL;
+                  fixP->fx_done = 1;
+                  break;
+                }
+            }
+          fixP->fx_next = xmemdup (fixP, sizeof (*fixP), sizeof (*fixP));
+          fixP->fx_next->fx_addsy = fixP->fx_subsy;
 	  fixP->fx_next->fx_subsy = NULL;
 	  fixP->fx_next->fx_offset = 0;
 	  fixP->fx_subsy = NULL;
@@ -4171,7 +4202,8 @@ md_apply_fix (fixS *fixP, valueT *valP, segT seg)
         bfd_vma value = target - md_pcrel_from (fixP);
 
         /* Record PCREL_HI20.  */
-        riscv_pcrel_hi_reloc_record(md_pcrel_from (fixP), fixP->fx_addsy, target);
+        if (riscv_pcrel_hi_reloc_record(seg, md_pcrel_from (fixP), fixP->fx_addsy, target) == FALSE)
+		as_warn("too many pcrel hi20");
 
         bfd_putl32 (bfd_getl32 (buf) | ENCODE_UTYPE_IMM (RISCV_CONST_HIGH_PART (value)), buf);
         fixP->fx_done = 1;
@@ -4183,7 +4215,7 @@ md_apply_fix (fixS *fixP, valueT *valP, segT seg)
     case BFD_RELOC_RISCV_PCREL_LO12_I:
       {
         bfd_vma location_pcrel_hi = S_GET_VALUE (fixP->fx_addsy) + *valP;
-        riscv_pcrel_hi_reloc const *res = riscv_pcrel_hi_reloc_find(location_pcrel_hi);
+        riscv_pcrel_hi_reloc const *res = riscv_pcrel_hi_reloc_find(seg, location_pcrel_hi);
         if (res && !riscv_opts.relax && res->symbol && S_IS_LOCAL(res->symbol) && S_GET_SEGMENT(res->symbol) == seg)
         {
           /* Fill in a tentative value to improve objdump readability.  */

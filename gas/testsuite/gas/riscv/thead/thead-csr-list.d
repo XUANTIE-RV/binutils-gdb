@@ -329,3 +329,4 @@ Disassembly of section .text:
 [ 	]+[0-9a-f]+:[ 	]+7ce02573[ 	]+csrr[ 	]+a0,mhint4
 [ 	]+[0-9a-f]+:[ 	]+80402573[ 	]+csrr[ 	]+a0,twcounter
 [ 	]+[0-9a-f]+:[ 	]+fc302573[ 	]+csrr[ 	]+a0,mapbaddr2
+[ 	]+[0-9a-f]+:[ 	]+5e202573[ 	]+csrr[ 	]+a0,shpmcounter2
