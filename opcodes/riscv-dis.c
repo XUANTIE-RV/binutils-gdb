@@ -75,6 +75,9 @@ static const char (*riscv_fpr_names)[NRC];
 /* If set, disassemble as most general instruction.  */
 static bool no_aliases = false;
 
+/* Default architecture string for the object file, used for mapping symbol $x.  */
+static const char *default_arch;
+
 /* If set, disassemble without checking architectire string, just like what
    we did at the beginning.  */
 static bool all_ext = false;
@@ -1128,10 +1131,14 @@ riscv_update_map_state (int n,
     return;
 
   name = bfd_asymbol_name(info->symtab[n]);
-  if (strcmp (name, "$x") == 0)
-    *state = MAP_INSN;
-  else if (strcmp (name, "$d") == 0)
+  if (strcmp (name, "$d") == 0)
     *state = MAP_DATA;
+  else if (strcmp (name, "$x") == 0)
+    {
+      *state = MAP_INSN;
+      riscv_release_subset_list (&riscv_subsets);
+      riscv_parse_subset (&riscv_rps_dis, default_arch);
+    }
   else if (strncmp (name, "$xrv", 4) == 0)
     {
       *state = MAP_INSN;
@@ -1484,7 +1491,7 @@ print_insn_riscv (bfd_vma memaddr, struct disassemble_info *info)
 disassembler_ftype
 riscv_get_disassembler (bfd *abfd)
 {
-  const char *default_arch = "rv64gc";
+  default_arch = "rv64gc";
 
   if (abfd && bfd_get_flavour (abfd) == bfd_target_elf_flavour)
     {
