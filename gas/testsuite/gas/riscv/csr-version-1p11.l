@@ -1281,6 +1281,10 @@
 .*Info: macro .*
 .*Warning: invalid CSR `vsiph', needs `ssaia' extension
 .*Info: macro .*
+.*Warning: invalid CSR `scountinhibit', needs `ssccfg' extension
+.*Info: macro .*
+.*Warning: invalid CSR `scountinhibit', needs `ssccfg' extension
+.*Info: macro .*
 .*Warning: invalid CSR `siselect', needs `ssaia or sscsrind' extension
 .*Info: macro .*
 .*Warning: invalid CSR `siselect', needs `ssaia or sscsrind' extension

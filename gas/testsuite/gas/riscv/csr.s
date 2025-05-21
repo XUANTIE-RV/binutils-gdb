@@ -416,6 +416,9 @@
 	csr vsieh
 	csr vsiph
 
+	# Ssccfg or Smcdeleg
+	csr scountinhibit
+
 	# Sscsrind
 	csr siselect
 	csr sireg
