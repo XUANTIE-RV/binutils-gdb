@@ -163,6 +163,7 @@ struct riscv_elf_link_hash_entry
 #define GOT_TLS_GD	2
 #define GOT_TLS_IE	4
 #define GOT_TLS_LE	8
+#define GOT_TLSDESC	16
   char tls_type;
 };
 
@@ -298,6 +299,9 @@ riscv_is_insn_reloc (const reloc_howto_type *howto)
 #define PLT_HEADER_SIZE (PLT_HEADER_INSNS * 4)
 #define PLT_ENTRY_SIZE (PLT_ENTRY_INSNS * 4)
 #define GOT_ENTRY_SIZE RISCV_ELF_WORD_BYTES
+#define TLS_GD_GOT_ENTRY_SIZE (RISCV_ELF_WORD_BYTES * 2)
+#define TLS_IE_GOT_ENTRY_SIZE RISCV_ELF_WORD_BYTES
+#define TLSDESC_GOT_ENTRY_SIZE (RISCV_ELF_WORD_BYTES * 2)
 /* Reserve two entries of GOTPLT for ld.so, one is used for PLT resolver,
    the other is used for link map.  Other targets also reserve one more
    entry used for runtime profile?  */
@@ -853,6 +857,12 @@ riscv_elf_check_relocs (bfd *abfd, struct bfd_link_info *info,
 	    return false;
 	  break;
 
+	case R_RISCV_TLSDESC_HI20:
+	  if (!riscv_elf_record_got_reference (abfd, info, h, r_symndx)
+	      || !riscv_elf_record_tls_type (abfd, h, r_symndx, GOT_TLSDESC))
+	    return false;
+	  break;
+
 	case R_RISCV_CALL:
 	case R_RISCV_CALL_PLT:
 	  /* These symbol requires a procedure linkage table entry.
@@ -1311,7 +1321,7 @@ allocate_dynrelocs (struct elf_link_hash_entry *h, void *inf)
       s = htab->elf.sgot;
       h->got.offset = s->size;
       dyn = htab->elf.dynamic_sections_created;
-      if (tls_type & (GOT_TLS_GD | GOT_TLS_IE))
+      if (tls_type & (GOT_TLS_GD | GOT_TLS_IE | GOT_TLSDESC))
 	{
 	  int indx = 0;
 	  bool need_reloc = false;
@@ -1320,7 +1330,7 @@ allocate_dynrelocs (struct elf_link_hash_entry *h, void *inf)
 	  /* TLS_GD needs two dynamic relocs and two GOT slots.  */
 	  if (tls_type & GOT_TLS_GD)
 	    {
-	      s->size += 2 * RISCV_ELF_WORD_BYTES;
+	      s->size += TLS_GD_GOT_ENTRY_SIZE;
 	      if (need_reloc)
 		htab->elf.srelgot->size += 2 * sizeof (ElfNN_External_Rela);
 	    }
@@ -1328,14 +1338,22 @@ allocate_dynrelocs (struct elf_link_hash_entry *h, void *inf)
 	  /* TLS_IE needs one dynamic reloc and one GOT slot.  */
 	  if (tls_type & GOT_TLS_IE)
 	    {
-	      s->size += RISCV_ELF_WORD_BYTES;
+	      s->size += TLS_IE_GOT_ENTRY_SIZE;
 	      if (need_reloc)
 		htab->elf.srelgot->size += sizeof (ElfNN_External_Rela);
+	    }
+
+	  /* TLSDESC needs one dynamic reloc and two GOT slots.  */
+	  if (tls_type & GOT_TLSDESC)
+	    {
+	      s->size += TLSDESC_GOT_ENTRY_SIZE;
+	      /* TLSDESC always use dynamic relocs.  */
+	      htab->elf.srelgot->size += sizeof (ElfNN_External_Rela);
 	    }
 	}
       else
 	{
-	  s->size += RISCV_ELF_WORD_BYTES;
+	  s->size += GOT_ENTRY_SIZE;
 	  if (WILL_CALL_FINISH_DYNAMIC_SYMBOL (dyn, bfd_link_pic (info), h)
 	      && ! UNDEFWEAK_NO_DYNAMIC_RELOC (info, h))
 	    htab->elf.srelgot->size += sizeof (ElfNN_External_Rela);
@@ -1482,7 +1500,7 @@ allocate_local_ifunc_dynrelocs (void **slot, void *inf)
 }
 
 static bool
-riscv_elf_size_dynamic_sections (bfd *output_bfd, struct bfd_link_info *info)
+riscv_elf_late_size_sections (bfd *output_bfd, struct bfd_link_info *info)
 {
   struct riscv_elf_link_hash_table *htab;
   bfd *dynobj;
@@ -1492,7 +1510,8 @@ riscv_elf_size_dynamic_sections (bfd *output_bfd, struct bfd_link_info *info)
   htab = riscv_elf_hash_table (info);
   BFD_ASSERT (htab != NULL);
   dynobj = htab->elf.dynobj;
-  BFD_ASSERT (dynobj != NULL);
+  if (dynobj == NULL)
+    return true;
 
   if (elf_hash_table (info)->dynamic_sections_created)
     {
@@ -1559,12 +1578,32 @@ riscv_elf_size_dynamic_sections (bfd *output_bfd, struct bfd_link_info *info)
 	  if (*local_got > 0)
 	    {
 	      *local_got = s->size;
-	      s->size += RISCV_ELF_WORD_BYTES;
-	      if (*local_tls_type & GOT_TLS_GD)
-		s->size += RISCV_ELF_WORD_BYTES;
-	      if (bfd_link_pic (info)
-		  || (*local_tls_type & (GOT_TLS_GD | GOT_TLS_IE)))
-		srel->size += sizeof (ElfNN_External_Rela);
+	      if (*local_tls_type & (GOT_TLS_GD | GOT_TLS_IE | GOT_TLSDESC))
+		{
+		  if (*local_tls_type & GOT_TLS_GD)
+		    {
+		      s->size += TLS_GD_GOT_ENTRY_SIZE;
+		      if (bfd_link_dll (info))
+			srel->size += sizeof (ElfNN_External_Rela);
+		    }
+		  if (*local_tls_type & GOT_TLS_IE)
+		    {
+		      s->size += TLS_IE_GOT_ENTRY_SIZE;
+		      if (bfd_link_dll (info))
+			srel->size += sizeof (ElfNN_External_Rela);
+		    }
+		  if (*local_tls_type & GOT_TLSDESC)
+		    {
+		      s->size += TLSDESC_GOT_ENTRY_SIZE;
+		      srel->size += sizeof (ElfNN_External_Rela);
+		    }
+		}
+	      else
+		{
+		  s->size += GOT_ENTRY_SIZE;
+		  if (bfd_link_pic (info))
+		    srel->size += sizeof (ElfNN_External_Rela);
+		}
 	    }
 	  else
 	    *local_got = (bfd_vma) -1;
@@ -1708,6 +1747,17 @@ tpoff (struct bfd_link_info *info, bfd_vma address)
   return address - elf_hash_table (info)->tls_sec->vma - TP_OFFSET;
 }
 
+/* Return the relocation value for a static TLSDESC relocation.  */
+
+static bfd_vma
+tlsdescoff (struct bfd_link_info *info, bfd_vma address)
+{
+  /* If tls_sec is NULL, we should have signalled an error already.  */
+  if (elf_hash_table (info)->tls_sec == NULL)
+    return 0;
+  return address - elf_hash_table (info)->tls_sec->vma;
+}
+
 /* Return the global pointer's value, or 0 if it is not in use.  */
 
 static bfd_vma
@@ -1747,6 +1797,7 @@ perform_relocation (const reloc_howto_type *howto,
     case R_RISCV_GOT_HI20:
     case R_RISCV_TLS_GOT_HI20:
     case R_RISCV_TLS_GD_HI20:
+    case R_RISCV_TLSDESC_HI20:
       if (ARCH_SIZE > 32 && !VALID_UTYPE_IMM (RISCV_CONST_HIGH_PART (value)))
 	return bfd_reloc_overflow;
       value = ENCODE_UTYPE_IMM (RISCV_CONST_HIGH_PART (value));
@@ -1757,6 +1808,8 @@ perform_relocation (const reloc_howto_type *howto,
     case R_RISCV_TPREL_LO12_I:
     case R_RISCV_TPREL_I:
     case R_RISCV_PCREL_LO12_I:
+    case R_RISCV_TLSDESC_LOAD_LO12:
+    case R_RISCV_TLSDESC_ADD_LO12:
       value = ENCODE_ITYPE_IMM (value);
       break;
 
@@ -2175,8 +2228,8 @@ riscv_elf_relocate_section (bfd *output_bfd,
       bfd_vma relocation;
       bfd_reloc_status_type r = bfd_reloc_ok;
       const char *name = NULL;
-      bfd_vma off, ie_off;
-      bool unresolved_reloc, is_ie = false;
+      bfd_vma off, ie_off, desc_off;
+      bool unresolved_reloc, is_ie = false, is_desc = false;
       bfd_vma pc = sec_addr (input_section) + rel->r_offset;
       int r_type = ELFNN_R_TYPE (rel->r_info), tls_type;
       reloc_howto_type *howto = riscv_elf_rtype_to_howto (input_bfd, r_type);
@@ -2479,6 +2532,7 @@ riscv_elf_relocate_section (bfd *output_bfd,
 	case R_RISCV_NONE:
 	case R_RISCV_RELAX:
 	case R_RISCV_TPREL_ADD:
+	case R_RISCV_TLSDESC_CALL:
 	case R_RISCV_COPY:
 	case R_RISCV_JUMP_SLOT:
 	case R_RISCV_RELATIVE:
@@ -2826,6 +2880,22 @@ riscv_elf_relocate_section (bfd *output_bfd,
 	  relocation = dtpoff (info, relocation);
 	  break;
 
+	case R_RISCV_TLSDESC_LOAD_LO12:
+	case R_RISCV_TLSDESC_ADD_LO12:
+	  if (rel->r_addend)
+	    {
+	      msg = _("%tlsdesc_lo with addend");
+	      r = bfd_reloc_dangerous;
+	      break;
+	    }
+
+	  if (riscv_record_pcrel_lo_reloc (&pcrel_relocs, relocation, rel,
+					   input_section, info, howto,
+					   contents))
+	      continue;
+	  r = bfd_reloc_overflow;
+	  break;
+
 	case R_RISCV_32:
 	  /* Non ABS symbol should be blocked in check_relocs.  */
 	  if (ARCH_SIZE > 32)
@@ -2891,11 +2961,16 @@ riscv_elf_relocate_section (bfd *output_bfd,
 	    }
 	  break;
 
+	case R_RISCV_TLSDESC_HI20:
+	  is_desc = true;
+	  goto tls;
+
 	case R_RISCV_TLS_GOT_HI20:
 	  is_ie = true;
-	  /* Fall through.  */
+	  goto tls;
 
 	case R_RISCV_TLS_GD_HI20:
+	tls:
 	  if (h != NULL)
 	    {
 	      off = h->got.offset;
@@ -2908,12 +2983,16 @@ riscv_elf_relocate_section (bfd *output_bfd,
 	    }
 
 	  tls_type = _bfd_riscv_elf_tls_type (input_bfd, h, r_symndx);
-	  BFD_ASSERT (tls_type & (GOT_TLS_IE | GOT_TLS_GD));
-	  /* If this symbol is referenced by both GD and IE TLS, the IE
-	     reference's GOT slot follows the GD reference's slots.  */
+	  BFD_ASSERT (tls_type & (GOT_TLS_IE | GOT_TLS_GD | GOT_TLSDESC));
+	  /* When more than one TLS type is used, the GD slot comes first,
+	     then IE, then finally TLSDESC.  */
 	  ie_off = 0;
-	  if ((tls_type & GOT_TLS_GD) && (tls_type & GOT_TLS_IE))
-	    ie_off = 2 * GOT_ENTRY_SIZE;
+	  if (tls_type & GOT_TLS_GD)
+	    ie_off += TLS_GD_GOT_ENTRY_SIZE;
+
+	  desc_off = ie_off;
+	  if (tls_type & GOT_TLS_IE)
+	    desc_off += TLS_IE_GOT_ENTRY_SIZE;
 
 	  if ((off & 1) != 0)
 	    off &= ~1;
@@ -2995,10 +3074,29 @@ riscv_elf_relocate_section (bfd *output_bfd,
 				  htab->elf.sgot->contents + off + ie_off);
 		    }
 		}
+
+	      if (tls_type & GOT_TLSDESC)
+		{
+		  /* TLSDESC is always handled by the dynamic linker and always need
+		   * a relocation.  */
+		  bfd_put_NN (output_bfd, 0,
+			      htab->elf.sgot->contents + off + desc_off);
+		  outrel.r_offset = sec_addr (htab->elf.sgot)
+				    + off + desc_off;
+		  outrel.r_addend = 0;
+		  if (indx == 0)
+		    outrel.r_addend = tlsdescoff (info, relocation);
+		  outrel.r_info = ELFNN_R_INFO (indx, R_RISCV_TLSDESC);
+		  riscv_elf_append_rela (output_bfd, htab->elf.srelgot, &outrel);
+		}
 	    }
 
 	  BFD_ASSERT (off < (bfd_vma) -2);
-	  relocation = sec_addr (htab->elf.sgot) + off + (is_ie ? ie_off : 0);
+	  relocation = sec_addr (htab->elf.sgot) + off;
+	  if (is_ie)
+	    relocation += ie_off;
+	  else if (is_desc)
+	    relocation += desc_off;
 	  if (!riscv_record_pcrel_hi_reloc (&pcrel_relocs, pc,
 					    relocation, r_type,
 					    false))
@@ -3136,7 +3234,7 @@ riscv_elf_finish_dynamic_symbol (bfd *output_bfd,
 	  || plt == NULL
 	  || gotplt == NULL
 	  || relplt == NULL)
-	return false;
+	abort ();
 
       /* Calculate the address of the PLT header.  */
       header_address = sec_addr (plt);
@@ -3218,7 +3316,7 @@ riscv_elf_finish_dynamic_symbol (bfd *output_bfd,
     }
 
   if (h->got.offset != (bfd_vma) -1
-      && !(riscv_elf_hash_entry (h)->tls_type & (GOT_TLS_GD | GOT_TLS_IE))
+      && !(riscv_elf_hash_entry (h)->tls_type & (GOT_TLS_GD | GOT_TLS_IE | GOT_TLSDESC))
       && !UNDEFWEAK_NO_DYNAMIC_RELOC (info, h))
     {
       asection *sgot;
@@ -4124,6 +4222,18 @@ _bfd_riscv_elf_merge_private_bfd_data (bfd *ibfd, struct bfd_link_info *info)
  fail:
   bfd_set_error (bfd_error_bad_value);
   return false;
+}
+
+/* Ignore and report warning for the unknwon elf attribute.  */
+
+static bool
+riscv_elf_obj_attrs_handle_unknown (bfd *abfd, int tag)
+{
+  _bfd_error_handler
+    /* xgettext:c-format */
+    (_("warning: %pB: unknown RISCV ABI object attribute %d"),
+     abfd, tag);
+  return true;
 }
 
 /* A second format for recording PC-relative hi relocations.  This stores the
@@ -5660,7 +5770,7 @@ riscv_elf_merge_symbol_attribute (struct elf_link_hash_entry *h,
 #define elf_backend_create_dynamic_sections	riscv_elf_create_dynamic_sections
 #define elf_backend_check_relocs		riscv_elf_check_relocs
 #define elf_backend_adjust_dynamic_symbol	riscv_elf_adjust_dynamic_symbol
-#define elf_backend_size_dynamic_sections	riscv_elf_size_dynamic_sections
+#define elf_backend_late_size_sections		riscv_elf_late_size_sections
 #define elf_backend_relocate_section		riscv_elf_relocate_section
 #define elf_backend_finish_dynamic_symbol	riscv_elf_finish_dynamic_symbol
 #define elf_backend_finish_dynamic_sections	riscv_elf_finish_dynamic_sections
@@ -5700,5 +5810,6 @@ riscv_elf_merge_symbol_attribute (struct elf_link_hash_entry *h,
 #define elf_backend_obj_attrs_section_type	SHT_RISCV_ATTRIBUTES
 #undef  elf_backend_obj_attrs_section
 #define elf_backend_obj_attrs_section		RISCV_ATTRIBUTES_SECTION_NAME
+#define elf_backend_obj_attrs_handle_unknown	riscv_elf_obj_attrs_handle_unknown
 
 #include "elfNN-target.h"

@@ -17,7 +17,6 @@
    You should have received a copy of the GNU General Public License
    along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
 
-#include "defs.h"
 #include "inferior.h"
 #include "infrun.h"
 #include "target.h"
@@ -33,7 +32,7 @@
 #include "nat/linux-personality.h"
 #include "linux-fork.h"
 #include "gdbthread.h"
-#include "gdbcmd.h"
+#include "cli/cli-cmds.h"
 #include "regcache.h"
 #include "regset.h"
 #include "inf-child.h"
@@ -180,7 +179,63 @@ execing thread, the leader will be zombie, and the execing thread will
 be in `D (disc sleep)' state.  As soon as all other threads are
 reaped, the execing thread changes its tid to the tgid, and the
 previous (zombie) leader vanishes, giving place to the "new"
-leader.  */
+leader.
+
+Accessing inferior memory
+=========================
+
+To access inferior memory, we strongly prefer /proc/PID/mem.  We
+fallback to ptrace if and only if /proc/PID/mem is not writable, as a
+concession for obsolescent kernels (such as found in RHEL6).  For
+modern kernels, the fallback shouldn't trigger.  GDBserver does not
+have the ptrace fallback already, and at some point, we'll consider
+removing it from native GDB too.
+
+/proc/PID/mem has a few advantages over alternatives like
+PTRACE_PEEKTEXT/PTRACE_POKETEXT or process_vm_readv/process_vm_writev:
+
+- Because we can use a single read/write call, /proc/PID/mem can be
+  much more efficient than banging away at
+  PTRACE_PEEKTEXT/PTRACE_POKETEXT, one word at a time.
+
+- /proc/PID/mem allows writing to read-only pages, which we need to
+  e.g., plant breakpoint instructions.  process_vm_writev does not
+  allow this.
+
+- /proc/PID/mem allows memory access even if all threads are running.
+  OTOH, PTRACE_PEEKTEXT/PTRACE_POKETEXT require passing down the tid
+  of a stopped task.  This lets us e.g., install breakpoints while the
+  inferior is running, clear a displaced stepping scratch pad when the
+  thread that was displaced stepping exits, print inferior globals,
+  etc., all without having to worry about temporarily pausing some
+  thread.
+
+- /proc/PID/mem does not suffer from a race that could cause us to
+  access memory of the wrong address space when the inferior execs.
+
+  process_vm_readv/process_vm_writev have this problem.
+
+  E.g., say GDB decides to write to memory just while the inferior
+  execs.  In this scenario, GDB could write memory to the post-exec
+  address space thinking it was writing to the pre-exec address space,
+  with high probability of corrupting the inferior.  Or if GDB decides
+  instead to read memory just while the inferior execs, it could read
+  bogus contents out of the wrong address space.
+
+  ptrace used to have this problem too, but no longer has since Linux
+  commit dbb5afad100a ("ptrace: make ptrace() fail if the tracee
+  changed its pid unexpectedly"), in Linux 5.13.  (And if ptrace were
+  ever changed to allow access memory via zombie or running threads,
+  it would better not forget to consider this scenario.)
+
+  We avoid this race with /proc/PID/mem, by opening the file as soon
+  as we start debugging the inferior, when it is known the inferior is
+  stopped, and holding on to the open file descriptor, to be used
+  whenever we need to access inferior memory.  If the inferior execs
+  or exits, reading/writing from/to the file returns 0 (EOF),
+  indicating the address space is gone, and so we return
+  TARGET_XFER_EOF to the core.  We close the old file and open a new
+  one when we finally see the PTRACE_EVENT_EXEC event.  */
 
 #ifndef O_LARGEFILE
 #define O_LARGEFILE 0
@@ -240,6 +295,8 @@ static void delete_lwp (ptid_t ptid);
 static struct lwp_info *find_lwp_pid (ptid_t ptid);
 
 static int lwp_status_pending_p (struct lwp_info *lp);
+
+static bool is_lwp_marked_dead (lwp_info *lp);
 
 static void save_stop_reason (struct lwp_info *lp);
 
@@ -397,6 +454,12 @@ linux_init_ptrace_procfs (pid_t pid, int attached)
   linux_ptrace_init_warnings ();
   linux_proc_init_warnings ();
   proc_mem_file_is_writable ();
+
+  /* Let the arch-specific native code do any needed initialization.
+     Some architectures need to call ptrace to check for hardware
+     watchpoints support, etc.  Call it now, when we know the tracee
+     is ptrace-stopped.  */
+  linux_target->low_init_process (pid);
 }
 
 linux_nat_target::~linux_nat_target ()
@@ -1412,9 +1475,7 @@ detach_one_lwp (struct lwp_info *lp, int *signo_p)
 
   /* If the lwp has exited or was terminated due to a signal, there's
      nothing left to do.  */
-  if (lp->waitstatus.kind () == TARGET_WAITKIND_EXITED
-      || lp->waitstatus.kind () == TARGET_WAITKIND_THREAD_EXITED
-      || lp->waitstatus.kind () == TARGET_WAITKIND_SIGNALLED)
+  if (is_lwp_marked_dead (lp))
     {
       linux_nat_debug_printf
 	("Can't detach %s - it has exited or was terminated: %s.",
@@ -2123,6 +2184,42 @@ wait_for_signal ()
     }
 }
 
+/* Mark LWP dead, with STATUS as exit status pending to report
+   later.  */
+
+static void
+mark_lwp_dead (lwp_info *lp, int status)
+{
+  /* Store the exit status lp->waitstatus, because lp->status would be
+     ambiguous (W_EXITCODE(0,0) == 0).  */
+  lp->waitstatus = host_status_to_waitstatus (status);
+
+  /* If we're processing LP's status, there should be no other event
+     already recorded as pending.  */
+  gdb_assert (lp->status == 0);
+
+  /* Dead LWPs aren't expected to report a pending sigstop.  */
+  lp->signalled = 0;
+
+  /* Prevent trying to stop it.  */
+  lp->stopped = 1;
+}
+
+/* Return true if LP is dead, with a pending exit/signalled event.  */
+
+static bool
+is_lwp_marked_dead (lwp_info *lp)
+{
+  switch (lp->waitstatus.kind ())
+    {
+    case TARGET_WAITKIND_EXITED:
+    case TARGET_WAITKIND_THREAD_EXITED:
+    case TARGET_WAITKIND_SIGNALLED:
+      return true;
+    }
+  return false;
+}
+
 /* Wait for LP to stop.  Returns the wait status, or 0 if the LWP has
    exited.  */
 
@@ -2207,9 +2304,8 @@ wait_lwp (struct lwp_info *lp)
 
 	      /* If this is the leader exiting, it means the whole
 		 process is gone.  Store the status to report to the
-		 core.  Store it in lp->waitstatus, because lp->status
-		 would be ambiguous (W_EXITCODE(0,0) == 0).  */
-	      lp->waitstatus = host_status_to_waitstatus (status);
+		 core.  */
+	      mark_lwp_dead (lp, status);
 	      return 0;
 	    }
 
@@ -2558,18 +2654,6 @@ status_callback (struct lwp_info *lp)
 	  discard = 1;
 	}
 
-#if !USE_SIGTRAP_SIGINFO
-      else if (!breakpoint_inserted_here_p (lwp_inferior (lp)->aspace, pc))
-	{
-	  linux_nat_debug_printf ("previous breakpoint of %s, at %s gone",
-				  lp->ptid.to_string ().c_str (),
-				  paddress (current_inferior ()->arch (),
-					    lp->stop_pc));
-
-	  discard = 1;
-	}
-#endif
-
       if (discard)
 	{
 	  linux_nat_debug_printf ("pending event of %s cancelled.",
@@ -2649,9 +2733,7 @@ save_stop_reason (struct lwp_info *lp)
   struct gdbarch *gdbarch;
   CORE_ADDR pc;
   CORE_ADDR sw_bp_pc;
-#if USE_SIGTRAP_SIGINFO
   siginfo_t siginfo;
-#endif
 
   gdb_assert (lp->stop_reason == TARGET_STOPPED_BY_NO_REASON);
   gdb_assert (lp->status != 0);
@@ -2669,7 +2751,6 @@ save_stop_reason (struct lwp_info *lp)
   pc = regcache_read_pc (regcache);
   sw_bp_pc = pc - gdbarch_decr_pc_after_break (gdbarch);
 
-#if USE_SIGTRAP_SIGINFO
   if (linux_nat_get_siginfo (lp->ptid, &siginfo))
     {
       if (siginfo.si_signo == SIGTRAP)
@@ -2712,21 +2793,6 @@ save_stop_reason (struct lwp_info *lp)
 	    }
 	}
     }
-#else
-  if ((!lp->step || lp->stop_pc == sw_bp_pc)
-      && software_breakpoint_inserted_here_p (inf->aspace, sw_bp_pc))
-    {
-      /* The LWP was either continued, or stepped a software
-	 breakpoint instruction.  */
-      lp->stop_reason = TARGET_STOPPED_BY_SW_BREAKPOINT;
-    }
-
-  if (hardware_breakpoint_inserted_here_p (inf->aspace, pc))
-    lp->stop_reason = TARGET_STOPPED_BY_HW_BREAKPOINT;
-
-  if (lp->stop_reason == TARGET_STOPPED_BY_NO_REASON)
-    check_stopped_by_watchpoint (lp);
-#endif
 
   if (lp->stop_reason == TARGET_STOPPED_BY_SW_BREAKPOINT)
     {
@@ -2772,7 +2838,7 @@ linux_nat_target::stopped_by_sw_breakpoint ()
 bool
 linux_nat_target::supports_stopped_by_sw_breakpoint ()
 {
-  return USE_SIGTRAP_SIGINFO;
+  return true;
 }
 
 /* Returns true if the LWP had stopped for a hardware
@@ -2793,7 +2859,7 @@ linux_nat_target::stopped_by_hw_breakpoint ()
 bool
 linux_nat_target::supports_stopped_by_hw_breakpoint ()
 {
-  return USE_SIGTRAP_SIGINFO;
+  return true;
 }
 
 /* Select one LWP out of those that have events pending.  */
@@ -3013,12 +3079,7 @@ linux_nat_filter_event (int lwpid, int status)
       linux_nat_debug_printf ("LWP %ld exited (resumed=%d)",
 			      lp->ptid.lwp (), lp->resumed);
 
-      /* Dead LWP's aren't expected to reported a pending sigstop.  */
-      lp->signalled = 0;
-
-      /* Store the pending event in the waitstatus, because
-	 W_EXITCODE(0,0) == 0.  */
-      lp->waitstatus = host_status_to_waitstatus (status);
+      mark_lwp_dead (lp, status);
       return;
     }
 
@@ -3368,6 +3429,7 @@ linux_nat_wait_1 (ptid_t ptid, struct target_waitstatus *ourstatus,
     }
 
   gdb_assert (lp);
+  gdb_assert (lp->stopped);
 
   status = lp->status;
   lp->status = 0;
@@ -3389,25 +3451,6 @@ linux_nat_wait_1 (ptid_t ptid, struct target_waitstatus *ourstatus,
     select_event_lwp (ptid, &lp, &status);
 
   gdb_assert (lp != NULL);
-
-  /* Now that we've selected our final event LWP, un-adjust its PC if
-     it was a software breakpoint, and we can't reliably support the
-     "stopped by software breakpoint" stop reason.  */
-  if (lp->stop_reason == TARGET_STOPPED_BY_SW_BREAKPOINT
-      && !USE_SIGTRAP_SIGINFO)
-    {
-      struct regcache *regcache = get_thread_regcache (linux_target, lp->ptid);
-      struct gdbarch *gdbarch = regcache->arch ();
-      int decr_pc = gdbarch_decr_pc_after_break (gdbarch);
-
-      if (decr_pc != 0)
-	{
-	  CORE_ADDR pc;
-
-	  pc = regcache_read_pc (regcache);
-	  regcache_write_pc (regcache, pc + decr_pc);
-	}
-    }
 
   /* We'll need this to determine whether to report a SIGSTOP as
      GDB_SIGNAL_0.  Need to take a copy because resume_clear_callback
@@ -3808,6 +3851,20 @@ linux_proc_xfer_memory_partial (int pid, gdb_byte *readbuf,
 				const gdb_byte *writebuf, ULONGEST offset,
 				LONGEST len, ULONGEST *xfered_len);
 
+/* Look for an LWP of PID that we know is ptrace-stopped.  Returns
+   NULL if none is found.  */
+
+static lwp_info *
+find_stopped_lwp (int pid)
+{
+  for (lwp_info *lp : all_lwps ())
+    if (lp->ptid.pid () == pid
+	&& lp->stopped
+	&& !is_lwp_marked_dead (lp))
+      return lp;
+  return nullptr;
+}
+
 enum target_xfer_status
 linux_nat_target::xfer_partial (enum target_object object,
 				const char *annex, gdb_byte *readbuf,
@@ -3854,6 +3911,32 @@ linux_nat_target::xfer_partial (enum target_object object,
 	return linux_proc_xfer_memory_partial (inferior_ptid.pid (), readbuf,
 					       writebuf, offset, len,
 					       xfered_len);
+
+      /* Fallback to ptrace.  This should only really trigger on old
+	 systems.  See "Accessing inferior memory" at the top.
+
+	 The target_xfer interface for memory access uses
+	 inferior_ptid as sideband argument to indicate which process
+	 to access.  Memory access is process-wide, it is not
+	 thread-specific, so inferior_ptid sometimes points at a
+	 process ptid_t.  If we fallback to inf_ptrace_target with
+	 that inferior_ptid, then the ptrace code will do the ptrace
+	 call targeting inferior_ptid.pid(), the leader LWP.  That
+	 may fail with ESRCH if the leader is currently running, or
+	 zombie.  So if we get a pid-ptid, we try to find a stopped
+	 LWP to use with ptrace.
+
+	 Note that inferior_ptid may not exist in the lwp / thread /
+	 inferior lists.  This can happen when we're removing
+	 breakpoints from a fork child that we're not going to stay
+	 attached to.  So if we don't find a stopped LWP, still do the
+	 ptrace call, targeting the inferior_ptid we had on entry.  */
+      scoped_restore save_inferior_ptid = make_scoped_restore (&inferior_ptid);
+      lwp_info *stopped = find_stopped_lwp (inferior_ptid.pid ());
+      if (stopped != nullptr)
+	inferior_ptid = stopped->ptid;
+      return inf_ptrace_target::xfer_partial (object, annex, readbuf, writebuf,
+					      offset, len, xfered_len);
     }
 
   return inf_ptrace_target::xfer_partial (object, annex, readbuf, writebuf,
@@ -4630,8 +4713,8 @@ _initialize_linux_nat ()
 {
   add_setshow_boolean_cmd ("linux-nat", class_maintenance,
 			   &debug_linux_nat, _("\
-Set debugging of GNU/Linux native target."), _("	\
-Show debugging of GNU/Linux native target."), _("	\
+Set debugging of GNU/Linux native target."), _("\
+Show debugging of GNU/Linux native target."), _("\
 When on, print debug messages relating to the GNU/Linux native target."),
 			   nullptr,
 			   show_debug_linux_nat,

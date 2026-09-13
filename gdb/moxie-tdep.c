@@ -17,13 +17,13 @@
    You should have received a copy of the GNU General Public License
    along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
 
-#include "defs.h"
+#include "extract-store-integer.h"
 #include "frame.h"
 #include "frame-unwind.h"
 #include "frame-base.h"
 #include "symtab.h"
 #include "gdbtypes.h"
-#include "gdbcmd.h"
+#include "cli/cli-cmds.h"
 #include "gdbcore.h"
 #include "value.h"
 #include "inferior.h"
@@ -226,7 +226,8 @@ moxie_skip_prologue (struct gdbarch *gdbarch, CORE_ADDR pc)
 	  plg_end = moxie_analyze_prologue (func_addr, 
 					    func_end, &cache, gdbarch);
 	  /* Found a function.  */
-	  sym = lookup_symbol (func_name, NULL, VAR_DOMAIN, NULL).symbol;
+	  sym = lookup_symbol (func_name, nullptr,
+			       SEARCH_FUNCTION_DOMAIN, nullptr).symbol;
 	  /* Don't use line number debug info for assembly source
 	     files.  */
 	  if (sym && sym->language () != language_asm)
@@ -513,7 +514,7 @@ moxie_alloc_frame_cache (void)
 /* Populate a moxie_frame_cache object for this_frame.  */
 
 static struct moxie_frame_cache *
-moxie_frame_cache (frame_info_ptr this_frame, void **this_cache)
+moxie_frame_cache (const frame_info_ptr &this_frame, void **this_cache)
 {
   struct moxie_frame_cache *cache;
   CORE_ADDR current_pc;
@@ -550,7 +551,7 @@ moxie_frame_cache (frame_info_ptr this_frame, void **this_cache)
    frame.  This will be used to create a new GDB frame struct.  */
 
 static void
-moxie_frame_this_id (frame_info_ptr this_frame,
+moxie_frame_this_id (const frame_info_ptr &this_frame,
 		    void **this_prologue_cache, struct frame_id *this_id)
 {
   struct moxie_frame_cache *cache = moxie_frame_cache (this_frame,
@@ -566,7 +567,7 @@ moxie_frame_this_id (frame_info_ptr this_frame,
 /* Get the value of register regnum in the previous stack frame.  */
 
 static struct value *
-moxie_frame_prev_register (frame_info_ptr this_frame,
+moxie_frame_prev_register (const frame_info_ptr &this_frame,
 			  void **this_prologue_cache, int regnum)
 {
   struct moxie_frame_cache *cache = moxie_frame_cache (this_frame,
@@ -597,7 +598,7 @@ static const struct frame_unwind moxie_frame_unwind = {
 /* Return the base address of this_frame.  */
 
 static CORE_ADDR
-moxie_frame_base_address (frame_info_ptr this_frame, void **this_cache)
+moxie_frame_base_address (const frame_info_ptr &this_frame, void **this_cache)
 {
   struct moxie_frame_cache *cache = moxie_frame_cache (this_frame,
 						       this_cache);

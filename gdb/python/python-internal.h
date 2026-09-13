@@ -384,7 +384,7 @@ extern enum ext_lang_rc gdbpy_apply_val_pretty_printer
    const struct language_defn *language);
 extern enum ext_lang_bt_status gdbpy_apply_frame_filter
   (const struct extension_language_defn *,
-   frame_info_ptr frame, frame_filter_flags flags,
+   const frame_info_ptr &frame, frame_filter_flags flags,
    enum ext_lang_frame_args args_type,
    struct ui_out *out, int frame_low, int frame_high);
 extern void gdbpy_preserve_values (const struct extension_language_defn *,
@@ -444,7 +444,7 @@ PyObject *block_to_block_object (const struct block *block,
 				 struct objfile *objfile);
 PyObject *value_to_value_object (struct value *v);
 PyObject *type_to_type_object (struct type *);
-PyObject *frame_info_to_frame_object (frame_info_ptr frame);
+PyObject *frame_info_to_frame_object (const frame_info_ptr &frame);
 PyObject *symtab_to_linetable_object (PyObject *symtab);
 gdbpy_ref<> pspace_to_pspace_object (struct program_space *);
 PyObject *pspy_get_printers (PyObject *, void *);
@@ -640,12 +640,18 @@ public:
 
   gdbpy_err_fetch ()
   {
+#if PY_VERSION_HEX < 0x030c0000
     PyObject *error_type, *error_value, *error_traceback;
 
     PyErr_Fetch (&error_type, &error_value, &error_traceback);
     m_error_type.reset (error_type);
     m_error_value.reset (error_value);
     m_error_traceback.reset (error_traceback);
+#else
+    /* PyErr_Fetch is deprecated in python 3.12, use PyErr_GetRaisedException
+       instead.  */
+    m_exc.reset (PyErr_GetRaisedException ());
+#endif
   }
 
   /* Call PyErr_Restore using the values stashed in this object.
@@ -654,9 +660,15 @@ public:
 
   void restore ()
   {
+#if PY_VERSION_HEX < 0x030c0000
     PyErr_Restore (m_error_type.release (),
 		   m_error_value.release (),
 		   m_error_traceback.release ());
+#else
+    /* PyErr_Restore is deprecated in python 3.12, use PyErr_SetRaisedException
+       instead.  */
+    PyErr_SetRaisedException (m_exc.release ());
+#endif
   }
 
   /* Return the string representation of the exception represented by
@@ -675,19 +687,54 @@ public:
 
   bool type_matches (PyObject *type) const
   {
-    return PyErr_GivenExceptionMatches (m_error_type.get (), type);
+    gdbpy_ref<> err_type = this->type ();
+    return PyErr_GivenExceptionMatches (err_type.get (), type);
   }
 
   /* Return a new reference to the exception value object.  */
 
-  gdbpy_ref<> value ()
+  gdbpy_ref<> value () const
   {
+#if PY_VERSION_HEX < 0x030c0000
+    if (!m_normalized)
+      {
+	PyObject *error_type, *error_value, *error_traceback;
+	error_type = m_error_type.release ();
+	error_value = m_error_value.release ();
+	error_traceback = m_error_traceback.release ();
+	PyErr_NormalizeException (&error_type, &error_value, &error_traceback);
+	m_error_type.reset (error_type);
+	m_error_value.reset (error_value);
+	m_error_traceback.reset (error_traceback);
+	m_normalized = true;
+      }
     return m_error_value;
+#else
+    return m_exc;
+#endif
+  }
+
+  /* Return a new reference to the exception type object.  */
+
+  gdbpy_ref<> type () const
+  {
+#if PY_VERSION_HEX < 0x030c0000
+    return m_error_type;
+#else
+    if (m_exc.get() == nullptr)
+      return nullptr;
+    return gdbpy_ref<>::new_reference ((PyObject *)Py_TYPE (m_exc.get ()));
+#endif
   }
 
 private:
 
-  gdbpy_ref<> m_error_type, m_error_value, m_error_traceback;
+#if PY_VERSION_HEX < 0x030c0000
+  mutable gdbpy_ref<> m_error_type, m_error_value, m_error_traceback;
+  mutable bool m_normalized = false;
+#else
+  gdbpy_ref<> m_exc;
+#endif
 };
 
 /* Called before entering the Python interpreter to install the
@@ -800,26 +847,20 @@ private:
   PyGILState_STATE m_state;
 };
 
-/* Use this after a TRY_EXCEPT to throw the appropriate Python
-   exception.  */
+/* Use this in a 'catch' block to convert the exception to a Python
+   exception and return nullptr.  */
 #define GDB_PY_HANDLE_EXCEPTION(Exception)	\
   do {						\
-    if (Exception.reason < 0)			\
-      {						\
-	gdbpy_convert_exception (Exception);	\
-	return NULL;				\
-      }						\
+    gdbpy_convert_exception (Exception);	\
+    return nullptr;				\
   } while (0)
 
-/* Use this after a TRY_EXCEPT to throw the appropriate Python
-   exception.  This macro is for use inside setter functions.  */
+/* Use this in a 'catch' block to convert the exception to a Python
+   exception and return -1.  */
 #define GDB_PY_SET_HANDLE_EXCEPTION(Exception)				\
     do {								\
-      if (Exception.reason < 0)						\
-	{								\
-	  gdbpy_convert_exception (Exception);				\
-	  return -1;							\
-	}								\
+      gdbpy_convert_exception (Exception);				\
+      return -1;							\
     } while (0)
 
 int gdbpy_print_python_errors_p (void);

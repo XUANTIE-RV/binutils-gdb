@@ -17,12 +17,12 @@
    You should have received a copy of the GNU General Public License
    along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
 
-#include "defs.h"
+#include "extract-store-integer.h"
 #include "frame.h"
 #include "inferior.h"
 #include "symtab.h"
 #include "value.h"
-#include "gdbcmd.h"
+#include "cli/cli-cmds.h"
 #include "language.h"
 #include "gdbcore.h"
 #include "symfile.h"
@@ -49,7 +49,6 @@
 #include "dwarf2/frame.h"
 #include "user-regs.h"
 #include "valprint.h"
-#include "gdbsupport/common-defs.h"
 #include "opcode/riscv-opc.h"
 #include "cli/cli-decode.h"
 #include "observable.h"
@@ -133,7 +132,7 @@ static const char *riscv_feature_name_virtual = "org.gnu.gdb.riscv.virtual";
 static const char *riscv_feature_name_vector = "org.gnu.gdb.riscv.vector";
 
 /* The current set of options to be passed to the disassembler.  */
-static char *riscv_disassembler_options;
+static std::string riscv_disassembler_options;
 
 /* Cached information about a frame.  */
 
@@ -165,7 +164,7 @@ static const reggroup *csr_reggroup = nullptr;
 /* Callback function for user_reg_add.  */
 
 static struct value *
-value_of_riscv_user_reg (frame_info_ptr frame, const void *baton)
+value_of_riscv_user_reg (const frame_info_ptr &frame, const void *baton)
 {
   const int *reg_p = (const int *) baton;
   return value_of_register (*reg_p, get_next_frame_sentinel_okay (frame));
@@ -1135,7 +1134,7 @@ riscv_register_type (struct gdbarch *gdbarch, int regnum)
 static void
 riscv_print_one_register_info (struct gdbarch *gdbarch,
 			       struct ui_file *file,
-			       frame_info_ptr frame,
+			       const frame_info_ptr &frame,
 			       int regnum)
 {
   const char *name = gdbarch_register_name (gdbarch, regnum);
@@ -1504,7 +1503,7 @@ riscv_pseudo_register_reggroup_p (struct gdbarch *gdbarch, int regnum,
 static void
 riscv_print_registers_info (struct gdbarch *gdbarch,
 			    struct ui_file *file,
-			    frame_info_ptr frame,
+			    const frame_info_ptr &frame,
 			    int regnum, int print_all)
 {
   if (regnum != -1)
@@ -3806,7 +3805,7 @@ riscv_frame_align (struct gdbarch *gdbarch, CORE_ADDR addr)
    unwinder.  */
 
 static struct riscv_unwind_cache *
-riscv_frame_cache (frame_info_ptr this_frame, void **this_cache)
+riscv_frame_cache (const frame_info_ptr &this_frame, void **this_cache)
 {
   CORE_ADDR pc, start_addr;
   struct riscv_unwind_cache *cache;
@@ -3866,7 +3865,7 @@ riscv_frame_cache (frame_info_ptr this_frame, void **this_cache)
 /* Implement the this_id callback for RiscV frame unwinder.  */
 
 static void
-riscv_frame_this_id (frame_info_ptr this_frame,
+riscv_frame_this_id (const frame_info_ptr &this_frame,
 		     void **prologue_cache,
 		     struct frame_id *this_id)
 {
@@ -3887,7 +3886,7 @@ riscv_frame_this_id (frame_info_ptr this_frame,
 /* Implement the prev_register callback for RiscV frame unwinder.  */
 
 static struct value *
-riscv_frame_prev_register (frame_info_ptr this_frame,
+riscv_frame_prev_register (const frame_info_ptr &this_frame,
 			   void **prologue_cache,
 			   int regnum)
 {
@@ -4823,7 +4822,7 @@ initialisation process."),
   add_setshow_auto_boolean_cmd ("use-compressed-breakpoints", no_class,
 				&use_compressed_breakpoints,
 				_("\
-Set debugger's use of compressed breakpoints."), _("	\
+Set debugger's use of compressed breakpoints."), _("\
 Show debugger's use of compressed breakpoints."), _("\
 Debugging compressed code requires compressed breakpoints to be used. If\n\
 left to 'auto' then gdb will use them if the existing instruction is a\n\

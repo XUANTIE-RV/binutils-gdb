@@ -15,7 +15,8 @@
    You should have received a copy of the GNU General Public License
    along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
 
-#include "defs.h"
+#include "event-top.h"
+#include "extract-store-integer.h"
 #include "osabi.h"
 #include "amd64-tdep.h"
 #include "gdbsupport/x86-xstate.h"
@@ -517,7 +518,7 @@ pc_in_range (CORE_ADDR pc, const struct amd64_windows_frame_cache *cache)
    Return 1 if an epilogue sequence was recognized, 0 otherwise.  */
 
 static int
-amd64_windows_frame_decode_epilogue (frame_info_ptr this_frame,
+amd64_windows_frame_decode_epilogue (const frame_info_ptr &this_frame,
 				     struct amd64_windows_frame_cache *cache)
 {
   /* According to MSDN an epilogue "must consist of either an add RSP,constant
@@ -697,7 +698,7 @@ amd64_windows_frame_decode_epilogue (frame_info_ptr this_frame,
 /* Decode and execute unwind insns at UNWIND_INFO.  */
 
 static void
-amd64_windows_frame_decode_insns (frame_info_ptr this_frame,
+amd64_windows_frame_decode_insns (const frame_info_ptr &this_frame,
 				  struct amd64_windows_frame_cache *cache,
 				  CORE_ADDR unwind_info)
 {
@@ -1077,7 +1078,7 @@ amd64_windows_find_unwind_info (struct gdbarch *gdbarch, CORE_ADDR pc,
    for THIS_FRAME.  */
 
 static struct amd64_windows_frame_cache *
-amd64_windows_frame_cache (frame_info_ptr this_frame, void **this_cache)
+amd64_windows_frame_cache (const frame_info_ptr &this_frame, void **this_cache)
 {
   struct gdbarch *gdbarch = get_frame_arch (this_frame);
   enum bfd_endian byte_order = gdbarch_byte_order (gdbarch);
@@ -1123,7 +1124,7 @@ amd64_windows_frame_cache (frame_info_ptr this_frame, void **this_cache)
    using the standard Windows x64 SEH info.  */
 
 static struct value *
-amd64_windows_frame_prev_register (frame_info_ptr this_frame,
+amd64_windows_frame_prev_register (const frame_info_ptr &this_frame,
 				   void **this_cache, int regnum)
 {
   struct gdbarch *gdbarch = get_frame_arch (this_frame);
@@ -1169,7 +1170,7 @@ amd64_windows_frame_prev_register (frame_info_ptr this_frame,
    the standard Windows x64 SEH info.  */
 
 static void
-amd64_windows_frame_this_id (frame_info_ptr this_frame, void **this_cache,
+amd64_windows_frame_this_id (const frame_info_ptr &this_frame, void **this_cache,
 		   struct frame_id *this_id)
 {
   struct amd64_windows_frame_cache *cache =
@@ -1235,7 +1236,7 @@ amd64_windows_skip_prologue (struct gdbarch *gdbarch, CORE_ADDR pc)
 /* Check Win64 DLL jmp trampolines and find jump destination.  */
 
 static CORE_ADDR
-amd64_windows_skip_trampoline_code (frame_info_ptr frame, CORE_ADDR pc)
+amd64_windows_skip_trampoline_code (const frame_info_ptr &frame, CORE_ADDR pc)
 {
   CORE_ADDR destination = 0;
   struct gdbarch *gdbarch = get_frame_arch (frame);
@@ -1334,11 +1335,37 @@ amd64_windows_init_abi (struct gdbarch_info info, struct gdbarch *gdbarch)
   set_gdbarch_long_bit (gdbarch, 32);
 }
 
+/* Sigwrapper unwinder instruction patterns for AMD64.  */
+
+static const gdb_byte amd64_sigbe_bytes[] = {
+  0x49, 0xc7, 0xc3, 0xf8, 0xff, 0xff, 0xff,	/* movq $-8,%r11 */
+  0x4d, 0x0f, 0xc1, 0x9a,			/* xaddq %r11,$tls::stackptr(%r10) */
+  /* 4 bytes for tls::stackptr operand.  */
+};
+
+static const gdb_byte amd64_sigdelayed_bytes[] = {
+  0x49, 0xc7, 0xc3, 0xf8, 0xff, 0xff, 0xff,	/* movq $-8,%r11 */
+  0x4d, 0x0f, 0xc1, 0x9c, 0x24,			/* xaddq %r11,$tls::stackptr(%r12) */
+  /* 4 bytes for tls::stackptr operand.  */
+};
+
+static const gdb::array_view<const gdb_byte> amd64_sig_patterns[] {
+  { amd64_sigbe_bytes },
+  { amd64_sigdelayed_bytes },
+};
+
+/* The sigwrapper unwinder on AMD64.  */
+
+static const cygwin_sigwrapper_frame_unwind
+  amd64_cygwin_sigwrapper_frame_unwind (amd64_sig_patterns);
+
 /* gdbarch initialization for Cygwin on AMD64.  */
 
 static void
 amd64_cygwin_init_abi (struct gdbarch_info info, struct gdbarch *gdbarch)
 {
+  frame_unwind_append_unwinder (gdbarch, &amd64_cygwin_sigwrapper_frame_unwind);
+
   amd64_windows_init_abi_common (info, gdbarch);
   cygwin_init_abi (info, gdbarch);
 }

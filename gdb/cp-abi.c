@@ -17,12 +17,11 @@
    You should have received a copy of the GNU General Public License
    along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
 
-#include "defs.h"
 #include "language.h"
 #include "value.h"
 #include "cp-abi.h"
 #include "command.h"
-#include "gdbcmd.h"
+#include "cli/cli-cmds.h"
 #include "ui-out.h"
 static struct cp_abi_ops *find_cp_abi (const char *short_name);
 
@@ -153,7 +152,7 @@ cplus_make_method_ptr (struct type *type, gdb_byte *contents,
 }
 
 CORE_ADDR
-cplus_skip_trampoline (frame_info_ptr frame,
+cplus_skip_trampoline (const frame_info_ptr &frame,
 		       CORE_ADDR stop_pc)
 {
   if (current_cp_abi.skip_trampoline == NULL)

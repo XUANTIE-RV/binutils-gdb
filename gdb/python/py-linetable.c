@@ -17,7 +17,6 @@
    You should have received a copy of the GNU General Public License
    along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
 
-#include "defs.h"
 #include "python-internal.h"
 
 struct linetable_entry_object {
@@ -397,7 +396,8 @@ ltpy_iternext (PyObject *self)
 
   LTPY_REQUIRE_VALID (iter_obj->source, symtab);
 
-  if (iter_obj->current_index >= symtab->linetable ()->nitems)
+  if (symtab->linetable () == nullptr
+      || iter_obj->current_index >= symtab->linetable ()->nitems)
     {
       PyErr_SetNone (PyExc_StopIteration);
       return NULL;

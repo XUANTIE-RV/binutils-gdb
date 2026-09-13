@@ -3748,6 +3748,41 @@ parse_shifter_operand (char **str, aarch64_opnd_info *operand,
   return parse_shifter_operand_imm (str, operand, mode);
 }
 
+static bool
+parse_reg_lsl_shifter_operand (char **str, aarch64_opnd_info *operand)
+{
+  aarch64_opnd_qualifier_t qualifier;
+  const reg_entry *reg = aarch64_reg_parse_32_64 (str, &qualifier);
+
+  if (reg)
+    {
+      if (!aarch64_check_reg_type (reg, REG_TYPE_R_ZR))
+	{
+	  set_expected_reg_error (REG_TYPE_R_ZR, reg, 0);
+	  return false;
+	}
+
+      operand->reg.regno = reg->number;
+      operand->qualifier = qualifier;
+
+      /* Accept optional LSL shift operation on register.  */
+      if (!skip_past_comma (str))
+	return true;
+
+      if (!parse_shift (str, operand, SHIFTED_LSL))
+	return false;
+
+      return true;
+    }
+  else
+    {
+      set_syntax_error
+	(_("integer register expected in the shifted operand "
+	   "register"));
+      return false;
+    }
+}
+
 /* Return TRUE on success; return FALSE otherwise.  */
 
 static bool
@@ -6590,6 +6625,17 @@ parse_operands (char *str, const aarch64_opcode *opcode)
 		 or not stack pointer is used in the instruction (Recall that
 		 "the extend operator is not optional unless at least one of
 		 "Rd" or "Rn" is '11111' (i.e. WSP)").  */
+	    }
+	  break;
+
+	case AARCH64_OPND_Rm_LSL:
+	  po_misc_or_fail (parse_reg_lsl_shifter_operand (&str, info));
+	  if (!info->shifter.operator_present)
+	    {
+	      /* Default to LSL #0 if not present. */
+	      gas_assert (info->shifter.kind == AARCH64_MOD_NONE);
+	      info->shifter.kind = AARCH64_MOD_LSL;
+	      info->shifter.amount = 0;
 	    }
 	  break;
 
@@ -10261,7 +10307,7 @@ static const struct aarch64_cpu_option_table aarch64_cpus[] = {
   {"cortex-a78ae",	AARCH64_CPU_FEATURES (V8_2A, 5, F16, RCPC, DOTPROD,
 					      SSBS, PROFILE), "Cortex-A78AE"},
   {"cortex-a78c",	AARCH64_CPU_FEATURES (V8_2A, 7, DOTPROD, F16, FLAGM,
-					      PAC, PROFILE, RCPC, SSBS),
+					      PAUTH, PROFILE, RCPC, SSBS),
 			"Cortex-A78C"},
   {"cortex-a510",	AARCH64_CPU_FEATURES (V9A, 4, BFLOAT16, I8MM, MEMTAG,
 					      SVE2_BITPERM), "Cortex-A510"},
@@ -10352,6 +10398,10 @@ struct aarch64_option_cpu_value_table
   const aarch64_feature_set require; /* Feature dependencies.  */
 };
 
+/* There are currently many feature bits with no corresponding flag for features implied by FEAT_D128.  We should combine or remove most of these in the future, but for now just make +d128 enable these dependencies as well.  */
+#define D128_FEATURE_DEPS AARCH64_FEATURES (8, LSE128, SCTLR2, FGT2, ATS1A, \
+					    AIE, S1PIE, S2PIE, TCR2)
+
 static const struct aarch64_option_cpu_value_table aarch64_features[] = {
   {"crc",		AARCH64_FEATURE (CRC), AARCH64_NO_FEATURES},
   {"crypto",		AARCH64_FEATURES (2, AES, SHA2),
@@ -10378,7 +10428,7 @@ static const struct aarch64_option_cpu_value_table aarch64_features[] = {
   {"rcpc",		AARCH64_FEATURE (RCPC), AARCH64_NO_FEATURES},
   {"rcpc2",		AARCH64_FEATURE (RCPC2), AARCH64_FEATURE (RCPC)},
   {"dotprod",		AARCH64_FEATURE (DOTPROD), AARCH64_FEATURE (SIMD)},
-  {"sha2",		AARCH64_FEATURE (SHA2), AARCH64_FEATURE (FP)},
+  {"sha2",		AARCH64_FEATURE (SHA2), AARCH64_FEATURE (SIMD)},
   {"frintts",		AARCH64_FEATURE (FRINTTS), AARCH64_FEATURE (SIMD)},
   {"sb",		AARCH64_FEATURE (SB), AARCH64_NO_FEATURES},
   {"predres",		AARCH64_FEATURE (PREDRES), AARCH64_NO_FEATURES},
@@ -10412,7 +10462,7 @@ static const struct aarch64_option_cpu_value_table aarch64_features[] = {
   {"ls64",		AARCH64_FEATURE (LS64), AARCH64_NO_FEATURES},
   {"flagm",		AARCH64_FEATURE (FLAGM), AARCH64_NO_FEATURES},
   {"flagm2",		AARCH64_FEATURE (FLAGMANIP), AARCH64_FEATURE (FLAGM)},
-  {"pauth",		AARCH64_FEATURE (PAC), AARCH64_NO_FEATURES},
+  {"pauth",		AARCH64_FEATURE (PAUTH), AARCH64_NO_FEATURES},
   {"xs",		AARCH64_FEATURE (XS), AARCH64_NO_FEATURES},
   {"wfxt",		AARCH64_FEATURE (WFXT), AARCH64_NO_FEATURES},
   {"mops",		AARCH64_FEATURE (MOPS), AARCH64_NO_FEATURES},
@@ -10423,9 +10473,14 @@ static const struct aarch64_option_cpu_value_table aarch64_features[] = {
   {"the",		AARCH64_FEATURE (THE), AARCH64_NO_FEATURES},
   {"rasv2",		AARCH64_FEATURE (RASv2), AARCH64_FEATURE (RAS)},
   {"ite",		AARCH64_FEATURE (ITE), AARCH64_NO_FEATURES},
-  {"d128",		AARCH64_FEATURE (D128),
-			AARCH64_FEATURE (LSE128)},
+  {"d128",		AARCH64_FEATURE (D128), D128_FEATURE_DEPS},
+  {"b16b16",		AARCH64_FEATURE (B16B16), AARCH64_FEATURE (SVE2)},
+  {"sme2p1",		AARCH64_FEATURE (SME2p1), AARCH64_FEATURE (SME2)},
+  {"sve2p1",		AARCH64_FEATURE (SVE2p1), AARCH64_FEATURE (SVE2)},
   {"rcpc3",		AARCH64_FEATURE (RCPC3), AARCH64_FEATURE (RCPC2)},
+  {"cpa",		AARCH64_FEATURE (CPA), AARCH64_NO_FEATURES},
+  {"faminmax",		AARCH64_FEATURE (FAMINMAX), AARCH64_FEATURE (SIMD)},
+  {"fp8",		AARCH64_FEATURE (FP8), AARCH64_FEATURE (SIMD)},
   {NULL,		AARCH64_NO_FEATURES, AARCH64_NO_FEATURES},
 };
 

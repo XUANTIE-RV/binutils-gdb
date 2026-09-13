@@ -17,7 +17,6 @@
    You should have received a copy of the GNU General Public License
    along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
 
-#include "defs.h"
 #include "language.h"
 #include "charset.h"
 #include "block.h"
@@ -361,7 +360,7 @@ frapy_function (PyObject *self, PyObject *args)
    Sets a Python exception and returns NULL on error.  */
 
 PyObject *
-frame_info_to_frame_object (frame_info_ptr frame)
+frame_info_to_frame_object (const frame_info_ptr &frame)
 {
   gdbpy_ref<frame_object> frame_obj (PyObject_New (frame_object,
 						   &frame_object_type));
@@ -532,7 +531,8 @@ frapy_read_var (PyObject *self, PyObject *args, PyObject *kw)
 
 	  if (!block)
 	    block = get_frame_block (frame, NULL);
-	  lookup_sym = lookup_symbol (var_name.get (), block, VAR_DOMAIN, NULL);
+	  lookup_sym = lookup_symbol (var_name.get (), block,
+				      SEARCH_VFT, nullptr);
 	  var = lookup_sym.symbol;
 	  block = lookup_sym.block;
 	}

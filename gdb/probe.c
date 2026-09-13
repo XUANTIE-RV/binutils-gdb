@@ -17,7 +17,6 @@
    You should have received a copy of the GNU General Public License
    along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
 
-#include "defs.h"
 #include "probe.h"
 #include "command.h"
 #include "cli/cli-cmds.h"
@@ -786,7 +785,7 @@ ignore_probes_command (const char *arg, int from_tty)
 /* See comments in probe.h.  */
 
 struct value *
-probe_safe_evaluate_at_pc (frame_info_ptr frame, unsigned n)
+probe_safe_evaluate_at_pc (const frame_info_ptr &frame, unsigned n)
 {
   struct bound_probe probe;
   unsigned n_args;

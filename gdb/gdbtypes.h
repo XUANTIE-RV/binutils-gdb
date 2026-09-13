@@ -211,7 +211,7 @@ struct variant_part;
    control other variant parts as well.  This struct corresponds to
    DW_TAG_variant in DWARF.  */
 
-struct variant : allocate_on_obstack
+struct variant : allocate_on_obstack<variant>
 {
   /* * The discriminant ranges for this variant.  */
   gdb::array_view<discriminant_range> discriminants;
@@ -243,7 +243,7 @@ struct variant : allocate_on_obstack
    and holds an array of variants.  This struct corresponds to
    DW_TAG_variant_part in DWARF.  */
 
-struct variant_part : allocate_on_obstack
+struct variant_part : allocate_on_obstack<variant_part>
 {
   /* * The index of the discriminant field in the outer type.  This is
      an index into the type's array of fields.  If this is -1, there
@@ -271,6 +271,7 @@ enum dynamic_prop_kind
   PROP_VARIANT_PARTS, /* Variant parts.  */
   PROP_TYPE,	   /* Type.  */
   PROP_VARIABLE_NAME, /* Variable name.  */
+  PROP_OPTIMIZED_OUT, /* Optimized out.  */
 };
 
 union dynamic_prop_data
@@ -316,6 +317,18 @@ struct dynamic_prop
   void set_undefined ()
   {
     m_kind = PROP_UNDEFINED;
+  }
+
+  void set_optimized_out ()
+  {
+    m_kind = PROP_OPTIMIZED_OUT;
+  }
+
+  /* Return true if this property is "available", at least in theory
+     -- meaning it is neither undefined nor optimized out.  */
+  bool is_available () const
+  {
+    return m_kind != PROP_UNDEFINED && m_kind != PROP_OPTIMIZED_OUT;
   }
 
   LONGEST const_val () const
@@ -760,6 +773,13 @@ struct range_bounds
       return this->stride.const_val ();
   }
 
+  /* Return true if either bounds is optimized out.  */
+  bool optimized_out () const
+  {
+    return (low.kind () == PROP_OPTIMIZED_OUT
+	    || high.kind () == PROP_OPTIMIZED_OUT);
+  }
+
   /* * Low bound of range.  */
 
   struct dynamic_prop low;
@@ -1133,6 +1153,12 @@ struct type
     gdb_assert (this->code () == TYPE_CODE_RANGE);
 
     this->main_type->flds_bnds.bounds = bounds;
+  }
+
+  /* Return true if this type's bounds were optimized out.  */
+  bool bound_optimized_out () const
+  {
+    return bounds ()->optimized_out ();
   }
 
   ULONGEST bit_stride () const
@@ -2607,7 +2633,7 @@ extern struct type *resolve_dynamic_type
    See the caveat in 'resolve_dynamic_type' to understand a scenario
    where an apparently-resolved type may still be considered
    "dynamic".  */
-extern int is_dynamic_type (struct type *type);
+extern bool is_dynamic_type (struct type *type);
 
 extern struct type *check_typedef (struct type *);
 

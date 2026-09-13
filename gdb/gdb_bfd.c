@@ -17,10 +17,10 @@
    You should have received a copy of the GNU General Public License
    along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
 
-#include "defs.h"
 #include "gdb_bfd.h"
+#include "event-top.h"
 #include "ui-out.h"
-#include "gdbcmd.h"
+#include "cli/cli-cmds.h"
 #include "hashtab.h"
 #include "gdbsupport/filestuff.h"
 #ifdef HAVE_MMAP
@@ -71,9 +71,9 @@ gdb_bfd_unlock (void *ignore)
 struct gdb_bfd_section_data
 {
   /* Size of the data.  */
-  bfd_size_type size;
+  size_t size;
   /* If the data was mmapped, this is the length of the map.  */
-  bfd_size_type map_len;
+  size_t map_len;
   /* The data.  If NULL, the section data has not been read.  */
   void *data;
   /* If the data was mmapped, this is the map address.  */
@@ -939,21 +939,51 @@ gdb_bfd_openr_iovec (const char *filename, const char *target,
   auto do_open = [] (bfd *nbfd, void *closure) -> void *
   {
     auto real_opener = static_cast<gdb_iovec_opener_ftype *> (closure);
-    return (*real_opener) (nbfd);
+    /* Prevent exceptions from escaping to C code and triggering an abort.  */
+    auto res = catch_exceptions<gdb_bfd_iovec_base *, nullptr> ([&]
+      {
+	return (*real_opener) (nbfd);
+      });
+    if (res == nullptr)
+      {
+	errno = EIO;
+	bfd_set_error (bfd_error_system_call);
+      }
+      return res;
   };
 
   auto read_trampoline = [] (bfd *nbfd, void *stream, void *buf,
 			     file_ptr nbytes, file_ptr offset) -> file_ptr
   {
     gdb_bfd_iovec_base *obj = static_cast<gdb_bfd_iovec_base *> (stream);
-    return obj->read (nbfd, buf, nbytes, offset);
+    /* Prevent exceptions from escaping to C code and triggering an abort.  */
+    auto res = catch_exceptions<long int, -1> ([&]
+      {
+	return obj->read (nbfd, buf, nbytes, offset);
+      });
+    if (res == -1)
+      {
+	errno = EIO;
+	bfd_set_error (bfd_error_system_call);
+      }
+    return res;
   };
 
   auto stat_trampoline = [] (struct bfd *abfd, void *stream,
 			     struct stat *sb) -> int
   {
     gdb_bfd_iovec_base *obj = static_cast<gdb_bfd_iovec_base *> (stream);
-    return obj->stat (abfd, sb);
+    /* Prevent exceptions from escaping to C code and triggering an abort.  */
+    auto res = catch_exceptions<int, -1> ([&]
+      {
+	return obj->stat (abfd, sb);
+      });
+    if (res == -1)
+      {
+	errno = EIO;
+	bfd_set_error (bfd_error_system_call);
+      }
+    return res;
   };
 
   auto close_trampoline = [] (struct bfd *nbfd, void *stream) -> int
@@ -1180,37 +1210,46 @@ get_bfd_inferior_data (struct inferior *inf)
    count.  */
 
 static unsigned long
-increment_bfd_error_count (std::string str)
+increment_bfd_error_count (const std::string &str)
 {
+#if CXX_STD_THREAD
+  std::lock_guard<std::recursive_mutex> guard (gdb_bfd_mutex);
+#endif
   struct bfd_inferior_data *bid = get_bfd_inferior_data (current_inferior ());
 
   auto &map = bid->bfd_error_string_counts;
-  return ++map[std::move (str)];
+  return ++map[str];
 }
 
-static bfd_error_handler_type default_bfd_error_handler;
+/* A print callback for bfd_print_error.  */
+
+static int ATTRIBUTE_PRINTF (2, 0)
+print_error_callback (void *stream, const char *fmt, ...)
+{
+  string_file *file = (string_file *) stream;
+  size_t in_size = file->size ();
+  va_list ap;
+  va_start (ap, fmt);
+  file->vprintf (fmt, ap);
+  va_end (ap);
+  return file->size () - in_size;
+}
 
 /* Define a BFD error handler which will suppress the printing of
    messages which have been printed once already.  This is done on a
    per-inferior basis.  */
 
-static void ATTRIBUTE_PRINTF (1, 0)
+static void
 gdb_bfd_error_handler (const char *fmt, va_list ap)
 {
-  va_list ap_copy;
+  string_file output;
+  bfd_print_error (print_error_callback, &output, fmt, ap);
+  std::string str = output.release ();
 
-  va_copy(ap_copy, ap);
-  const std::string str = string_vprintf (fmt, ap_copy);
-  va_end (ap_copy);
-
-  if (increment_bfd_error_count (std::move (str)) > 1)
+  if (increment_bfd_error_count (str) > 1)
     return;
 
-  /* We must call the BFD mechanism for printing format strings since
-     it supports additional format specifiers that GDB's vwarning() doesn't
-     recognize.  It also outputs additional text, i.e. "BFD: ", which
-     makes it clear that it's a BFD warning/error.  */
-  (*default_bfd_error_handler) (fmt, ap);
+  warning ("%s", str.c_str ());
 }
 
 /* See gdb_bfd.h.  */
@@ -1263,5 +1302,5 @@ When non-zero, bfd cache specific debugging is enabled."),
 			   &setdebuglist, &showdebuglist);
 
   /* Hook the BFD error/warning handler to limit amount of output.  */
-  default_bfd_error_handler = bfd_set_error_handler (gdb_bfd_error_handler);
+  bfd_set_error_handler (gdb_bfd_error_handler);
 }

@@ -16,7 +16,6 @@
    You should have received a copy of the GNU General Public License
    along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
 
-#include "server.h"
 
 #ifdef IN_PROCESS_AGENT
 #  define PREFIX "ipa: "
@@ -100,7 +99,7 @@ internal_vwarning (const char *file, int line, const char *fmt, va_list args)
 /* Convert a CORE_ADDR into a HEX string, like %lx.
    The result is stored in a circular static buffer, NUMCELLS deep.  */
 
-char *
+const char *
 paddress (CORE_ADDR addr)
 {
   return phex_nz (addr, sizeof (CORE_ADDR));

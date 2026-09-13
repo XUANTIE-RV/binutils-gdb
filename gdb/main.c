@@ -17,7 +17,7 @@
    You should have received a copy of the GNU General Public License
    along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
 
-#include "defs.h"
+#include "annotate.h"
 #include "top.h"
 #include "ui.h"
 #include "target.h"
@@ -79,7 +79,6 @@ std::string python_libdir;
 /* Target IO streams.  */
 struct ui_file *gdb_stdtargin;
 struct ui_file *gdb_stdtarg;
-struct ui_file *gdb_stdtargerr;
 
 /* True if --batch or --batch-silent was seen.  */
 int batch_flag = 0;
@@ -96,13 +95,6 @@ int return_child_result_value = -1;
 
 /* GDB as it has been invoked from the command line (i.e. argv[0]).  */
 static char *gdb_program_name;
-
-/* Return read only pointer to GDB_PROGRAM_NAME.  */
-const char *
-get_gdb_program_name (void)
-{
-  return gdb_program_name;
-}
 
 static void print_gdb_help (struct ui_file *);
 
@@ -686,7 +678,6 @@ captured_main_1 (struct captured_main_args *context)
   current_ui = main_ui;
 
   gdb_stdtarg = gdb_stderr;
-  gdb_stdtargerr = gdb_stderr;
   gdb_stdtargin = gdb_stdin;
 
   /* Put a CLI based uiout in place early.  If the early initialization
@@ -1154,7 +1145,7 @@ captured_main_1 (struct captured_main_args *context)
 
   /* Install the default UI.  All the interpreters should have had a
      look at things by now.  Initialize the default interpreter.  */
-  set_top_level_interpreter (interpreter_p.c_str ());
+  set_top_level_interpreter (interpreter_p.c_str (), false);
 
   /* The interpreter should have installed the real uiout by now.  */
   gdb_assert (current_uiout != temp_uiout.get ());
@@ -1310,10 +1301,6 @@ captured_main_1 (struct captured_main_args *context)
   /* Process '-x' and '-ex' options.  */
   execute_cmdargs (&cmdarg_vec, CMDARG_FILE, CMDARG_COMMAND, &ret);
 
-  /* Read in the old history after all the command files have been
-     read.  */
-  init_history ();
-
   if (batch_flag)
     {
       int error_status = EXIT_FAILURE;
@@ -1322,6 +1309,14 @@ captured_main_1 (struct captured_main_args *context)
       /* We have hit the end of the batch file.  */
       quit_force (exit_arg, 0);
     }
+
+  /* We are starting an interactive session.  */
+
+  /* Read in the history.  This is after all the command files have been read,
+     so that the user can change the history file via a .gdbinit file.  This
+     is also after the batch_flag check, because we don't need the history in
+     batch mode.  */
+  init_history ();
 }
 
 static void

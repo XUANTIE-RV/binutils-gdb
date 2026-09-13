@@ -227,10 +227,7 @@ public:
      NOTE: This points into dwarf2_per_objfile->per_bfd->quick_file_names_table.  */
   struct quick_file_names *file_names = nullptr;
 
-  /* The CUs we import using DW_TAG_imported_unit.  This is filled in
-     while reading psymtabs, used to compute the psymtab dependencies,
-     and then cleared.  Then it is filled in again while reading full
-     symbols, and only deleted when the objfile is destroyed.
+  /* The CUs we import using DW_TAG_imported_unit.
 
      This is also used to work around a difference between the way gold
      generates .gdb_index version <=7 and the way gdb does.  Arguably this
@@ -244,45 +241,8 @@ public:
      .gdb_index version <=7 this also records the TUs that the CU referred
      to.  Concurrently with this change gdb was modified to emit version 8
      indices so we only pay a price for gold generated indices.
-     http://sourceware.org/bugzilla/show_bug.cgi?id=15021.
-
-     This currently needs to be a public member due to how
-     dwarf2_per_cu_data is allocated and used.  Ideally in future things
-     could be refactored to make this private.  Until then please try to
-     avoid direct access to this member, and instead use the helper
-     functions above.  */
-  std::vector <dwarf2_per_cu_data *> *imported_symtabs = nullptr;
-
-  /* Return true of IMPORTED_SYMTABS is empty or not yet allocated.  */
-  bool imported_symtabs_empty () const
-  {
-    return (imported_symtabs == nullptr || imported_symtabs->empty ());
-  }
-
-  /* Push P to the back of IMPORTED_SYMTABS, allocated IMPORTED_SYMTABS
-     first if required.  */
-  void imported_symtabs_push (dwarf2_per_cu_data *p)
-  {
-    if (imported_symtabs == nullptr)
-      imported_symtabs = new std::vector <dwarf2_per_cu_data *>;
-    imported_symtabs->push_back (p);
-  }
-
-  /* Return the size of IMPORTED_SYMTABS if it is allocated, otherwise
-     return 0.  */
-  size_t imported_symtabs_size () const
-  {
-    if (imported_symtabs == nullptr)
-      return 0;
-    return imported_symtabs->size ();
-  }
-
-  /* Delete IMPORTED_SYMTABS and set the pointer back to nullptr.  */
-  void imported_symtabs_free ()
-  {
-    delete imported_symtabs;
-    imported_symtabs = nullptr;
-  }
+     http://sourceware.org/bugzilla/show_bug.cgi?id=15021.  */
+  std::vector<dwarf2_per_cu_data *> imported_symtabs;
 
   /* Get the header of this per_cu, reading it if necessary.  */
   const comp_unit_head *get_header () const;
@@ -576,7 +536,7 @@ public:
     abstract_to_concrete;
 
   /* The address map that is used by the DWARF index code.  */
-  struct addrmap *index_addrmap = nullptr;
+  addrmap_fixed *index_addrmap = nullptr;
 };
 
 /* An iterator for all_units that is based on index.  This
@@ -732,10 +692,6 @@ struct dwarf2_per_objfile
      any that are too old.  */
   void age_comp_units ();
 
-  /* Apply any needed adjustments to ADDR, returning an adjusted but
-     still unrelocated address.  */
-  unrelocated_addr adjust (unrelocated_addr addr);
-
   /* Apply any needed adjustments to ADDR and then relocate the
      address according to the objfile's section offsets, returning a
      relocated address.  */
@@ -879,7 +835,7 @@ struct dwarf2_base_index_functions : public quick_symbol_functions
 
   enum language lookup_global_symbol_language (struct objfile *objfile,
 					       const char *name,
-					       domain_enum domain,
+					       domain_search_flags domain,
 					       bool *symbol_found_p) override
   {
     *symbol_found_p = false;

@@ -42,7 +42,6 @@
    
 %{
 
-#include "defs.h"
 #include "expression.h"
 #include "value.h"
 #include "parser-defs.h"
@@ -1558,13 +1557,8 @@ yylex (void)
 				got_dot|got_e|got_d,
 				&yylval);
 	if (toktype == ERROR)
-	  {
-	    char *err_copy = (char *) alloca (p - tokstart + 1);
-	    
-	    memcpy (err_copy, tokstart, p - tokstart);
-	    err_copy[p - tokstart] = 0;
-	    error (_("Invalid number \"%s\"."), err_copy);
-	  }
+	  error (_("Invalid number \"%.*s\"."), (int) (p - tokstart),
+		 tokstart);
 	pstate->lexptr = p;
 	return toktype;
       }
@@ -1640,11 +1634,11 @@ yylex (void)
   {
     std::string tmp = copy_name (yylval.sval);
     struct block_symbol result;
-    const domain_enum lookup_domains[] =
+    const domain_search_flags lookup_domains[] =
     {
-      STRUCT_DOMAIN,
-      VAR_DOMAIN,
-      MODULE_DOMAIN
+      SEARCH_STRUCT_DOMAIN,
+      SEARCH_VFT,
+      SEARCH_MODULE_DOMAIN
     };
     int hextype;
 

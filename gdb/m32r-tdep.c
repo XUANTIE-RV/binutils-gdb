@@ -17,13 +17,13 @@
    You should have received a copy of the GNU General Public License
    along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
 
-#include "defs.h"
+#include "extract-store-integer.h"
 #include "frame.h"
 #include "frame-unwind.h"
 #include "frame-base.h"
 #include "symtab.h"
 #include "gdbtypes.h"
-#include "gdbcmd.h"
+#include "cli/cli-cmds.h"
 #include "gdbcore.h"
 #include "value.h"
 #include "inferior.h"
@@ -516,7 +516,7 @@ struct m32r_unwind_cache
    for it IS the sp for the next frame.  */
 
 static struct m32r_unwind_cache *
-m32r_frame_unwind_cache (frame_info_ptr this_frame,
+m32r_frame_unwind_cache (const frame_info_ptr &this_frame,
 			 void **this_prologue_cache)
 {
   CORE_ADDR pc, scan_limit;
@@ -793,7 +793,7 @@ m32r_return_value (struct gdbarch *gdbarch, struct value *function,
    frame.  This will be used to create a new GDB frame struct.  */
 
 static void
-m32r_frame_this_id (frame_info_ptr this_frame,
+m32r_frame_this_id (const frame_info_ptr &this_frame,
 		    void **this_prologue_cache, struct frame_id *this_id)
 {
   struct m32r_unwind_cache *info
@@ -823,7 +823,7 @@ m32r_frame_this_id (frame_info_ptr this_frame,
 }
 
 static struct value *
-m32r_frame_prev_register (frame_info_ptr this_frame,
+m32r_frame_prev_register (const frame_info_ptr &this_frame,
 			  void **this_prologue_cache, int regnum)
 {
   struct m32r_unwind_cache *info
@@ -842,7 +842,7 @@ static const struct frame_unwind m32r_frame_unwind = {
 };
 
 static CORE_ADDR
-m32r_frame_base_address (frame_info_ptr this_frame, void **this_cache)
+m32r_frame_base_address (const frame_info_ptr &this_frame, void **this_cache)
 {
   struct m32r_unwind_cache *info
     = m32r_frame_unwind_cache (this_frame, this_cache);

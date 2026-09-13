@@ -16,7 +16,6 @@
    You should have received a copy of the GNU General Public License
    along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
 
-#include "defs.h"
 #include "run-on-main-thread.h"
 #include "ser-event.h"
 #if CXX_STD_THREAD
@@ -133,4 +132,15 @@ _initialize_run_on_main_thread ()
   runnable_event = make_serial_event ();
   add_file_handler (serial_event_fd (runnable_event), run_events, nullptr,
 		    "run-on-main-thread");
+
+  /* A runnable may refer to an extension language.  So, we want to
+     make sure any pending ones have been deleted before the extension
+     languages are shut down.  */
+  add_final_cleanup ([] ()
+    {
+#if CXX_STD_THREAD
+      std::lock_guard lock (runnable_mutex);
+#endif
+      runnables.clear ();
+    });
 }

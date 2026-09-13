@@ -17,7 +17,6 @@
    You should have received a copy of the GNU General Public License
    along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
 
-#include "defs.h"
 
 #include "annotate.h"
 #include "arch-utils.h"
@@ -117,7 +116,7 @@ solib_catchpoint::check_status (struct bpstat *bs)
 {
   if (is_load)
     {
-      for (shobj *iter : current_program_space->added_solibs)
+      for (solib *iter : current_program_space->added_solibs)
 	{
 	  if (!regex
 	      || compiled->exec (iter->so_name.c_str (), 0, nullptr, 0) == 0)

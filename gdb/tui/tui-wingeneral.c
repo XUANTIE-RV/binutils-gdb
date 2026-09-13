@@ -19,7 +19,6 @@
    You should have received a copy of the GNU General Public License
    along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
 
-#include "defs.h"
 #include "tui/tui.h"
 #include "tui/tui-data.h"
 #include "tui/tui-io.h"
@@ -177,7 +176,7 @@ tui_win_info::make_window ()
 }
 
 /* We can't really make windows visible, or invisible.  So we have to
-   delete the entire window when making it visible, and create it
+   delete the entire window when making it invisible, and create it
    again when making it visible.  */
 void
 tui_win_info::make_visible (bool visible)
@@ -189,16 +188,4 @@ tui_win_info::make_visible (bool visible)
     make_window ();
   else
     handle.reset (nullptr);
-}
-
-/* Function to refresh all the windows currently displayed.  */
-
-void
-tui_refresh_all ()
-{
-  for (tui_win_info *win_info : all_tui_windows ())
-    {
-      if (win_info->is_visible ())
-	win_info->refresh_window ();
-    }
 }

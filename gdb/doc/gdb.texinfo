@@ -1752,6 +1752,7 @@ show you the alternatives available, if there is more than one possibility).
 * Command Syntax::              How to give commands to @value{GDBN}
 * Command Settings::            How to change default behavior of commands
 * Completion::                  Command completion
+* Filename Arguments::		Filenames As Command Arguments
 * Command Options::             Command options
 * Help::                        How to ask @value{GDBN} for help
 @end menu
@@ -2122,6 +2123,68 @@ struct ui_file
    void *to_data;
 @}
 @end smallexample
+
+@node Filename Arguments
+@section Filenames As Command Arguments
+@cindex file names, quoting and escaping
+
+When passing filenames (or directory names) as arguments to a command,
+if the filename argument does not include any whitespace, double
+quotes, or single quotes, then for all commands the filename can be
+written as a simple string, for example:
+
+@smallexample
+(@value{GDBP}) file /path/to/some/file
+@end smallexample
+
+If the filename does include whitespace, double quotes, or single
+quotes, then @value{GDBN} has two approaches for how these filenames
+should be formatted; which format to use depends on which command is
+being used.
+
+Most @value{GDBN} commands don't require, or support, quoting and
+escaping.  These commands treat any text after the command name, that
+is not a command option (@pxref{Command Options}), as the filename,
+even if the filename contains whitespace or quote characters.  In the
+following example the user is adding @w{@file{/path/that contains/two
+spaces/}} to the auto-load safe-path (@pxref{add-auto-load-safe-path}):
+
+@smallexample
+(@value{GDBP}) add-auto-load-safe-path /path/that contains/two spaces/
+@end smallexample
+
+A small number of commands require that filenames containing
+whitespace or quote characters are either quoted, or have the special
+characters escaped with a backslash.  Commands that support this style
+are marked as such in the manual, any command not marked as accepting
+quoting and escaping of its filename argument, does not accept this
+filename argument style.
+
+For example, to load the file @w{@file{/path/with spaces/to/a file}}
+with the @code{file} command (@pxref{Files, ,Commands to Specify
+Files}), you can escape the whitespace characters with a backslash:
+
+@smallexample
+(@value{GDBP}) file /path/with\ spaces/to/a\ file
+@end smallexample
+
+Alternatively the entire filename can be wrapped in either single or
+double quotes, in which case no backlsashes are needed, for example:
+
+@smallexample
+(@value{GDBP}) symbol-file "/path/with spaces/to/a file"
+(@value{GDBP}) exec-file '/path/with spaces/to/a file'
+@end smallexample
+
+It is possible to include a quote character within a quoted filename
+by escaping it with a backslash, for example, within a filename
+surrounded by double quotes, a double quote character should be
+escaped with a backslash, but a single quote character should not be
+escaped.  Within a single quoted string a single quote character needs
+to be escaped, but a double quote character does not.
+
+A literal backslash character can also be included by escaping it with
+a backslash.
 
 @node Command Options
 @section Command options
@@ -2725,7 +2788,7 @@ automatically with the @code{set auto-connect-native-target off}
 command.
 
 If @code{on}, which is the default, and if the current inferior is not
-connected to a target already, the @code{run} command automaticaly
+connected to a target already, the @code{run} command automatically
 connects to the native target, if one is available.
 
 If @code{off}, and if the current inferior is not connected to a
@@ -4343,7 +4406,8 @@ running or not, what process it is, and why it stopped.
 @end table
 
 @menu
-* Breakpoints::                 Breakpoints, watchpoints, and catchpoints
+* Breakpoints::                 Breakpoints, watchpoints, tracepoints,
+                                and catchpoints
 * Continuing and Stepping::     Resuming execution
 * Skipping Over Functions and Files::
                                 Skipping over functions and files
@@ -4721,15 +4785,15 @@ optionally be surrounded by spaces.
 @cindex @code{$_} and @code{info breakpoints}
 @item info breakpoints @r{[}@var{list}@dots{}@r{]}
 @itemx info break @r{[}@var{list}@dots{}@r{]}
-Print a table of all breakpoints, watchpoints, and catchpoints set and
-not deleted.  Optional argument @var{n} means print information only
-about the specified breakpoint(s) (or watchpoint(s) or catchpoint(s)).
+Print a table of all breakpoints, watchpoints, tracepoints, and catchpoints set
+and not deleted.  Optional argument @var{n} means print information only about
+the specified breakpoint(s) (or watchpoint(s) or tracepoint(s) or catchpoint(s)).
 For each breakpoint, following columns are printed:
 
 @table @emph
 @item Breakpoint Numbers
 @item Type
-Breakpoint, watchpoint, or catchpoint.
+Breakpoint, watchpoint, tracepoint, or catchpoint.
 @item Disposition
 Whether the breakpoint is marked to be disabled or deleted when hit.
 @item Enabled or Disabled
@@ -5650,10 +5714,11 @@ in @ref{Location Specifications}.
 @kindex delete
 @kindex d @r{(@code{delete})}
 @item delete @r{[}breakpoints@r{]} @r{[}@var{list}@dots{}@r{]}
-Delete the breakpoints, watchpoints, or catchpoints of the breakpoint
-list specified as argument.  If no argument is specified, delete all
-breakpoints (@value{GDBN} asks confirmation, unless you have @code{set
-confirm off}).  You can abbreviate this command as @code{d}.
+Delete the breakpoints, watchpoints, tracepoints, or catchpoints of the
+breakpoint list specified as argument.  If no argument is specified, delete
+all breakpoints, watchpoints, tracepoints, and catchpoints (@value{GDBN} asks
+confirmation, unless you have @code{set confirm off}).  You can abbreviate this
+command as @code{d}.
 @end table
 
 @node Disabling
@@ -5665,10 +5730,10 @@ prefer to @dfn{disable} it.  This makes the breakpoint inoperative as if
 it had been deleted, but remembers the information on the breakpoint so
 that you can @dfn{enable} it again later.
 
-You disable and enable breakpoints, watchpoints, and catchpoints with
-the @code{enable} and @code{disable} commands, optionally specifying
-one or more breakpoint numbers as arguments.  Use @code{info break} to
-print a list of all breakpoints, watchpoints, and catchpoints if you
+You disable and enable breakpoints, watchpoints, tracepoints, and catchpoints
+with the @code{enable} and @code{disable} commands, optionally specifying
+one or more breakpoint numbers as arguments.  Use @code{info break} to print
+a list of all breakpoints, watchpoints, tracepoints, and catchpoints if you
 do not know which numbers to use.
 
 Disabling and enabling a breakpoint that has multiple locations
@@ -5696,7 +5761,7 @@ set with the @code{tbreak} command starts out in this state.
 @end itemize
 
 You can use the following commands to enable or disable breakpoints,
-watchpoints, and catchpoints:
+watchpoints, tracepoints, and catchpoints:
 
 @table @code
 @kindex disable
@@ -5874,7 +5939,7 @@ is decremented each time.  @xref{Convenience Vars, ,Convenience
 Variables}.
 @end table
 
-Ignore counts apply to breakpoints, watchpoints, and catchpoints.
+Ignore counts apply to breakpoints, watchpoints, tracepoints, and catchpoints.
 
 
 @node Break Commands
@@ -13865,6 +13930,9 @@ Produce a core dump of the inferior process.  The optional argument
 specified, the file name defaults to @file{core.@var{pid}}, where
 @var{pid} is the inferior process ID.
 
+If supported by the filesystem where the core is written to,
+@value{GDBN} generates a sparse core dump file.
+
 Note that this command is implemented only for some systems (as of
 this writing, @sc{gnu}/Linux, FreeBSD, Solaris, and S390).
 
@@ -14511,7 +14579,7 @@ There is no execution history stored (possible @ref{Reverse Execution} is never
 used for this purpose) and the last known caller could have reached the known
 callee by multiple different jump sequences.  In such case @value{GDBN} still
 tries to show at least all the unambiguous top tail callers and all the
-unambiguous bottom tail calees, if any.
+unambiguous bottom tail callees, if any.
 
 @table @code
 @anchor{set debug entry-values}
@@ -20898,7 +20966,7 @@ value history.
 It is possible for the function you call via the @code{print} or
 @code{call} command to generate a signal (e.g., if there's a bug in
 the function, or if you passed it incorrect arguments).  What happens
-in that case is controlled by the @code{set unwindonsignal} command.
+in that case is controlled by the @code{set unwind-on-signal} command.
 
 Similarly, with a C@t{++} program it is possible for the function you
 call via the @code{print} or @code{call} command to generate an
@@ -20912,7 +20980,8 @@ in that case is controlled by the
 
 @anchor{stack unwind settings}
 @table @code
-@item set unwindonsignal
+@item set unwind-on-signal
+@kindex set unwind-on-signal
 @kindex set unwindonsignal
 @cindex unwind stack in called functions
 @cindex call dummy stack unwinding
@@ -20923,10 +20992,17 @@ the context to what it was before the call.  If set to off (the
 default), @value{GDBN} stops in the frame where the signal was
 received.
 
-@item show unwindonsignal
+The command @code{set unwindonsignal} is an alias for this command,
+and is maintained for backward compatibility.
+
+@item show unwind-on-signal
+@kindex show unwind-on-signal
 @kindex show unwindonsignal
 Show the current setting of stack unwinding in the functions called by
 @value{GDBN}.
+
+The command @code{show unwindonsignal} is an alias for this command,
+and is maintained for backward compatibility.
 
 @item set unwind-on-terminating-exception
 @kindex set unwind-on-terminating-exception
@@ -20943,6 +21019,22 @@ the default C@t{++} exception handler and the inferior terminated.
 @kindex show unwind-on-terminating-exception
 Show the current setting of stack unwinding in the functions called by
 @value{GDBN}.
+
+@anchor{set unwind-on-timeout}
+@item set unwind-on-timeout
+@kindex set unwind-on-timeout
+@cindex unwind stack in called functions when timing out
+@cindex call dummy stack unwinding on timeout.
+Set unwinding of the stack if a function called from @value{GDBN}
+times out.  If set to @code{off} (the default), @value{GDBN} stops in
+the frame where the timeout occurred.  If set to @code{on},
+@value{GDBN} unwinds the stack it created for the call and restores
+the context to what it was before the call.
+
+@item show unwind-on-timeout
+@kindex show unwind-on-timeout
+Show whether @value{GDBN} will unwind the stack if a function called
+from @value{GDBN} times out.
 
 @item set may-call-functions
 @kindex set may-call-functions
@@ -20975,11 +21067,11 @@ call by typing the interrupt character (often @kbd{Ctrl-c}).
 
 If a called function is interrupted for any reason, including hitting
 a breakpoint, or triggering a watchpoint, and the stack is not unwound
-due to @code{set unwind-on-terminating-exception on} or @code{set
-unwindonsignal on} (@pxref{stack unwind settings}),
-then the dummy-frame, created by @value{GDBN} to facilitate the call
-to the program function, will be visible in the backtrace, for example
-frame @code{#3} in the following backtrace:
+due to @code{set unwind-on-terminating-exception on}, @code{set
+unwind-on-timeout on}, or @code{set unwind-on-signal on} (@pxref{stack
+unwind settings}), then the dummy-frame, created by @value{GDBN} to
+facilitate the call to the program function, will be visible in the
+backtrace, for example frame @code{#3} in the following backtrace:
 
 @smallexample
 (@value{GDBP}) backtrace
@@ -20998,6 +21090,77 @@ Depending on why the function was interrupted then it may be possible
 to resume the inferior (using commands like @code{continue},
 @code{step}, etc).  In this case, when the inferior finally returns to
 the dummy-frame, @value{GDBN} will once again halt the inferior.
+
+On targets that support asynchronous execution (@pxref{Background
+Execution}) @value{GDBN} can place a timeout on any functions called
+from @value{GDBN}.  If the timeout expires and the function call is
+still ongoing, then @value{GDBN} will interrupt the program.
+
+If a function called from @value{GDBN} is interrupted by a timeout,
+then by default the inferior is left in the frame where the timeout
+occurred, this behaviour can be adjusted with @samp{set
+unwind-on-timeout} (@pxref{set unwind-on-timeout}).
+
+For targets that don't support asynchronous execution
+(@pxref{Background Execution}) then timeouts for functions called from
+@value{GDBN} are not supported, the timeout settings described below
+will be treated as @code{unlimited}, meaning @value{GDBN} will wait
+indefinitely for function call to complete, unless interrupted by the
+user using @kbd{Ctrl-C}.
+
+@table @code
+@item set direct-call-timeout @var{seconds}
+@kindex set direct-call-timeout
+@cindex timeout for called functions
+Set the timeout used when calling functions in the program to
+@var{seconds}, which should be an integer greater than zero, or the
+special value @code{unlimited}, which indicates no timeout should be
+used.  The default for this setting is @code{unlimited}.
+
+This setting is used when the user calls a function directly from the
+command prompt, for example with a @code{call} or @code{print}
+command.
+
+This setting only works for targets that support asynchronous
+execution (@pxref{Background Execution}), for any other target the
+setting is treated as @code{unlimited}.
+
+@item show direct-call-timeout
+@kindex show direct-call-timeout
+@cindex timeout for called functions
+Show the timeout used when calling functions in the program with a
+@code{call} or @code{print} command.
+@end table
+
+It is also possible to call functions within the program from the
+condition of a conditional breakpoint (@pxref{Conditions, ,Break
+Conditions}).  A different setting controls the timeout used for
+function calls made from a breakpoint condition.
+
+@table @code
+@item set indirect-call-timeout @var{seconds}
+@kindex set indirect-call-timeout
+@cindex timeout for called functions
+Set the timeout used when calling functions in the program from a
+breakpoint or watchpoint condition to @var{seconds}, which should be
+an integer greater than zero, or the special value @code{unlimited},
+which indicates no timeout should be used.  The default for this
+setting is @code{30} seconds.
+
+This setting only works for targets that support asynchronous
+execution (@pxref{Background Execution}), for any other target the
+setting is treated as @code{unlimited}.
+
+If a function called from a breakpoint or watchpoint condition times
+out, then @value{GDBN} will stop at the point where the timeout
+occurred.  The breakpoint condition evaluation will be abandoned.
+
+@item show indirect-call-timeout
+@kindex show indirect-call-timeout
+@cindex timeout for called functions
+Show the timeout used when calling functions in the program from a
+breakpoint or watchpoint condition.
+@end table
 
 @subsection Calling functions with no debug info
 
@@ -21429,7 +21592,7 @@ will print to the console.
 which may not be obvious for remote targets of different architecture
 than where @value{GDBN} is running.  Environment variable @env{PATH} on
 @value{GDBN} host is searched for @value{NGCC} binary matching the
-target architecture and operating system.  This search can be overriden
+target architecture and operating system.  This search can be overridden
 by @code{set compile-gcc} @value{GDBN} command below.  @env{PATH} is
 taken from shell that executed @value{GDBN}, it is not the value set by
 @value{GDBN} command @code{set environment}).  @xref{Environment}.
@@ -21479,6 +21642,7 @@ program.  To debug a core dump of a previous run, you must also tell
 * Separate Debug Files::        Debugging information in separate files
 * MiniDebugInfo::               Debugging information in a special section
 * Index Files::                 Index files speed up GDB
+* Debug Names::                 Extensions to .debug_names
 * Symbol Errors::               Errors reading symbol files
 * Data Files::                  GDB data files
 @end menu
@@ -21514,6 +21678,9 @@ directories to search, just as the shell does when looking for a program
 to run.  You can change the value of this variable, for both @value{GDBN}
 and your program, using the @code{path} command.
 
+The @var{filename} argument supports escaping and quoting, see
+@ref{Filename Arguments,,Filenames As Command Arguments}.
+
 @cindex unlinked object files
 @cindex patching object files
 You can load unlinked object @file{.o} files into @value{GDBN} using
@@ -21535,6 +21702,9 @@ Specify that the program to be run (but not the symbol table) is found
 in @var{filename}.  @value{GDBN} searches the environment variable @env{PATH}
 if necessary to locate your program.  Omitting @var{filename} means to
 discard information on the executable file.
+
+The @var{filename} argument supports escaping and quoting, see
+@ref{Filename Arguments,,Filenames As Command Arguments}.
 
 @kindex symbol-file
 @item symbol-file @r{[} @var{filename} @r{[} -o @var{offset} @r{]]}
@@ -21558,6 +21728,9 @@ which are part of the old symbol table data being discarded inside
 
 @code{symbol-file} does not repeat if you press @key{RET} again after
 executing it once.
+
+The @var{filename} argument supports escaping and quoting, see
+@ref{Filename Arguments,,Filenames As Command Arguments}.
 
 When @value{GDBN} is configured for a particular environment, it
 understands debugging information in whatever format is the standard
@@ -21653,6 +21826,9 @@ originally read with the @code{symbol-file} command.  You can use the
 @code{add-symbol-file} command any number of times; the new symbol data
 thus read is kept in addition to the old.
 
+The @var{filename} argument supports escaping and quoting, see
+@ref{Filename Arguments,,Filenames As Command Arguments}.
+
 Changes can be reverted using the command @code{remove-symbol-file}.
 
 @cindex relocatable object files, reading symbols from
@@ -21711,6 +21887,9 @@ Remove symbol table from file "/home/user/gdb/mylib.so"? (y or n) y
 
 
 @code{remove-symbol-file} does not repeat if you press @key{RET} after using it.
+
+The @var{filename} argument supports escaping and quoting, see
+@ref{Filename Arguments,,Filenames As Command Arguments}.
 
 @kindex add-symbol-file-from-memory
 @cindex @code{syscall DSO}
@@ -22680,6 +22859,44 @@ to delete the content of that directory to free up disk space.
 @item show index-cache stats
 Print the number of cache hits and misses since the launch of @value{GDBN}.
 
+@end table
+
+@node Debug Names
+@section Extensions to @samp{.debug_names}
+@cindex index files
+@cindex @samp{.debug_names} section
+
+The DWARF specification documents an optional index section called
+@samp{.debug_names}.  @value{GDBN} can both read and create this
+section.  However, in order to work with @value{GDBN}, some extensions
+were necessary.
+
+@value{GDBN} uses the augmentation string @samp{GDB2}.  Earlier
+versions used the string @samp{GDB}, but these versions of the index
+are no longer supported.
+
+@value{GDBN} does not use the specified hash table.  Therefore,
+because this hash table is optional, @value{GDBN} also does not write
+it.
+
+@value{GDBN} also generates and uses some extra index attributes:
+@table @code
+@item DW_IDX_GNU_internal
+This has the value @samp{0x2000}.  It is a flag that, when set,
+indicates that the associated entry has @code{static} linkage.
+
+@item DW_IDX_GNU_main
+This has the value @samp{0x2002}.  It is a flag that, when set,
+indicates that the associated entry is the program's @code{main}.
+
+@item DW_IDX_GNU_language
+This has the value @samp{0x2003}.  It is @samp{DW_LANG_} constant,
+indicating the language of the associated entry.
+
+@item DW_IDX_GNU_linkage_name
+This has the value @samp{0x2004}.  It is a flag that, when set,
+indicates that the associated entry is a linkage name, and not a
+source name.
 @end table
 
 @node Symbol Errors
@@ -25117,7 +25334,7 @@ attributes of that page.
 Note that you must cast the addresses of variables to a @code{char *},
 since otherwise the value of @code{__djgpp_base_address}, the base
 address of all variables and functions in a @sc{djgpp} program, will
-be added using the rules of C pointer arithmetics: if @code{i} is
+be added using the rules of C pointer arithmetic: if @code{i} is
 declared an @code{int}, @value{GDBN} will add 4 times the value of
 @code{__djgpp_base_address} to the address of @code{i}.
 
@@ -26610,6 +26827,9 @@ This command takes three parameters: @var{pointer} is the pointers
 whose bounds are to be changed, @var{lbound} and @var{ubound} are new values
 for lower and upper bounds respectively.
 @end table
+
+Both commands are deprecated and will be removed in future versions of
+@value{GDBN}.  MPX itself was listed as removed by Intel in 2019.
 
 When you call an inferior function on an Intel MPX enabled program,
 GDB sets the inferior's bound registers to the init (disabled) state
@@ -28252,7 +28472,7 @@ by the host platform path separator in use.
 This variable defaults to what @code{--with-auto-load-dir} has been configured
 to (@pxref{with-auto-load-dir}).  @file{$debugdir} and @file{$datadir}
 substitution applies the same as for @ref{set auto-load scripts-directory}.
-The default @code{set auto-load safe-path} value can be also overriden by
+The default @code{set auto-load safe-path} value can be also overridden by
 @value{GDBN} configuration option @option{--with-auto-load-safe-path}.
 
 Setting this variable to @file{/} disables this security protection,
@@ -29902,7 +30122,7 @@ Each entry here needs to be covered also by the security setting
 
 @anchor{with-auto-load-dir}
 This variable defaults to @file{$debugdir:$datadir/auto-load}.  The default
-@code{set auto-load safe-path} value can be also overriden by @value{GDBN}
+@code{set auto-load safe-path} value can be also overridden by @value{GDBN}
 configuration option @option{--with-auto-load-dir}.
 
 Any reference to @file{$debugdir} will get replaced by
@@ -32078,7 +32298,7 @@ value is @samp{y}, or disabled, in which case the value is @samp{n}.
 Note that this is not the same as the field @code{enable}.
 
 @item addr
-The address of the breakpoint.  This may be a hexidecimal number,
+The address of the breakpoint.  This may be a hexadecimal number,
 giving the address; or the string @samp{<PENDING>}, for a pending
 breakpoint; or the string @samp{<MULTIPLE>}, for a breakpoint with
 multiple locations.  This field will not be present if no address can
@@ -32198,7 +32418,7 @@ at this location.
 @end table
 
 @item addr
-The address of this location as an hexidecimal number.
+The address of this location as an hexadecimal number.
 
 @item addr_flags
 Optional field containing any flags related to the address.  These flags are
@@ -32948,8 +33168,8 @@ list of thread groups to which this breakpoint applies
 number of times the breakpoint has been hit
 @end table
 
-If there are no breakpoints or watchpoints, the @code{BreakpointTable}
-@code{body} field is an empty list.
+If there are no breakpoints, watchpoints, tracepoints, or catchpoints,
+the @code{BreakpointTable} @code{body} field is an empty list.
 
 @subsubheading @value{GDBN} Command
 
@@ -33941,7 +34161,7 @@ to execute until it reaches a debugger stop event.  If the
 it reaches a stop event.  Stop events may include
 @itemize @bullet
 @item
-breakpoints or watchpoints
+breakpoints, watchpoints, tracepoints, or catchpoints
 @item
 signals or exceptions
 @item
@@ -35193,7 +35413,7 @@ The syntax for the @var{format-spec} is as follows:
  @{binary | decimal | hexadecimal | octal | natural | zero-hexadecimal@}
 @end smallexample
 
-The natural format is the default format choosen automatically
+The natural format is the default format chosen automatically
 based on the variable type (like decimal for an @code{int}, hex
 for pointers, etc.).
 
@@ -36378,7 +36598,7 @@ literal.
 The offset relative to @var{address} at which to start reading.  This
 should be an integer literal.  This option is provided so that a frontend
 is not required to first evaluate address and then perform address
-arithmetics itself.
+arithmetic itself.
 
 @end table
 
@@ -36808,12 +37028,12 @@ the following fields:
 May have a value of either @samp{0}, when no tracing operations are
 supported, @samp{1}, when all tracing operations are supported, or
 @samp{file} when examining trace file.  In the latter case, examining
-of trace frame is possible but new tracing experiement cannot be
+of trace frame is possible but new tracing experiment cannot be
 started.  This field is always present.
 
 @item running
 May have a value of either @samp{0} or @samp{1} depending on whether
-tracing experiement is in progress on target.  This field is present
+tracing experiment is in progress on target.  This field is present
 if @samp{supported} field is not @samp{0}.
 
 @item stop-reason
@@ -37085,8 +37305,8 @@ The corresponding @value{GDBN} command is @samp{info module functions}.
              symbols=[@{line="30",name="mod2::check_var_i",type="void (void)",
                        description="void mod2::check_var_i(void);"@}]@}]@},
     @{module="mod3",
-     files=[@{filename="/projec/gdb/testsuite/gdb.mi/mi-fortran-modules.f90",
-             fullname="/projec/gdb/testsuite/gdb.mi/mi-fortran-modules.f90",
+     files=[@{filename="/project/gdb/testsuite/gdb.mi/mi-fortran-modules.f90",
+             fullname="/project/gdb/testsuite/gdb.mi/mi-fortran-modules.f90",
              symbols=[@{line="21",name="mod3::check_all",type="void (void)",
                        description="void mod3::check_all(void);"@},
                       @{line="27",name="mod3::check_mod2",type="void (void)",
@@ -40100,8 +40320,6 @@ The @var{gdb_jump_pad_head} is updated head of jumppad.  Both of
 @var{target_address} and @var{gdb_jump_pad_head} are 8-byte long.
 The @var{fjump} contains a sequence of instructions jump to jumppad entry.
 The @var{fjump_size}, 4-byte long, is the size of @var{fjump}.
-@item E @var{NN}
-for an error
 
 @end table
 
@@ -40120,8 +40338,6 @@ Asks in-process agent to probe the marker at @var{address}.
 
 Replies:
 @table @samp
-@item E @var{NN}
-for an error
 @end table
 @item unprobe_marker_at:@var{address}
 Asks in-process agent to unprobe the marker at @var{address}.
@@ -40516,9 +40732,9 @@ Other packages will be used only if they are found.
 
 @heading Tools/Packages Necessary for Building @value{GDBN}
 @table @asis
-@item C@t{++}11 compiler
-@value{GDBN} is written in C@t{++}11.  It should be buildable with any
-recent C@t{++}11 compiler, e.g.@: GCC.
+@item C@t{++}17 compiler
+@value{GDBN} is written in C@t{++}17.  It should be buildable with any
+recent C@t{++}17 compiler, e.g.@: GCC.
 
 @item GNU make
 @value{GDBN}'s build system relies on features only found in the GNU
@@ -40542,13 +40758,13 @@ them if your system doesn't already include them.
 @table @asis
 @item GMP (The GNU Multiple Precision arithmetic library)
 @value{GDBN} uses GMP to perform some of its extended-precision
-arithmetics.  The latest version of GMP is available from
+arithmetic.  The latest version of GMP is available from
 @url{https://gmplib.org/}.
 
 @anchor{MPFR}
 @item MPFR (The GNU Multiple-precision floating-point library)
 @value{GDBN} uses MPFR to emulate the target floating-point
-arithmetics during expression evaluation, if the target uses different
+arithmetic during expression evaluation, if the target uses different
 floating-point formats than the host.  The latest version of MPFR is
 available from @url{http://www.mpfr.org}.
 @end table
@@ -41768,7 +41984,7 @@ data structures, including its flags and contained types.
 @itemx maint print record-instruction @var{N}
 print how GDB recorded a given instruction.  If @var{n} is not positive
 number, it prints the values stored by the inferior before the @var{n}-th previous
-instruction was exectued.  If @var{n} is positive, print the values after the @var{n}-th
+instruction was executed.  If @var{n} is positive, print the values after the @var{n}-th
 following instruction is executed.  If @var{n} is not given, 0 is assumed.
 
 @kindex maint selftest
@@ -42226,6 +42442,7 @@ Show the current setting of the target wait timeout.
 
 @menu
 * Overview::
+* Standard Replies::
 * Packets::
 * Stop Reply Packets::
 * General Query Packets::
@@ -42329,7 +42546,7 @@ would potentially conflict with the @var{sequence-id}).
 
 @cindex remote protocol, binary data
 @anchor{Binary Data}
-Binary data in most packets is encoded either as two hexadecimal
+Binary data in most packets is encoded as two hexadecimal
 digits per byte of binary data.  This allowed the traditional remote
 protocol to work over connections which were only seven-bit clean.
 Some packets designed more recently assume an eight-bit clean
@@ -42366,14 +42583,24 @@ seven repeats (@samp{$}) can be expanded using a repeat count of only
 five (@samp{"}).  For example, @samp{00000000} can be encoded as
 @samp{0*"00}.
 
-The error response returned for some packets includes a two character
-error number.  That number is not well defined.
+@xref{Standard Replies} for standard error responses, and how to
+respond indicating a command is not supported.
 
-@cindex empty response, for unsupported packets
-For any @var{command} not supported by the stub, an empty response
-(@samp{$#00}) should be returned.  That way it is possible to extend the
-protocol.  A newer @value{GDBN} can tell if a packet is supported based
-on that response.
+In describing packets (commands and responses), each description has a
+template showing the overall syntax, followed by an explanation of the
+packet's meaning.  We include spaces in some of the templates for
+clarity; these are not part of the packet's syntax.  No @value{GDBN}
+packet uses spaces to separate its components.  For example, a
+template like @samp{foo @var{bar} @var{baz}} describes a packet
+beginning with the three ASCII bytes @samp{foo}, followed by a
+@var{bar}, followed directly by a @var{baz}.  @value{GDBN} does not
+transmit a space character between the @samp{foo} and the @var{bar},
+or between the @var{bar} and the @var{baz}.
+
+We place optional portions of a packet in [square brackets];
+for example, a template like @samp{c @r{[}@var{addr}@r{]}} describes a
+packet beginning with the single ASCII character @samp{c}, possibly
+followed by an @var{addr}.
 
 At a minimum, a stub is required to support the @samp{?} command to
 tell @value{GDBN} the reason for halting, @samp{g} and @samp{G}
@@ -42384,6 +42611,38 @@ the target architecture supports hardware-assisted single-stepping,
 the @samp{s} (step) command.  Stubs that support multi-threading
 targets should support the @samp{vCont} command.  All other commands
 are optional.
+
+@node Standard Replies
+@section Standard Replies
+@cindex standard responses for remote packets
+@cindex remote packets, standard replies
+
+The remote protocol specifies a few standard replies.  All commands
+support these, except as noted in the individual command descriptions.
+
+@table @asis
+
+@item empty response
+
+@cindex empty response, for unsupported packets
+@cindex unsupported packets, empty response for
+An empty response (raw character sequence @samp{$#00}) means the
+@var{command} is not supported by the stub.  This way it is possible
+to extend the protocol.  A newer @value{GDBN} can tell if a command is
+supported based on that response (but see also @ref{qSupported}).
+
+@item @samp{E @var{xx}}
+An error has occurred; @var{xx} is a two-digit hexadecimal error
+number.  In almost all cases, the protocol does not specify the
+meaning of the error numbers; @value{GDBN} usually ignores the
+numbers, or displays them to the user without further interpretation.
+
+@anchor{textual error reply}
+@item @samp{E.@var{errtext}}
+An error has occurred; @var{errtext} is the textual error message,
+encoded in @sc{ascii}.
+
+@end table
 
 @node Packets
 @section Packets
@@ -42472,8 +42731,6 @@ Reply:
 @table @samp
 @item OK
 The arguments were set.
-@item E @var{NN}
-An error occurred.
 @end table
 
 @item b @var{baud}
@@ -42562,8 +42819,6 @@ Reply:
 @table @samp
 @item OK
 for success
-@item E @var{NN}
-for an error
 @end table
 
 @item F @var{RC},@var{EE},@var{CF};@var{XX}
@@ -42610,8 +42865,6 @@ are available, and both have zero value:
 <- @code{xxxxxxxx00000000xxxxxxxx00000000}
 @end smallexample
 
-@item E @var{NN}
-for an error.
 @end table
 
 @item G @var{XX@dots{}}
@@ -42623,8 +42876,6 @@ Reply:
 @table @samp
 @item OK
 for success
-@item E @var{NN}
-for an error
 @end table
 
 @item H @var{op} @var{thread-id}
@@ -42641,8 +42892,6 @@ Reply:
 @table @samp
 @item OK
 for success
-@item E @var{NN}
-for an error
 @end table
 
 @c FIXME: JTC:
@@ -42717,9 +42966,11 @@ Reply:
 Memory contents; each byte is transmitted as a two-digit hexadecimal number.
 The reply may contain fewer addressable memory units than requested if the
 server was able to read only part of the region of memory.
-@item E @var{NN}
-@var{NN} is errno
 @end table
+
+Unlike most packets, this packet does not support
+@samp{E.@var{errtext}}-style textual error replies (@pxref{textual
+error reply}).
 
 @item M @var{addr},@var{length}:@var{XX@dots{}}
 @cindex @samp{M} packet
@@ -42730,10 +42981,8 @@ byte is transmitted as a two-digit hexadecimal number.
 Reply:
 @table @samp
 @item OK
-for success
-@item E @var{NN}
-for an error (this includes the case where only part of the data was
-written).
+All the data was written successfully.  (If only part of the data was
+written, this command returns an error.)
 @end table
 
 @item p @var{n}
@@ -42746,10 +42995,6 @@ Reply:
 @table @samp
 @item @var{XX@dots{}}
 the register's value
-@item E @var{NN}
-for an error
-@item @w{}
-Indicating an unrecognized @var{query}.
 @end table
 
 @item P @var{n@dots{}}=@var{r@dots{}}
@@ -42763,8 +43008,6 @@ Reply:
 @table @samp
 @item OK
 for success
-@item E @var{NN}
-for an error
 @end table
 
 @item q @var{name} @var{params}@dots{}
@@ -42824,8 +43067,6 @@ Reply:
 @table @samp
 @item OK
 thread is still alive
-@item E @var{NN}
-thread is dead
 @end table
 
 @item v
@@ -42853,8 +43094,6 @@ This packet is only available in extended mode (@pxref{extended mode}).
 
 Reply:
 @table @samp
-@item E @var{nn}
-for an error
 @item @r{Any stop packet}
 for success in all-stop mode (@pxref{Stop Reply Packets})
 @item OK
@@ -42943,8 +43182,6 @@ Reply:
 @item vCont@r{[};@var{action}@dots{}@r{]}
 The @samp{vCont} packet is supported.  Each @var{action} is a supported
 command in the @samp{vCont} packet.
-@item @w{}
-The @samp{vCont} packet is not supported.
 @end table
 
 @anchor{vCtrlC packet}
@@ -42959,8 +43196,6 @@ variant.
 
 Reply:
 @table @samp
-@item E @var{nn}
-for an error
 @item OK
 for success
 @end table
@@ -42985,8 +43220,6 @@ Reply:
 @table @samp
 @item OK
 for success
-@item E @var{NN}
-for an error
 @end table
 
 @item vFlashWrite:@var{addr}:@var{XX@dots{}}
@@ -43009,8 +43242,6 @@ Reply:
 for success
 @item E.memtype
 for vFlashWrite addressing non-flash memory
-@item E @var{NN}
-for an error
 @end table
 
 @item vFlashDone
@@ -43032,8 +43263,6 @@ supported; see @ref{multiprocess extensions}.
 
 Reply:
 @table @samp
-@item E @var{nn}
-for an error
 @item OK
 for success
 @end table
@@ -43065,8 +43294,6 @@ This packet is only available in extended mode (@pxref{extended mode}).
 
 Reply:
 @table @samp
-@item E @var{nn}
-for an error
 @item @r{Any stop packet}
 for success (@pxref{Stop Reply Packets})
 @end table
@@ -43087,8 +43314,6 @@ Reply:
 @table @samp
 @item OK
 for success
-@item E @var{NN}
-for an error
 @end table
 
 @item z @var{type},@var{addr},@var{kind}
@@ -43169,10 +43394,6 @@ Reply:
 @table @samp
 @item OK
 success
-@item @w{}
-not supported
-@item E @var{NN}
-for an error
 @end table
 
 @item z1,@var{addr},@var{kind}
@@ -43194,10 +43415,6 @@ Reply:
 @table @samp
 @item OK
 success
-@item @w{}
-not supported
-@item E @var{NN}
-for an error
 @end table
 
 @item z2,@var{addr},@var{kind}
@@ -43211,10 +43428,6 @@ Reply:
 @table @samp
 @item OK
 success
-@item @w{}
-not supported
-@item E @var{NN}
-for an error
 @end table
 
 @item z3,@var{addr},@var{kind}
@@ -43228,10 +43441,6 @@ Reply:
 @table @samp
 @item OK
 success
-@item @w{}
-not supported
-@item E @var{NN}
-for an error
 @end table
 
 @item z4,@var{addr},@var{kind}
@@ -43245,10 +43454,6 @@ Reply:
 @table @samp
 @item OK
 success
-@item @w{}
-not supported
-@item E @var{NN}
-for an error
 @end table
 
 @end table
@@ -43618,8 +43823,6 @@ detect trailing zeros.
 
 Reply:
 @table @samp
-@item E @var{NN}
-An error (such as memory fault)
 @item C @var{crc32}
 The specified memory region's checksum is @var{crc32}.
 @end table
@@ -43642,13 +43845,6 @@ Reply:
 @table @samp
 @item OK
 The request succeeded.
-
-@item E @var{nn}
-An error occurred.  The error number @var{nn} is given as hex digits.
-
-@item @w{}
-An empty reply indicates that @samp{QDisableRandomization} is not supported
-by the stub.
 @end table
 
 This packet is not probed by default; the remote stub must request it,
@@ -43677,9 +43873,6 @@ Reply:
 @table @samp
 @item OK
 The request succeeded.
-
-@item E @var{nn}
-An error occurred.  The error number @var{nn} is given as hex digits.
 @end table
 
 This packet is not probed by default; the remote stub must request it,
@@ -43869,12 +44062,6 @@ Reply:
 @item @var{XX}@dots{}
 Hex encoded (big endian) bytes representing the address of the thread
 local storage requested.
-
-@item E @var{nn}
-An error occurred.  The error number @var{nn} is given as hex digits.
-
-@item @w{}
-An empty reply indicates that @samp{qGetTLSAddr} is not supported by the stub.
 @end table
 
 @item qGetTIBAddr:@var{thread-id}
@@ -43889,13 +44076,6 @@ Reply:
 @item @var{XX}@dots{}
 Hex encoded (big endian) bytes representing the linear address of the
 thread information block.
-
-@item E @var{nn}
-An error occurred.  This means that either the thread was not found, or the
-address could not be retrieved.
-
-@item @w{}
-An empty reply indicates that @samp{qGetTIBAddr} is not supported by the stub.
 @end table
 
 @item qL @var{startflag} @var{threadcount} @var{nextthread}
@@ -43935,20 +44115,36 @@ is architecture-specific.
 @var{type} is the type of tag the request wants to fetch.  The type is a signed
 integer.
 
+@value{GDBN} will only send this packet if the stub has advertised
+support for memory tagging via @samp{qSupported}.
+
 Reply:
 @table @samp
 @item @var{mxx}@dots{}
 Hex encoded sequence of uninterpreted bytes, @var{xx}@dots{}, representing the
 tags found in the requested memory range.
 
-@item E @var{nn}
-An error occurred.  This means that fetching of memory tags failed for some
-reason.
+@end table
 
-@item @w{}
-An empty reply indicates that @samp{qMemTags} is not supported by the stub,
-although this should not happen given @value{GDBN} will only send this packet
-if the stub has advertised support for memory tagging via @samp{qSupported}.
+@cindex check if a given address is in a memory tagged region
+@cindex @samp{qIsAddressTagged} packet
+@item qIsAddressTagged:@var{address}
+@anchor {qIsAddressTagged}
+Check if address @var{address} is in a memory tagged region; if it is, it's
+said to be @dfn{tagged}.  The target is responsible for checking it, as this
+is architecture-specific.
+
+@var{address} is the address to be checked.
+
+Reply:
+@table @samp
+Replies to this packet should all be in two hex digit format, as follows:
+
+@item @samp{01}
+Address @var{address} is tagged.
+
+@item @samp{00}
+Address @var{address} is not tagged.
 @end table
 
 @item QMemTags:@var{start address},@var{length}:@var{type}:@var{tag bytes}
@@ -43984,20 +44180,14 @@ integer.
 interpreted by the target.  Each pair of hex digits is interpreted as a
 single byte.
 
+@value{GDBN} will only send this packet if the stub has advertised
+support for memory tagging via @samp{qSupported}.
+
 Reply:
 @table @samp
 @item OK
 The request was successful and the memory tag granules were modified
 accordingly.
-
-@item E @var{nn}
-An error occurred.  This means that modifying the memory tag granules failed
-for some reason.
-
-@item @w{}
-An empty reply indicates that @samp{QMemTags} is not supported by the stub,
-although this should not happen given @value{GDBN} will only send this packet
-if the stub has advertised support for memory tagging via @samp{qSupported}.
 @end table
 
 @item qOffsets
@@ -44054,13 +44244,6 @@ Reply:
 @table @samp
 @item OK
 The request succeeded.
-
-@item E @var{nn}
-An error occurred.  The error number @var{nn} is given as hex digits.
-
-@item @w{}
-An empty reply indicates that @samp{QNonStop} is not supported by
-the stub.
 @end table
 
 This packet is not probed by default; the remote stub must request it,
@@ -44097,13 +44280,6 @@ Reply:
 @table @samp
 @item OK
 The request succeeded.
-
-@item E @var{nn}
-An error occurred.  @var{nn} are hex digits.
-
-@item @w{}
-An empty reply indicates that @samp{QCatchSyscalls} is not supported by
-the stub.
 @end table
 
 Use of this packet is controlled by the @code{set remote catch-syscalls}
@@ -44129,13 +44305,6 @@ Reply:
 @table @samp
 @item OK
 The request succeeded.
-
-@item E @var{nn}
-An error occurred.  The error number @var{nn} is given as hex digits.
-
-@item @w{}
-An empty reply indicates that @samp{QPassSignals} is not supported by
-the stub.
 @end table
 
 Use of this packet is controlled by the @code{set remote pass-signals}
@@ -44171,13 +44340,6 @@ Reply:
 @table @samp
 @item OK
 The request succeeded.
-
-@item E @var{nn}
-An error occurred.  The error number @var{nn} is given as hex digits.
-
-@item @w{}
-An empty reply indicates that @samp{QProgramSignals} is not supported
-by the stub.
 @end table
 
 Use of this packet is controlled by the @code{set remote program-signals}
@@ -44211,13 +44373,6 @@ Reply:
 @table @samp
 @item OK
 The request succeeded.
-
-@item E @var{nn}
-An error occurred.  The error number @var{nn} is given as hex digits.
-
-@item @w{}
-An empty reply indicates that @samp{QThreadEvents} is not supported by
-the stub.
 @end table
 
 Use of this packet is controlled by the @code{set remote thread-events}
@@ -44300,13 +44455,6 @@ Reply:
 @table @samp
 @item OK
 The request succeeded.
-
-@item E @var{nn}
-An error occurred.  The error number @var{nn} is given as hex digits.
-
-@item @w{}
-An empty reply indicates that @samp{QThreadOptions} is not supported by
-the stub.
 @end table
 
 Use of this packet is controlled by the @code{set remote thread-options}
@@ -44328,12 +44476,11 @@ Reply:
 A command response with no output.
 @item @var{OUTPUT}
 A command response with the hex encoded output string @var{OUTPUT}.
-@item E @var{NN}
-Indicate a badly formed request.  The error number @var{NN} is given as
-hex digits.
-@item @w{}
-An empty reply indicates that @samp{qRcmd} is not recognized.
 @end table
+
+Unlike most packets, this packet does not support
+@samp{E.@var{errtext}}-style textual error replies (@pxref{textual
+error reply}).
 
 (Note that the @code{qRcmd} packet's name is separated from the
 command by a @samp{,}, not a @samp{:}, contrary to the naming
@@ -44357,10 +44504,6 @@ Reply:
 The pattern was not found.
 @item 1,address
 The pattern was found at @var{address}.
-@item E @var{NN}
-A badly formed request or an error was encountered while searching memory.
-@item @w{}
-An empty reply indicates that @samp{qSearch:memory} is not recognized.
 @end table
 
 @item QStartNoAckMode
@@ -44376,8 +44519,6 @@ The stub has switched to no-acknowledgment mode.
 @value{GDBN} acknowledges this response,
 but neither the stub nor @value{GDBN} shall send or expect further
 @samp{+}/@samp{-} acknowledgments in the current connection.
-@item @w{}
-An empty reply indicates that the stub does not support no-acknowledgment mode.
 @end table
 
 @item qSupported @r{[}:@var{gdbfeature} @r{[};@var{gdbfeature}@r{]}@dots{} @r{]}
@@ -44406,9 +44547,6 @@ Reply:
 The stub supports or does not support each returned @var{stubfeature},
 depending on the form of each @var{stubfeature} (see below for the
 possible forms).
-@item @w{}
-An empty reply indicates that @samp{qSupported} is not recognized,
-or that no features needed to be reported to @value{GDBN}.
 @end table
 
 The allowed forms for each feature (either a @var{gdbfeature} in the
@@ -44782,7 +44920,7 @@ These are the currently defined stub features, in more detail:
 The remote stub can accept packets up to at least @var{bytes} in
 length.  @value{GDBN} will send packets up to this size for bulk
 transfers, and will never send larger packets.  This is a limit on the
-data characters in the packet, including the frame and checksum.
+data characters in the packet, not including the frame and checksum.
 There is no trailing NUL byte in a remote protocol packet; if the stub
 stores packets in a NUL-terminated format, it should allow an extra
 byte in its buffer for the NUL.  If this stub feature is not supported,
@@ -44999,9 +45137,11 @@ The remote stub supports and implements the required memory tagging
 functionality and understands the @samp{qMemTags} (@pxref{qMemTags}) and
 @samp{QMemTags} (@pxref{QMemTags}) packets.
 
-For AArch64 GNU/Linux systems, this feature also requires access to the
-@file{/proc/@var{pid}/smaps} file so memory mapping page flags can be inspected.
-This is done via the @samp{vFile} requests.
+For AArch64 GNU/Linux systems, this feature can require access to the
+@file{/proc/@var{pid}/smaps} file so memory mapping page flags can be
+inspected, if @samp{qIsAddressTagged} (@pxref{qIsAddressTagged}) packet
+is not supported by the stub.  Access to the @file{/proc/@var{pid}/smaps}
+file is done via @samp{vFile} requests.
 
 @end table
 
@@ -45127,17 +45267,6 @@ have fewer bytes than the @var{length} in the request.
 @item l
 The @var{offset} in the request is at the end of the data.
 There is no more data to be read.
-
-@item E00
-The request was malformed, or @var{annex} was invalid.
-
-@item E @var{nn}
-The offset was invalid, or there was an error encountered reading the data.
-The @var{nn} part is a hex-encoded @code{errno} value.
-
-@item @w{}
-An empty reply indicates the @var{object} string was not recognized by
-the stub, or that the object does not support reading.
 @end table
 
 Here are the specific requests of this form defined so far.  All the
@@ -45356,17 +45485,6 @@ Reply:
 @item @var{nn}
 @var{nn} (hex encoded) is the number of bytes written.
 This may be fewer bytes than supplied in the request.
-
-@item E00
-The request was malformed, or @var{annex} was invalid.
-
-@item E @var{nn}
-The offset was invalid, or there was an error encountered writing the data.
-The @var{nn} part is a hex-encoded @code{errno} value.
-
-@item @w{}
-An empty reply indicates the @var{object} string was not
-recognized by the stub, or that the object does not support writing.
 @end table
 
 Here are the specific requests of this form defined so far.  All the
@@ -45411,8 +45529,6 @@ Reply:
 The remote server attached to an existing process.
 @item 0
 The remote server created a new process.
-@item E @var{NN}
-A badly formed request or an error was encountered.
 @end table
 
 @item Qbtrace:bts
@@ -45422,8 +45538,6 @@ Reply:
 @table @samp
 @item OK
 Branch tracing has been enabled.
-@item E.errtext
-A badly formed request or an error was encountered.
 @end table
 
 @item Qbtrace:pt
@@ -45433,8 +45547,6 @@ Reply:
 @table @samp
 @item OK
 Branch tracing has been enabled.
-@item E.errtext
-A badly formed request or an error was encountered.
 @end table
 
 @item Qbtrace:off
@@ -45444,8 +45556,6 @@ Reply:
 @table @samp
 @item OK
 Branch tracing has been disabled.
-@item E.errtext
-A badly formed request or an error was encountered.
 @end table
 
 @item Qbtrace-conf:bts:size=@var{value}
@@ -45456,8 +45566,6 @@ Reply:
 @table @samp
 @item OK
 The ring buffer size has been set.
-@item E.errtext
-A badly formed request or an error was encountered.
 @end table
 
 @item Qbtrace-conf:pt:size=@var{value}
@@ -45468,8 +45576,6 @@ Reply:
 @table @samp
 @item OK
 The ring buffer size has been set.
-@item E.errtext
-A badly formed request or an error was encountered.
 @end table
 
 @end table
@@ -45616,8 +45722,6 @@ Replies:
 The packet was understood and carried out.
 @item qRelocInsn
 @xref{Tracepoint Packets,,Relocate instruction reply packet}.
-@item  @w{}
-The packet was not recognized.
 @end table
 
 @item QTDP:-@var{n}:@var{addr}:@r{[}S@r{]}@var{action}@dots{}@r{[}-@r{]}
@@ -45682,8 +45786,6 @@ Replies:
 The packet was understood and carried out.
 @item qRelocInsn
 @xref{Tracepoint Packets,,Relocate instruction reply packet}.
-@item  @w{}
-The packet was not recognized.
 @end table
 
 @item QTDPsrc:@var{n}:@var{addr}:@var{type}:@var{start}:@var{slen}:@var{bytes}
@@ -45800,8 +45902,6 @@ of 1 means that a fast tracepoint may be placed on any instruction
 regardless of size.
 @item E
 An error has occurred.
-@item @w{}
-An empty reply indicates that the request is not supported by the stub.
 @end table
 
 @item QTStart
@@ -46010,11 +46110,6 @@ A single marker
 a comma-separated list of markers
 @item l
 (lower case letter @samp{L}) denotes end of list.
-@item E @var{nn}
-An error occurred.  The error number @var{nn} is given as hex digits.
-@item @w{}
-An empty reply indicates that the request is not supported by the
-stub.
 @end table
 
 The @var{address} is encoded in hex;
@@ -46103,9 +46198,6 @@ Replies:
 @item qRelocInsn:@var{adjusted_size}
 Informs the stub the relocation is complete.  The @var{adjusted_size} is
 the length in bytes of resulting relocated instruction sequence.
-@item E @var{NN}
-A badly formed request was detected, or an error was encountered while
-relocating the instruction.
 @end table
 
 @node Host I/O Packets
@@ -46749,7 +46841,7 @@ If the @samp{Ctrl-C} flag is set in the @value{GDBN}
 reply packet (@pxref{The F Reply Packet}),
 the target should behave as if it had
 gotten a break message.  The meaning for the target is ``system call
-interrupted by @code{SIGINT}''.  Consequentially, the target should actually stop
+interrupted by @code{SIGINT}''.  Consequently, the target should actually stop
 (as with a break message) and return to @value{GDBN} with a @code{T02}
 packet.
 
@@ -47939,7 +48031,7 @@ the following structure:
 @smallexample
 <?xml version="1.0"?>
 <threads>
-    <thread id="id" core="0" name="name">
+    <thread id="id" core="0" name="name" handle="1a2b3c">
     ... description ...
     </thread>
 </threads>
@@ -50114,7 +50206,7 @@ These values are reserved.
 This bit is zero if the value is global and one if it is static.
 
 The determination of whether a symbol is global or static is complicated.
-The authorative reference is the file @file{dwarf2read.c} in
+The authoritative reference is the file @file{dwarf2read.c} in
 @value{GDBN} sources.
 
 @end table

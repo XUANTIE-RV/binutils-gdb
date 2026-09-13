@@ -352,7 +352,7 @@ bool expand_symtabs_matching
    gdb::function_view<expand_symtabs_symbol_matcher_ftype> symbol_matcher,
    gdb::function_view<expand_symtabs_exp_notify_ftype> expansion_notify,
    block_search_flags search_flags,
-   enum search_domain kind);
+   domain_search_flags kind);
 
 void map_symbol_filenames (gdb::function_view<symbol_filename_ftype> fun,
 			   bool need_fullname);
@@ -378,5 +378,21 @@ extern int readnow_symbol_files;
 /* Never read full symbols.  */
 
 extern int readnever_symbol_files;
+
+/* This is the symbol-file command.  Read the file, analyze its
+   symbols, and add a struct symtab to a symtab list.  The syntax of
+   the command is rather bizarre:
+
+   1. The function buildargv implements various quoting conventions
+   which are undocumented and have little or nothing in common with
+   the way things are quoted (or not quoted) elsewhere in GDB.
+
+   2. Options are used, which are not generally used in GDB (perhaps
+   "set mapped on", "set readnow on" would be better)
+
+   3. The order of options matters, which is contrary to GNU
+   conventions (because it is confusing and inconvenient).  */
+
+extern void symbol_file_command (const char *, int);
 
 #endif /* !defined(SYMFILE_H) */

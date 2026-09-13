@@ -17,7 +17,7 @@
    You should have received a copy of the GNU General Public License
    along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
 
-#include "defs.h"
+#include "extract-store-integer.h"
 #include "symtab.h"
 #include "gdbtypes.h"
 #include "expression.h"
@@ -205,7 +205,7 @@ print_unpacked_pointer (struct type *type, struct type *elttype,
 	    {
 	      const char *search_name = msymbol.minsym->search_name ();
 	      wsym = lookup_symbol_search_name (search_name, NULL,
-						VAR_DOMAIN).symbol;
+						SEARCH_VAR_DOMAIN).symbol;
 	    }
 
 	  if (wsym)

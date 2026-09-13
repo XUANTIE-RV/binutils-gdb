@@ -17,11 +17,10 @@
    You should have received a copy of the GNU General Public License
    along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
 
-#include "defs.h"
 #include "frame.h"
 #include "inferior.h"
 #include "target.h"
-#include "gdbcmd.h"
+#include "cli/cli-cmds.h"
 #include "language.h"
 #include "filenames.h"
 #include "symfile.h"
@@ -254,10 +253,8 @@ validate_exec_file (int from_tty)
 
 	  if (target_exec_file_build_id != nullptr)
 	    {
-	      if (exec_file_build_id->size == target_exec_file_build_id->size
-		  && memcmp (exec_file_build_id->data,
-			     target_exec_file_build_id->data,
-			     exec_file_build_id->size) == 0)
+	      if (build_id_equal (exec_file_build_id,
+				  target_exec_file_build_id))
 		{
 		  /* Match.  */
 		  return;
@@ -494,10 +491,6 @@ exec_file_attach (const char *filename, int from_tty)
 	 target.  */
       current_program_space->add_target_sections
 	(current_program_space->ebfd.get (), sections);
-
-      /* Tell display code (if any) about the changed file name.  */
-      if (deprecated_exec_file_display_hook)
-	(*deprecated_exec_file_display_hook) (filename);
     }
 
   /* Are are loading the same executable?  */

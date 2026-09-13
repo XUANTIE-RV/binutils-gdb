@@ -83,8 +83,8 @@ extern bool default_displaced_step_hw_singlestep (struct gdbarch *);
 extern CORE_ADDR displaced_step_at_entry_point (struct gdbarch *gdbarch);
 
 /* The only possible cases for inner_than.  */
-extern int core_addr_lessthan (CORE_ADDR lhs, CORE_ADDR rhs);
-extern int core_addr_greaterthan (CORE_ADDR lhs, CORE_ADDR rhs);
+extern bool core_addr_lessthan (CORE_ADDR lhs, CORE_ADDR rhs);
+extern bool core_addr_greaterthan (CORE_ADDR lhs, CORE_ADDR rhs);
 
 /* Identity functions on a CORE_ADDR.  Just return the "addr".  */
 
@@ -141,7 +141,7 @@ extern std::string default_memtag_to_string (struct gdbarch *gdbarch,
 					     struct value *tag);
 
 /* Default implementation of gdbarch_tagged_address_p.  */
-bool default_tagged_address_p (struct gdbarch *gdbarch, struct value *address);
+bool default_tagged_address_p (struct gdbarch *gdbarch, CORE_ADDR address);
 
 /* Default implementation of gdbarch_memtag_matches_p.  */
 extern bool default_memtag_matches_p (struct gdbarch *gdbarch,
@@ -158,7 +158,7 @@ struct value *default_get_memtag (struct gdbarch *gdbarch,
 				  struct value *address,
 				  memtag_type tag_type);
 
-extern CORE_ADDR generic_skip_trampoline_code (frame_info_ptr frame,
+extern CORE_ADDR generic_skip_trampoline_code (const frame_info_ptr &frame,
 					       CORE_ADDR pc);
 
 extern CORE_ADDR generic_skip_solib_resolver (struct gdbarch *gdbarch,
@@ -171,7 +171,7 @@ extern int generic_stack_frame_destroyed_p (struct gdbarch *gdbarch,
 					    CORE_ADDR pc);
 
 extern int default_code_of_frame_writable (struct gdbarch *gdbarch,
-					   frame_info_ptr frame);
+					   const frame_info_ptr &frame);
 
 /* By default, registers are not convertible.  */
 extern int generic_convert_register_p (struct gdbarch *gdbarch, int regnum,
@@ -295,7 +295,7 @@ extern ULONGEST default_type_align (struct gdbarch *gdbarch,
 				    struct type *type);
 
 /* Default implementation of gdbarch get_pc_address_flags method.  */
-extern std::string default_get_pc_address_flags (frame_info_ptr frame,
+extern std::string default_get_pc_address_flags (const frame_info_ptr &frame,
 						 CORE_ADDR pc);
 
 /* Default implementation of gdbarch read_core_file_mappings method.  */
@@ -313,7 +313,7 @@ extern bool default_use_target_description_from_corefile_notes
 
 /* Default implementation of gdbarch default_get_return_buf_addr method.  */
 extern CORE_ADDR default_get_return_buf_addr (struct type *val_typegdbarch,
-					      frame_info_ptr cur_frame);
+					      const frame_info_ptr &cur_frame);
 
 /* Default implementation of gdbarch default_dwarf2_omit_typedef_p method.  */
 extern bool default_dwarf2_omit_typedef_p (struct type *target_type,

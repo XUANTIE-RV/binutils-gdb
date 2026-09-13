@@ -18,8 +18,8 @@
    You should have received a copy of the GNU General Public License
    along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
 
-#include "defs.h"
 #include "arch-utils.h"
+#include "extract-store-integer.h"
 #include "frame.h"
 #include "gdbcore.h"
 #include "regcache.h"
@@ -133,7 +133,7 @@ static const gdb_byte amd64_x32_linux_sigtramp_code[] =
    the routine.  Otherwise, return 0.  */
 
 static CORE_ADDR
-amd64_linux_sigtramp_start (frame_info_ptr this_frame)
+amd64_linux_sigtramp_start (const frame_info_ptr &this_frame)
 {
   struct gdbarch *gdbarch;
   const gdb_byte *sigtramp_code;
@@ -175,7 +175,7 @@ amd64_linux_sigtramp_start (frame_info_ptr this_frame)
    routine.  */
 
 static int
-amd64_linux_sigtramp_p (frame_info_ptr this_frame)
+amd64_linux_sigtramp_p (const frame_info_ptr &this_frame)
 {
   CORE_ADDR pc = get_frame_pc (this_frame);
   const char *name;
@@ -201,7 +201,7 @@ amd64_linux_sigtramp_p (frame_info_ptr this_frame)
    address of the associated sigcontext structure.  */
 
 static CORE_ADDR
-amd64_linux_sigcontext_addr (frame_info_ptr this_frame)
+amd64_linux_sigcontext_addr (const frame_info_ptr &this_frame)
 {
   struct gdbarch *gdbarch = get_frame_arch (this_frame);
   enum bfd_endian byte_order = gdbarch_byte_order (gdbarch);

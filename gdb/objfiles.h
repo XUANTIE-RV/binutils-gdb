@@ -20,21 +20,15 @@
 #if !defined (OBJFILES_H)
 #define OBJFILES_H
 
-#include "hashtab.h"
 #include "gdbsupport/gdb_obstack.h"
 #include "objfile-flags.h"
 #include "symfile.h"
 #include "progspace.h"
 #include "registry.h"
 #include "gdb_bfd.h"
-#include <atomic>
 #include <bitset>
-#include <vector>
-#include "gdbsupport/next-iterator.h"
-#include "gdbsupport/safe-iterator.h"
 #include "bcache.h"
 #include "gdbarch.h"
-#include "gdbsupport/refcounted-object.h"
 #include "jit.h"
 #include "quick-symbol.h"
 #include <forward_list>
@@ -394,6 +388,12 @@ struct obj_section
     return this->addr () + bfd_section_size (this->the_bfd_section);
   }
 
+  /* True if ADDR is in this obj_section, false otherwise.  */
+  bool contains (CORE_ADDR addr) const
+  {
+    return addr >= this->addr () && addr < endaddr ();
+  }
+
   /* BFD section pointer */
   struct bfd_section *the_bfd_section;
 
@@ -561,8 +561,9 @@ public:
      defined, or NULL if no such symbol table exists.  If OBJFILE
      contains !TYPE_OPAQUE symbol prefer its compunit.  If it contains
      only TYPE_OPAQUE symbol(s), return at least that compunit.  */
-  struct compunit_symtab *lookup_symbol (block_enum kind, const char *name,
-					 domain_enum domain);
+  struct compunit_symtab *lookup_symbol (block_enum kind,
+					 const lookup_name_info &name,
+					 domain_search_flags domain);
 
   /* See quick_symbol_functions.  */
   void print_stats (bool print_bcache);
@@ -591,8 +592,7 @@ public:
      gdb::function_view<expand_symtabs_symbol_matcher_ftype> symbol_matcher,
      gdb::function_view<expand_symtabs_exp_notify_ftype> expansion_notify,
      block_search_flags search_flags,
-     domain_enum domain,
-     enum search_domain kind);
+     domain_search_flags domain);
 
   /* See quick_symbol_functions.  */
   struct compunit_symtab *find_pc_sect_compunit_symtab
@@ -613,7 +613,7 @@ public:
 
   /* See quick_symbol_functions.  */
   enum language lookup_global_symbol_language (const char *name,
-					       domain_enum domain,
+					       domain_search_flags domain,
 					       bool *symbol_found_p);
 
   /* Return the relocation offset applied to SECTION.  */

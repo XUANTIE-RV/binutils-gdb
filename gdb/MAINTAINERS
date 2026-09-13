@@ -346,6 +346,7 @@ the native maintainer when resolving ABI issues.
 	h8300		--target=h8300-elf
 
 	i386		--target=i386-elf
+			Felix Willgerodt	felix.willgerodt@intel.com
 
 	ia64		--target=ia64-linux-gnu
 			(--target=ia64-elf broken)
@@ -421,6 +422,7 @@ the native maintainer when resolving ABI issues.
 	vax		--target=vax-netbsd
 
 	x86-64		--target=x86_64-linux-gnu
+			Felix Willgerodt	felix.willgerodt@intel.com
 
 	xstormy16	--target=xstormy16-elf
 	xtensa		--target=xtensa-elf
@@ -665,7 +667,8 @@ Yan-Ting Lin					currygt52@gmail.com
 Robert Lipe					rjl@sco.com
 Lei Liu						lei.liu2@windriver.com
 Yang Liu					liuyang22@iscas.ac.cn
-Sandra Loosemore				sandra@codesourcery.com
+Toby Lloyd Davies				tlloyddavies@undo.io
+Sandra Loosemore				sloosemore@baylibre.com
 Carl Love					cel@linux.ibm.com
 H.J. Lu						hjl.tools@gmail.com
 Michal Ludvig					mludvig@suse.cz

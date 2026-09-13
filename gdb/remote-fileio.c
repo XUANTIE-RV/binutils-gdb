@@ -19,8 +19,9 @@
 
 /* See the GDB User Guide for details of the GDB remote protocol.  */
 
-#include "defs.h"
-#include "gdbcmd.h"
+#include "event-top.h"
+#include "extract-store-integer.h"
+#include "cli/cli-cmds.h"
 #include "remote.h"
 #include "gdbsupport/gdb_wait.h"
 #include <sys/stat.h>
@@ -316,7 +317,7 @@ static void
 remote_fileio_reply (remote_target *remote, int retcode, int error)
 {
   char buf[32];
-  int ctrl_c = check_quit_flag ();
+  bool ctrl_c = check_quit_flag ();
 
   strcpy (buf, "F");
   if (retcode < 0)
@@ -640,7 +641,7 @@ remote_fileio_func_write (remote_target *remote, char *buf)
 	return;
       case FIO_FD_CONSOLE_OUT:
 	{
-	  ui_file *file = target_fd == 1 ? gdb_stdtarg : gdb_stdtargerr;
+	  ui_file *file = gdb_stdtarg;
 	  file->write ((char *) buffer, length);
 	  file->flush ();
 	  ret = length;

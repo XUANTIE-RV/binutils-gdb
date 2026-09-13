@@ -17,13 +17,13 @@
    You should have received a copy of the GNU General Public License
    along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
 
-#include "defs.h"
 #include "arch-utils.h"
+#include "event-top.h"
 #include "symtab.h"
 #include "frame.h"
 #include "gdbtypes.h"
 #include "expression.h"
-#include "gdbcmd.h"
+#include "cli/cli-cmds.h"
 #include "value.h"
 #include "target.h"
 #include "target-dcache.h"
@@ -206,7 +206,7 @@ set_tracepoint_num (int num)
    the traceframe context (line, function, file).  */
 
 static void
-set_traceframe_context (frame_info_ptr trace_frame)
+set_traceframe_context (const frame_info_ptr &trace_frame)
 {
   CORE_ADDR trace_pc;
   struct symbol *traceframe_fun;
@@ -253,8 +253,7 @@ set_traceframe_context (frame_info_ptr trace_frame)
 struct trace_state_variable *
 create_trace_state_variable (const char *name)
 {
-  tvariables.emplace_back (name, next_tsv_number++);
-  return &tvariables.back ();
+  return &tvariables.emplace_back (name, next_tsv_number++);
 }
 
 /* Look for a trace state variable of the given name.  */
@@ -943,7 +942,7 @@ collection_list::collect_symbol (struct symbol *sym,
 	add_memrange (gdbarch, memrange_absolute, offset, len, scope);
       break;
     case LOC_REGISTER:
-      reg = SYMBOL_REGISTER_OPS (sym)->register_number (sym, gdbarch);
+      reg = sym->register_ops ()->register_number (sym, gdbarch);
       if (info_verbose)
 	gdb_printf ("LOC_REG[parm] %s: ", sym->print_name ());
       add_local_register (gdbarch, reg, scope);
@@ -2502,10 +2501,10 @@ info_scope_command (const char *args_in, int from_tty)
 
 	  gdb_printf ("Symbol %s is ", symname);
 
-	  if (SYMBOL_COMPUTED_OPS (sym) != NULL)
-	    SYMBOL_COMPUTED_OPS (sym)->describe_location (sym,
-							  block->entry_pc (),
-							  gdb_stdout);
+	  if (const symbol_computed_ops *computed_ops = sym->computed_ops ();
+	      computed_ops != nullptr)
+	    computed_ops->describe_location (sym, block->entry_pc (),
+					     gdb_stdout);
 	  else
 	    {
 	      switch (sym->aclass ())
@@ -2539,8 +2538,7 @@ info_scope_command (const char *args_in, int from_tty)
 		     We assume the objfile architecture will contain all the
 		     standard registers that occur in debug info in that
 		     objfile.  */
-		  regno = SYMBOL_REGISTER_OPS (sym)->register_number (sym,
-								      gdbarch);
+		  regno = sym->register_ops ()->register_number (sym, gdbarch);
 
 		  if (sym->is_argument ())
 		    gdb_printf ("an argument in register $%s",
@@ -2563,8 +2561,7 @@ info_scope_command (const char *args_in, int from_tty)
 		  break;
 		case LOC_REGPARM_ADDR:
 		  /* Note comment at LOC_REGISTER.  */
-		  regno = SYMBOL_REGISTER_OPS (sym)->register_number (sym,
-								      gdbarch);
+		  regno = sym->register_ops ()->register_number (sym, gdbarch);
 		  gdb_printf ("the address of an argument, in register $%s",
 			      gdbarch_register_name (gdbarch, regno));
 		  break;

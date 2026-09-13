@@ -20,13 +20,11 @@
    along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
 
 
-#include "defs.h"
 #include "arch-utils.h"
 #include <ctype.h>
 #include <cmath>
 #include <signal.h>
 #include "command.h"
-#include "gdbcmd.h"
 #include "symtab.h"
 #include "block.h"
 #include "gdbtypes.h"
@@ -459,8 +457,9 @@ maintenance_info_sections (const char *arg, int from_tty)
 				  ofile, arg);
     }
 
-  if (core_bfd)
-    maint_print_all_sections (_("Core file: "), core_bfd, nullptr, arg);
+  if (current_program_space->core_bfd () != nullptr)
+    maint_print_all_sections (_("Core file: "),
+			      current_program_space->core_bfd (), nullptr, arg);
 }
 
 /* Implement the "maintenance info target-sections" command.  */

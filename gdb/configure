@@ -20181,12 +20181,13 @@ if test "${enable_threading+set}" = set; then :
     *) as_fn_error $? "bad value $enableval for threading" "$LINENO" 5 ;;
     esac
 else
-  want_threading=yes
+  want_threading=auto
 fi
 
 
   # Check for std::thread.  This does not work on some platforms, like
-  # mingw and DJGPP.
+  # mingw using the win32 threads model with gcc older than 13, and
+  # DJGPP.
   ac_ext=cpp
 ac_cpp='$CXXCPP $CPPFLAGS'
 ac_compile='$CXX -c $CXXFLAGS $CPPFLAGS conftest.$ac_ext >&5'
@@ -20854,6 +20855,7 @@ else
     # endif
     #endif	/* __MINGW32__ || __CYGWIN__ */
     #include <thread>
+    #include <mutex>
     void callback() { }
 int
 main ()
@@ -20892,11 +20894,18 @@ done
   LIBS="$save_LIBS"
   CXXFLAGS="$save_CXXFLAGS"
 
-  if test "$want_threading" = "yes"; then
+  if test "$want_threading" != "no"; then
     if test "$gdb_cv_cxx_std_thread" = "yes"; then
 
 $as_echo "#define CXX_STD_THREAD 1" >>confdefs.h
 
+    else
+	if test "$want_threading" = "yes"; then
+	    as_fn_error $? "std::thread does not work; disable threading" "$LINENO" 5
+	else
+	    { $as_echo "$as_me:${as_lineno-$LINENO}: WARNING: std::thread does not work; disabling threading" >&5
+$as_echo "$as_me: WARNING: std::thread does not work; disabling threading" >&2;}
+	fi
     fi
   fi
   ac_ext=c
@@ -31179,6 +31188,7 @@ build_warnings="-Wall -Wpointer-arith \
 -Wredundant-move \
 -Wmissing-declarations \
 -Wstrict-null-sentinel \
+-Wno-vla-cxx-extension \
 "
 
 # The -Wmissing-prototypes flag will be accepted by GCC, but results
@@ -32848,13 +32858,15 @@ fi
 #
 # Check whether --enable-sim was given.
 if test "${enable_sim+set}" = set; then :
-  enableval=$enable_sim; echo "enable_sim = $enable_sim";
- echo "enableval = ${enableval}";
- case "${enableval}" in
-  yes) ignore_sim=false ;;
-  no)  ignore_sim=true ;;
-  *)   ignore_sim=false ;;
- esac
+  enableval=$enable_sim; { $as_echo "$as_me:${as_lineno-$LINENO}: enable_sim = $enable_sim" >&5
+$as_echo "$as_me: enable_sim = $enable_sim" >&6;};
+	       { $as_echo "$as_me:${as_lineno-$LINENO}: enableval = ${enableval}" >&5
+$as_echo "$as_me: enableval = ${enableval}" >&6;};
+	       case "${enableval}" in
+		 yes) ignore_sim=false ;;
+		 no)  ignore_sim=true ;;
+		 *)   ignore_sim=false ;;
+	       esac
 else
   ignore_sim=false
 fi

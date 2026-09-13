@@ -2057,7 +2057,7 @@ elf_x86_64_scan_relocs (bfd *abfd, struct bfd_link_info *info,
   /* Get the section contents.  */
   if (elf_section_data (sec)->this_hdr.contents != NULL)
     contents = elf_section_data (sec)->this_hdr.contents;
-  else if (!bfd_malloc_and_get_section (abfd, sec, &contents))
+  else if (!_bfd_elf_mmap_section_contents (abfd, sec, &contents))
     {
       sec->check_relocs_failed = 1;
       return false;
@@ -2590,8 +2590,8 @@ elf_x86_64_scan_relocs (bfd *abfd, struct bfd_link_info *info,
 
   if (elf_section_data (sec)->this_hdr.contents != contents)
     {
-      if (!converted && !_bfd_link_keep_memory (info))
-	free (contents);
+      if (!converted)
+	_bfd_elf_munmap_section_contents (sec, contents);
       else
 	{
 	  /* Cache the section contents for elf_link_input_bfd if any
@@ -2609,14 +2609,13 @@ elf_x86_64_scan_relocs (bfd *abfd, struct bfd_link_info *info,
 
  error_return:
   if (elf_section_data (sec)->this_hdr.contents != contents)
-    free (contents);
+    _bfd_elf_munmap_section_contents (sec, contents);
   sec->check_relocs_failed = 1;
   return false;
 }
 
 static bool
-elf_x86_64_always_size_sections (bfd *output_bfd,
-				 struct bfd_link_info *info)
+elf_x86_64_early_size_sections (bfd *output_bfd, struct bfd_link_info *info)
 {
   bfd *abfd;
 
@@ -2629,7 +2628,7 @@ elf_x86_64_always_size_sections (bfd *output_bfd,
 					     elf_x86_64_scan_relocs))
       return false;
 
-  return _bfd_x86_elf_always_size_sections (output_bfd, info);
+  return _bfd_x86_elf_early_size_sections (output_bfd, info);
 }
 
 /* Return the relocation value for @tpoff relocation
@@ -4581,8 +4580,6 @@ elf_x86_64_finish_dynamic_symbol (bfd *output_bfd,
   bool local_undefweak;
 
   htab = elf_x86_hash_table (info, X86_64_ELF_DATA);
-  if (htab == NULL)
-    return false;
 
   /* Use the second PLT section only if there is .plt section.  */
   use_plt_second = htab->elf.splt != NULL && htab->plt_second != NULL;
@@ -5276,7 +5273,7 @@ elf_x86_64_get_synthetic_symtab (bfd *abfd,
 	continue;
 
       /* Get the PLT section contents.  */
-      if (!bfd_malloc_and_get_section (abfd, plt, &plt_contents))
+      if (!_bfd_elf_mmap_section_contents (abfd, plt, &plt_contents))
 	break;
 
       /* Check what kind of PLT it is.  */
@@ -5369,7 +5366,7 @@ elf_x86_64_get_synthetic_symtab (bfd *abfd,
 
       if (plt_type == plt_unknown)
 	{
-	  free (plt_contents);
+	  _bfd_elf_munmap_section_contents (plt, plt_contents);
 	  continue;
 	}
 
@@ -5749,7 +5746,7 @@ elf_x86_64_special_sections[]=
   elf_x86_64_reloc_name_lookup
 
 #define elf_backend_relocs_compatible	    elf_x86_64_relocs_compatible
-#define elf_backend_always_size_sections    elf_x86_64_always_size_sections
+#define elf_backend_early_size_sections	    elf_x86_64_early_size_sections
 #define elf_backend_create_dynamic_sections _bfd_elf_create_dynamic_sections
 #define elf_backend_finish_dynamic_sections elf_x86_64_finish_dynamic_sections
 #define elf_backend_finish_dynamic_symbol   elf_x86_64_finish_dynamic_symbol

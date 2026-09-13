@@ -17,7 +17,6 @@
    You should have received a copy of the GNU General Public License
    along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
 
-#include "defs.h"
 #include <ctype.h>
 #include "auto-load.h"
 #include "progspace.h"
@@ -28,7 +27,6 @@
 #include "observable.h"
 #include "objfiles.h"
 #include "cli/cli-script.h"
-#include "gdbcmd.h"
 #include "cli/cli-cmds.h"
 #include "cli/cli-decode.h"
 #include "cli/cli-setshow.h"

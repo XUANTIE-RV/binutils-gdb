@@ -18,11 +18,11 @@
    You should have received a copy of the GNU General Public License
    along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
 
-#include "defs.h"
 
+#include "extract-store-integer.h"
 #include "frame.h"
 #include "language.h"
-#include "gdbcmd.h"
+#include "cli/cli-cmds.h"
 #include "gdbcore.h"
 #include "dis-asm.h"
 #include "regcache.h"
@@ -268,7 +268,7 @@ class instruction_reader : public abstract_instruction_reader
 
 static CORE_ADDR
 aarch64_frame_unmask_lr (aarch64_gdbarch_tdep *tdep,
-			 frame_info_ptr this_frame, CORE_ADDR addr)
+			 const frame_info_ptr &this_frame, CORE_ADDR addr)
 {
   if (tdep->has_pauth ()
       && frame_unwind_register_unsigned (this_frame,
@@ -298,7 +298,7 @@ aarch64_frame_unmask_lr (aarch64_gdbarch_tdep *tdep,
 /* Implement the "get_pc_address_flags" gdbarch method.  */
 
 static std::string
-aarch64_get_pc_address_flags (frame_info_ptr frame, CORE_ADDR pc)
+aarch64_get_pc_address_flags (const frame_info_ptr &frame, CORE_ADDR pc)
 {
   if (pc != 0 && get_frame_pc_masked (frame))
     return "PAC";
@@ -995,7 +995,7 @@ aarch64_skip_prologue (struct gdbarch *gdbarch, CORE_ADDR pc)
    cache CACHE.  */
 
 static void
-aarch64_scan_prologue (frame_info_ptr this_frame,
+aarch64_scan_prologue (const frame_info_ptr &this_frame,
 		       struct aarch64_prologue_cache *cache)
 {
   CORE_ADDR block_addr = get_frame_address_in_block (this_frame);
@@ -1049,7 +1049,7 @@ aarch64_scan_prologue (frame_info_ptr this_frame,
    not available.  */
 
 static void
-aarch64_make_prologue_cache_1 (frame_info_ptr this_frame,
+aarch64_make_prologue_cache_1 (const frame_info_ptr &this_frame,
 			       struct aarch64_prologue_cache *cache)
 {
   CORE_ADDR unwound_fp;
@@ -1087,7 +1087,7 @@ aarch64_make_prologue_cache_1 (frame_info_ptr this_frame,
    *THIS_CACHE.  */
 
 static struct aarch64_prologue_cache *
-aarch64_make_prologue_cache (frame_info_ptr this_frame, void **this_cache)
+aarch64_make_prologue_cache (const frame_info_ptr &this_frame, void **this_cache)
 {
   struct aarch64_prologue_cache *cache;
 
@@ -1114,7 +1114,7 @@ aarch64_make_prologue_cache (frame_info_ptr this_frame, void **this_cache)
 /* Implement the "stop_reason" frame_unwind method.  */
 
 static enum unwind_stop_reason
-aarch64_prologue_frame_unwind_stop_reason (frame_info_ptr this_frame,
+aarch64_prologue_frame_unwind_stop_reason (const frame_info_ptr &this_frame,
 					   void **this_cache)
 {
   struct aarch64_prologue_cache *cache
@@ -1140,7 +1140,7 @@ aarch64_prologue_frame_unwind_stop_reason (frame_info_ptr this_frame,
    PC and the caller's SP when we were called.  */
 
 static void
-aarch64_prologue_this_id (frame_info_ptr this_frame,
+aarch64_prologue_this_id (const frame_info_ptr &this_frame,
 			  void **this_cache, struct frame_id *this_id)
 {
   struct aarch64_prologue_cache *cache
@@ -1155,7 +1155,7 @@ aarch64_prologue_this_id (frame_info_ptr this_frame,
 /* Implement the "prev_register" frame_unwind method.  */
 
 static struct value *
-aarch64_prologue_prev_register (frame_info_ptr this_frame,
+aarch64_prologue_prev_register (const frame_info_ptr &this_frame,
 				void **this_cache, int prev_regnum)
 {
   struct aarch64_prologue_cache *cache
@@ -1221,7 +1221,7 @@ static frame_unwind aarch64_prologue_unwind =
    *THIS_CACHE.  */
 
 static struct aarch64_prologue_cache *
-aarch64_make_stub_cache (frame_info_ptr this_frame, void **this_cache)
+aarch64_make_stub_cache (const frame_info_ptr &this_frame, void **this_cache)
 {
   struct aarch64_prologue_cache *cache;
 
@@ -1251,7 +1251,7 @@ aarch64_make_stub_cache (frame_info_ptr this_frame, void **this_cache)
 /* Implement the "stop_reason" frame_unwind method.  */
 
 static enum unwind_stop_reason
-aarch64_stub_frame_unwind_stop_reason (frame_info_ptr this_frame,
+aarch64_stub_frame_unwind_stop_reason (const frame_info_ptr &this_frame,
 				       void **this_cache)
 {
   struct aarch64_prologue_cache *cache
@@ -1266,7 +1266,7 @@ aarch64_stub_frame_unwind_stop_reason (frame_info_ptr this_frame,
 /* Our frame ID for a stub frame is the current SP and LR.  */
 
 static void
-aarch64_stub_this_id (frame_info_ptr this_frame,
+aarch64_stub_this_id (const frame_info_ptr &this_frame,
 		      void **this_cache, struct frame_id *this_id)
 {
   struct aarch64_prologue_cache *cache
@@ -1282,7 +1282,7 @@ aarch64_stub_this_id (frame_info_ptr this_frame,
 
 static int
 aarch64_stub_unwind_sniffer (const struct frame_unwind *self,
-			     frame_info_ptr this_frame,
+			     const frame_info_ptr &this_frame,
 			     void **this_prologue_cache)
 {
   CORE_ADDR addr_in_block;
@@ -1313,7 +1313,7 @@ static frame_unwind aarch64_stub_unwind =
 /* Return the frame base address of *THIS_FRAME.  */
 
 static CORE_ADDR
-aarch64_normal_frame_base (frame_info_ptr this_frame, void **this_cache)
+aarch64_normal_frame_base (const frame_info_ptr &this_frame, void **this_cache)
 {
   struct aarch64_prologue_cache *cache
     = aarch64_make_prologue_cache (this_frame, this_cache);
@@ -1334,7 +1334,7 @@ static frame_base aarch64_normal_base =
    *THIS_FRAME.  */
 
 static struct value *
-aarch64_dwarf2_prev_register (frame_info_ptr this_frame,
+aarch64_dwarf2_prev_register (const frame_info_ptr &this_frame,
 			      void **this_cache, int regnum)
 {
   gdbarch *arch = get_frame_arch (this_frame);
@@ -1361,7 +1361,7 @@ static const unsigned char op_lit1 = DW_OP_lit1;
 static void
 aarch64_dwarf2_frame_init_reg (struct gdbarch *gdbarch, int regnum,
 			       struct dwarf2_frame_state_reg *reg,
-			       frame_info_ptr this_frame)
+			       const frame_info_ptr &this_frame)
 {
   aarch64_gdbarch_tdep *tdep = gdbarch_tdep<aarch64_gdbarch_tdep> (gdbarch);
 
@@ -2780,7 +2780,7 @@ aarch64_return_value (struct gdbarch *gdbarch, struct value *func_value,
 /* Implement the "get_longjmp_target" gdbarch method.  */
 
 static int
-aarch64_get_longjmp_target (frame_info_ptr frame, CORE_ADDR *pc)
+aarch64_get_longjmp_target (const frame_info_ptr &frame, CORE_ADDR *pc)
 {
   CORE_ADDR jb_addr;
   gdb_byte buf[X_REGISTER_SIZE];
@@ -3105,7 +3105,7 @@ aarch64_pseudo_register_reggroup_p (struct gdbarch *gdbarch, int regnum,
 /* Helper for aarch64_pseudo_read_value.  */
 
 static value *
-aarch64_pseudo_read_value_1 (frame_info_ptr next_frame,
+aarch64_pseudo_read_value_1 (const frame_info_ptr &next_frame,
 			     const int pseudo_reg_num, int raw_regnum_offset)
 {
   unsigned v_regnum = AARCH64_V0_REGNUM + raw_regnum_offset;
@@ -3197,7 +3197,7 @@ aarch64_za_offsets_from_regnum (struct gdbarch *gdbarch, int regnum)
 /* Given REGNUM, a SME pseudo-register number, return its value in RESULT.  */
 
 static value *
-aarch64_sme_pseudo_register_read (gdbarch *gdbarch, frame_info_ptr next_frame,
+aarch64_sme_pseudo_register_read (gdbarch *gdbarch, const frame_info_ptr &next_frame,
 				  const int pseudo_reg_num)
 {
   aarch64_gdbarch_tdep *tdep = gdbarch_tdep<aarch64_gdbarch_tdep> (gdbarch);
@@ -3231,7 +3231,7 @@ aarch64_sme_pseudo_register_read (gdbarch *gdbarch, frame_info_ptr next_frame,
 /* Implement the "pseudo_register_read_value" gdbarch method.  */
 
 static value *
-aarch64_pseudo_read_value (gdbarch *gdbarch, frame_info_ptr next_frame,
+aarch64_pseudo_read_value (gdbarch *gdbarch, const frame_info_ptr &next_frame,
 			   const int pseudo_reg_num)
 {
   aarch64_gdbarch_tdep *tdep = gdbarch_tdep<aarch64_gdbarch_tdep> (gdbarch);
@@ -3296,7 +3296,7 @@ aarch64_pseudo_read_value (gdbarch *gdbarch, frame_info_ptr next_frame,
 /* Helper for aarch64_pseudo_write.  */
 
 static void
-aarch64_pseudo_write_1 (gdbarch *gdbarch, frame_info_ptr next_frame,
+aarch64_pseudo_write_1 (gdbarch *gdbarch, const frame_info_ptr &next_frame,
 			int regnum_offset,
 			gdb::array_view<const gdb_byte> buf)
 {
@@ -3322,7 +3322,7 @@ aarch64_pseudo_write_1 (gdbarch *gdbarch, frame_info_ptr next_frame,
    pseudo-register.  */
 
 static void
-aarch64_sme_pseudo_register_write (gdbarch *gdbarch, frame_info_ptr next_frame,
+aarch64_sme_pseudo_register_write (gdbarch *gdbarch, const frame_info_ptr &next_frame,
 				   const int regnum,
 				   gdb::array_view<const gdb_byte> data)
 {
@@ -3364,7 +3364,7 @@ aarch64_sme_pseudo_register_write (gdbarch *gdbarch, frame_info_ptr next_frame,
 /* Implement the "pseudo_register_write" gdbarch method.  */
 
 static void
-aarch64_pseudo_write (gdbarch *gdbarch, frame_info_ptr next_frame,
+aarch64_pseudo_write (gdbarch *gdbarch, const frame_info_ptr &next_frame,
 		      const int pseudo_reg_num,
 		      gdb::array_view<const gdb_byte> buf)
 {
@@ -3437,7 +3437,7 @@ aarch64_pseudo_write (gdbarch *gdbarch, frame_info_ptr next_frame,
 /* Callback function for user_reg_add.  */
 
 static struct value *
-value_of_aarch64_user_reg (frame_info_ptr frame, const void *baton)
+value_of_aarch64_user_reg (const frame_info_ptr &frame, const void *baton)
 {
   const int *reg_p = (const int *) baton;
 
@@ -3808,10 +3808,12 @@ aarch64_displaced_step_copy_insn (struct gdbarch *gdbarch,
   if (aarch64_decode_insn (insn, &inst, 1, NULL) != 0)
     return NULL;
 
-  /* Look for a Load Exclusive instruction which begins the sequence.  */
-  if (inst.opcode->iclass == ldstexcl && bit (insn, 22))
+  /* Look for a Load Exclusive instruction which begins the sequence,
+     or for a MOPS instruction.  */
+  if ((inst.opcode->iclass == ldstexcl && bit (insn, 22))
+      || AARCH64_CPU_HAS_FEATURE (*inst.opcode->avariant, MOPS))
     {
-      /* We can't displaced step atomic sequences.  */
+      /* We can't displaced step atomic sequences nor MOPS instructions.  */
       return NULL;
     }
 
@@ -5186,6 +5188,71 @@ aarch64_record_asimd_load_store (aarch64_insn_decode_record *aarch64_insn_r)
   return AARCH64_RECORD_SUCCESS;
 }
 
+/* Record handler for Memory Copy and Memory Set instructions.  */
+
+static unsigned int
+aarch64_record_memcopy_memset (aarch64_insn_decode_record *aarch64_insn_r)
+{
+  if (record_debug)
+    debug_printf ("Process record: memory copy and memory set\n");
+
+  uint8_t op1 = bits (aarch64_insn_r->aarch64_insn, 22, 23);
+  uint8_t op2 = bits (aarch64_insn_r->aarch64_insn, 12, 15);
+  uint32_t reg_rd = bits (aarch64_insn_r->aarch64_insn, 0, 4);
+  uint32_t reg_rn = bits (aarch64_insn_r->aarch64_insn, 5, 9);
+  uint32_t record_buf[3];
+  uint64_t record_buf_mem[4];
+
+  if (op1 == 3 && op2 > 11)
+    /* Unallocated instructions.  */
+    return AARCH64_RECORD_UNKNOWN;
+
+  /* Set instructions have two registers and one memory region to be
+     recorded.  */
+  record_buf[0] = reg_rd;
+  record_buf[1] = reg_rn;
+  aarch64_insn_r->reg_rec_count = 2;
+
+  ULONGEST dest_addr;
+  regcache_raw_read_unsigned (aarch64_insn_r->regcache, reg_rd, &dest_addr);
+
+  LONGEST length;
+  regcache_raw_read_signed (aarch64_insn_r->regcache, reg_rn, &length);
+
+  /* In one of the algorithm options a processor can implement, the length
+     in Rn has an inverted sign.  */
+  if (length < 0)
+    length *= -1;
+
+  record_buf_mem[0] = length;
+  record_buf_mem[1] = dest_addr;
+  aarch64_insn_r->mem_rec_count = 1;
+
+  if (op1 != 3)
+    {
+      /* Copy instructions have an additional register and an additional
+	 memory region to be recorded.  */
+      uint32_t reg_rs = bits (aarch64_insn_r->aarch64_insn, 16, 20);
+
+      record_buf[2] = reg_rs;
+      aarch64_insn_r->reg_rec_count++;
+
+      ULONGEST source_addr;
+      regcache_raw_read_unsigned (aarch64_insn_r->regcache, reg_rs,
+				  &source_addr);
+
+      record_buf_mem[2] = length;
+      record_buf_mem[3] = source_addr;
+      aarch64_insn_r->mem_rec_count++;
+    }
+
+  MEM_ALLOC (aarch64_insn_r->aarch64_mems, aarch64_insn_r->mem_rec_count,
+	     record_buf_mem);
+  REG_ALLOC (aarch64_insn_r->aarch64_regs, aarch64_insn_r->reg_rec_count,
+	     record_buf);
+  return AARCH64_RECORD_SUCCESS;
+}
+
 /* Record handler for load and store instructions.  */
 
 static unsigned int
@@ -5463,6 +5530,10 @@ aarch64_record_load_store (aarch64_insn_decode_record *aarch64_insn_r)
       if (insn_bits10_11 == 0x01 || insn_bits10_11 == 0x03)
 	record_buf[aarch64_insn_r->reg_rec_count++] = reg_rn;
     }
+  /* Memory Copy and Memory Set instructions.  */
+  else if ((insn_bits24_27 & 1) == 1 && insn_bits28_29 == 1
+	   && insn_bits10_11 == 1 && !insn_bit21)
+    return aarch64_record_memcopy_memset (aarch64_insn_r);
   /* Advanced SIMD load/store instructions.  */
   else
     return aarch64_record_asimd_load_store (aarch64_insn_r);
@@ -5714,7 +5785,7 @@ aarch64_process_record (struct gdbarch *gdbarch, struct regcache *regcache,
 			CORE_ADDR insn_addr)
 {
   uint32_t rec_no = 0;
-  uint8_t insn_size = 4;
+  const uint8_t insn_size = 4;
   uint32_t ret = 0;
   gdb_byte buf[insn_size];
   aarch64_insn_decode_record aarch64_record;

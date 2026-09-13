@@ -24,10 +24,87 @@
 
 #include <signal.h>
 
+#include "extension.h"
+
 struct cmd_list_element;
+
+/* The current quit handler (and its type).  This is called from the
+   QUIT macro.  See default_quit_handler below for default behavior.
+   Parts of GDB temporarily override this to e.g., completely suppress
+   Ctrl-C because it would not be safe to throw.  E.g., normally, you
+   wouldn't want to quit between a RSP command and its response, as
+   that would break the communication with the target, but you may
+   still want to intercept the Ctrl-C and offer to disconnect if the
+   user presses Ctrl-C multiple times while the target is stuck
+   waiting for the wedged remote stub.  */
+typedef void (quit_handler_ftype) ();
+extern quit_handler_ftype *quit_handler;
 
 /* Exported functions from event-top.c.
    FIXME: these should really go into top.h.  */
+
+/* The default quit handler.  Checks whether Ctrl-C was pressed, and
+   if so:
+
+     - If GDB owns the terminal, throws a quit exception.
+
+     - If GDB does not own the terminal, forwards the Ctrl-C to the
+       target.
+*/
+
+extern void default_quit_handler ();
+
+/* Flag that function quit should call quit_force.  */
+
+extern volatile bool sync_quit_force_run;
+
+/* Set sync_quit_force_run and also call set_quit_flag().  */
+
+extern void set_force_quit_flag ();
+
+/* Control C eventually causes this to be called, at a convenient time.  */
+
+extern void quit ();
+
+/* Helper for the QUIT macro.  */
+
+extern void maybe_quit ();
+
+/* Check whether a Ctrl-C was typed, and if so, call the current quit
+   handler.  */
+
+#define QUIT maybe_quit ()
+
+/* Set the serial event associated with the quit flag.  */
+
+extern void quit_serial_event_set ();
+
+/* Clear the serial event associated with the quit flag.  */
+
+extern void quit_serial_event_clear ();
+
+/* Wrap f (args) and handle exceptions by:
+   - returning val, and
+   - calling set_quit_flag or set_force_quit_flag, if needed.  */
+
+template <typename R, R val, typename F, typename... Args>
+static R
+catch_exceptions (F &&f, Args&&... args)
+{
+   try
+     {
+       return f (std::forward<Args> (args)...);
+     }
+   catch (const gdb_exception &ex)
+     {
+       if (ex.reason == RETURN_QUIT)
+	 set_quit_flag ();
+       else if (ex.reason == RETURN_FORCED_QUIT)
+	 set_force_quit_flag ();
+     }
+
+   return val;
+}
 
 extern void display_gdb_prompt (const char *new_prompt);
 extern void gdb_setup_readline (int);

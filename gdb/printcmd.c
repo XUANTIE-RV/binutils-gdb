@@ -17,16 +17,18 @@
    You should have received a copy of the GNU General Public License
    along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
 
-#include "defs.h"
+#include "event-top.h"
+#include "extract-store-integer.h"
 #include "frame.h"
 #include "symtab.h"
 #include "gdbtypes.h"
+#include "top.h"
 #include "value.h"
 #include "language.h"
 #include "c-lang.h"
 #include "expression.h"
 #include "gdbcore.h"
-#include "gdbcmd.h"
+#include "cli/cli-cmds.h"
 #include "target.h"
 #include "breakpoint.h"
 #include "demangle.h"
@@ -1133,7 +1135,7 @@ do_examine (struct format_data fmt, struct gdbarch *gdbarch, CORE_ADDR addr)
 	    = value_from_ulongest (builtin_type (gdbarch)->builtin_data_ptr,
 				   tag_laddr);
 
-	  if (gdbarch_tagged_address_p (current_inferior ()->arch  (), v_addr))
+	  if (target_is_address_tagged (gdbarch, value_as_address (v_addr)))
 	    {
 	      /* Fetch the allocation tag.  */
 	      struct value *tag
@@ -1269,7 +1271,7 @@ print_value (value *val, const value_print_options &opts)
 /* Returns true if memory tags should be validated.  False otherwise.  */
 
 static bool
-should_validate_memtags (struct value *value)
+should_validate_memtags (gdbarch *gdbarch, struct value *value)
 {
   gdb_assert (value != nullptr && value->type () != nullptr);
 
@@ -1290,7 +1292,7 @@ should_validate_memtags (struct value *value)
     return false;
 
   /* We do.  Check whether it includes any tags.  */
-  return gdbarch_tagged_address_p (current_inferior ()->arch  (), value);
+  return target_is_address_tagged (gdbarch, value_as_address (value));
 }
 
 /* Helper for parsing arguments for print_command_1.  */
@@ -1347,7 +1349,7 @@ print_command_1 (const char *args, int voidprint)
 	    {
 	      gdbarch *arch = current_inferior ()->arch ();
 
-	      if (should_validate_memtags (val)
+	      if (should_validate_memtags (arch, val)
 		  && !gdbarch_memtag_matches_p (arch, val))
 		{
 		  /* Fetch the logical tag.  */
@@ -1499,7 +1501,7 @@ info_symbol_command (const char *arg, int from_tty)
 
 	sect_addr = overlay_mapped_address (addr, osect);
 
-	if (osect->addr () <= sect_addr && sect_addr < osect->endaddr ()
+	if (osect->contains (sect_addr)
 	    && (msymbol
 		= lookup_minimal_symbol_by_pc_section (sect_addr,
 						       osect).minsym))
@@ -1582,7 +1584,7 @@ info_address_command (const char *exp, int from_tty)
   if (exp == 0)
     error (_("Argument required."));
 
-  sym = lookup_symbol (exp, get_selected_block (&context_pc), VAR_DOMAIN,
+  sym = lookup_symbol (exp, get_selected_block (&context_pc), SEARCH_VFT,
 		       &is_a_field_of_this).symbol;
   if (sym == NULL)
     {
@@ -1643,10 +1645,10 @@ info_address_command (const char *exp, int from_tty)
     section = NULL;
   gdbarch = sym->arch ();
 
-  if (SYMBOL_COMPUTED_OPS (sym) != NULL)
+  if (const symbol_computed_ops *computed_ops = sym->computed_ops ();
+      computed_ops != nullptr)
     {
-      SYMBOL_COMPUTED_OPS (sym)->describe_location (sym, context_pc,
-						    gdb_stdout);
+      computed_ops->describe_location (sym, context_pc, gdb_stdout);
       gdb_printf (".\n");
       return;
     }
@@ -1684,7 +1686,7 @@ info_address_command (const char *exp, int from_tty)
 	 architecture at this point.  We assume the objfile architecture
 	 will contain all the standard registers that occur in debug info
 	 in that objfile.  */
-      regno = SYMBOL_REGISTER_OPS (sym)->register_number (sym, gdbarch);
+      regno = sym->register_ops ()->register_number (sym, gdbarch);
 
       if (sym->is_argument ())
 	gdb_printf (_("an argument in register %s"),
@@ -1712,7 +1714,7 @@ info_address_command (const char *exp, int from_tty)
 
     case LOC_REGPARM_ADDR:
       /* Note comment at LOC_REGISTER.  */
-      regno = SYMBOL_REGISTER_OPS (sym)->register_number (sym, gdbarch);
+      regno = sym->register_ops ()->register_number (sym, gdbarch);
       gdb_printf (_("address of an argument in register %s"),
 		  gdbarch_register_name (gdbarch, regno));
       break;
@@ -2330,7 +2332,7 @@ clear_dangling_display_expressions (struct objfile *objfile)
 
 void
 print_variable_and_value (const char *name, struct symbol *var,
-			  frame_info_ptr frame,
+			  const frame_info_ptr &frame,
 			  struct ui_file *stream, int indent)
 {
 
@@ -2947,9 +2949,10 @@ memory_tag_print_tag_command (const char *args, enum memtag_type tag_type)
      flag, it is no use trying to access/manipulate its allocation tag.
 
      It is OK to manipulate the logical tag though.  */
+  CORE_ADDR addr = value_as_address (val);
   if (tag_type == memtag_type::allocation
-      && !gdbarch_tagged_address_p (arch, val))
-    show_addr_not_tagged (value_as_address (val));
+      && !target_is_address_tagged (arch, addr))
+    show_addr_not_tagged (addr);
 
   value *tag_value = gdbarch_get_memtag (arch, val, tag_type);
   std::string tag = gdbarch_memtag_to_string (arch, tag_value);
@@ -3102,11 +3105,6 @@ parse_set_allocation_tag_input (const char *args, struct value **val,
     error (_("Error parsing tags argument. Tags should be 2 digits per byte."));
 
   tags = hex2bin (tags_string.c_str ());
-
-  /* If the address is not in a region memory mapped with a memory tagging
-     flag, it is no use trying to access/manipulate its allocation tag.  */
-  if (!gdbarch_tagged_address_p (current_inferior ()->arch (), *val))
-    show_addr_not_tagged (value_as_address (*val));
 }
 
 /* Implement the "memory-tag set-allocation-tag" command.
@@ -3127,6 +3125,12 @@ memory_tag_set_allocation_tag_command (const char *args, int from_tty)
 
   /* Parse the input.  */
   parse_set_allocation_tag_input (args, &val, &length, tags);
+
+  /* If the address is not in a region memory-mapped with a memory tagging
+     flag, it is no use trying to manipulate its allocation tag.  */
+  CORE_ADDR addr = value_as_address (val);
+  if (!target_is_address_tagged (current_inferior ()-> arch(), addr))
+    show_addr_not_tagged (addr);
 
   if (!gdbarch_set_memtags (current_inferior ()->arch (), val, length, tags,
 			    memtag_type::allocation))
@@ -3153,12 +3157,12 @@ memory_tag_check_command (const char *args, int from_tty)
   struct value *val = process_print_command_args (args, &print_opts, true);
   gdbarch *arch = current_inferior ()->arch ();
 
+  CORE_ADDR addr = value_as_address (val);
+
   /* If the address is not in a region memory mapped with a memory tagging
      flag, it is no use trying to access/manipulate its allocation tag.  */
-  if (!gdbarch_tagged_address_p (arch, val))
-    show_addr_not_tagged (value_as_address (val));
-
-  CORE_ADDR addr = value_as_address (val);
+  if (!target_is_address_tagged (arch, addr))
+    show_addr_not_tagged (addr);
 
   /* Check if the tag is valid.  */
   if (!gdbarch_memtag_matches_p (arch, val))

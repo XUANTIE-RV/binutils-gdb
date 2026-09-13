@@ -17,14 +17,14 @@
    You should have received a copy of the GNU General Public License
    along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
 
-#include "defs.h"
 #include "stap-probe.h"
+#include "extract-store-integer.h"
 #include "probe.h"
 #include "ui-out.h"
 #include "objfiles.h"
 #include "arch-utils.h"
 #include "command.h"
-#include "gdbcmd.h"
+#include "cli/cli-cmds.h"
 #include "filenames.h"
 #include "value.h"
 #include "ax.h"
@@ -151,7 +151,7 @@ public:
 
   /* See probe.h.  */
   struct value *evaluate_argument (unsigned n,
-				   frame_info_ptr frame) override;
+				   const frame_info_ptr &frame) override;
 
   /* See probe.h.  */
   void compile_to_ax (struct agent_expr *aexpr,
@@ -1438,7 +1438,7 @@ stap_probe::can_evaluate_arguments () const
    corresponding to it.  Assertion is thrown if N does not exist.  */
 
 struct value *
-stap_probe::evaluate_argument (unsigned n, frame_info_ptr frame)
+stap_probe::evaluate_argument (unsigned n, const frame_info_ptr &frame)
 {
   struct stap_probe_arg *arg;
   struct gdbarch *gdbarch = get_frame_arch (frame);

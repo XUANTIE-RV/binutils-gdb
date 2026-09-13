@@ -19,12 +19,12 @@
    You should have received a copy of the GNU General Public License
    along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
 
-#include "defs.h"
 #include "bfd.h"
 #include "elf-bfd.h"
 #include "elf/common.h"
 #include "elf/internal.h"
 #include "elf/mips.h"
+#include "extract-store-integer.h"
 #include "symtab.h"
 #include "symfile.h"
 #include "objfiles.h"
@@ -989,8 +989,6 @@ elf_gnu_ifunc_resolver_stop (code_breakpoint *b)
 				    prev_frame_id,
 				    bp_gnu_ifunc_resolver_return).release ();
 
-      /* set_momentary_breakpoint invalidates PREV_FRAME.  */
-      prev_frame = NULL;
 
       /* Add new b_return to the ring list b->related_breakpoint.  */
       gdb_assert (b_return->related_breakpoint == b_return);

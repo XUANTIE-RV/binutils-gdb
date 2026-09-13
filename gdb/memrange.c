@@ -17,7 +17,6 @@
    You should have received a copy of the GNU General Public License
    along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
 
-#include "defs.h"
 #include "memrange.h"
 #include <algorithm>
 
@@ -34,11 +33,11 @@ mem_ranges_overlap (CORE_ADDR start1, int len1,
 
 /* See memrange.h.  */
 
-int
-address_in_mem_range (CORE_ADDR address, const struct mem_range *r)
+bool
+mem_range::contains (CORE_ADDR address) const
 {
-  return (r->start <= address
-	  && (address - r->start) < r->length);
+  return (this->start <= address
+	  && (address - this->start) < this->length);
 }
 
 void

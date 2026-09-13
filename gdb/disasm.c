@@ -17,14 +17,14 @@
    You should have received a copy of the GNU General Public License
    along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
 
-#include "defs.h"
 #include "arch-utils.h"
+#include "event-top.h"
 #include "target.h"
 #include "value.h"
 #include "ui-out.h"
 #include "disasm.h"
 #include "gdbcore.h"
-#include "gdbcmd.h"
+#include "cli/cli-cmds.h"
 #include "dis-asm.h"
 #include "source.h"
 #include "gdbsupport/gdb-safe-ctype.h"
@@ -197,7 +197,12 @@ gdb_disassembler_memory_reader::dis_asm_read_memory
   (bfd_vma memaddr, gdb_byte *myaddr, unsigned int len,
    struct disassemble_info *info) noexcept
 {
-  return target_read_code (memaddr, myaddr, len);
+  auto res = catch_exceptions<int, -1> ([&]
+    {
+      return target_read_code (memaddr, myaddr, len);
+    });
+
+  return res;
 }
 
 /* Wrapper of memory_error.  */
@@ -1291,20 +1296,20 @@ gdb_buffered_insn_length (struct gdbarch *gdbarch,
   return result;
 }
 
-char *
+const char *
 get_disassembler_options (struct gdbarch *gdbarch)
 {
-  char **disassembler_options = gdbarch_disassembler_options (gdbarch);
-  if (disassembler_options == NULL)
-    return NULL;
-  return *disassembler_options;
+  std::string *disassembler_options = gdbarch_disassembler_options (gdbarch);
+  if (disassembler_options == nullptr || disassembler_options->empty ())
+    return nullptr;
+  return disassembler_options->c_str ();
 }
 
 void
 set_disassembler_options (const char *prospective_options)
 {
   struct gdbarch *gdbarch = get_current_arch ();
-  char **disassembler_options = gdbarch_disassembler_options (gdbarch);
+  std::string *disassembler_options = gdbarch_disassembler_options (gdbarch);
   const disasm_options_and_args_t *valid_options_and_args;
   const disasm_options_t *valid_options;
   gdb::unique_xmalloc_ptr<char> prospective_options_local
@@ -1317,11 +1322,8 @@ set_disassembler_options (const char *prospective_options)
      to reset their disassembler options to NULL.  */
   if (options == NULL)
     {
-      if (disassembler_options != NULL)
-	{
-	  free (*disassembler_options);
-	  *disassembler_options = NULL;
-	}
+      if (disassembler_options != nullptr)
+	disassembler_options->clear ();
       return;
     }
 
@@ -1373,8 +1375,7 @@ set_disassembler_options (const char *prospective_options)
 	}
     }
 
-  free (*disassembler_options);
-  *disassembler_options = xstrdup (options);
+  *disassembler_options = options;
 }
 
 static void

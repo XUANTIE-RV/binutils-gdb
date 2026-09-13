@@ -19,7 +19,7 @@
    You should have received a copy of the GNU General Public License
    along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
 
-#include "defs.h"
+#include "extract-store-integer.h"
 #include "osabi.h"
 #include "regcache.h"
 #include "regset.h"
@@ -240,7 +240,7 @@ static const struct regset rs6000_aix_vsxregset = {
 };
 
 static struct trad_frame_cache *
-aix_sighandle_frame_cache (frame_info_ptr this_frame,
+aix_sighandle_frame_cache (const frame_info_ptr &this_frame,
 			   void **this_cache)
 {
   LONGEST backchain;
@@ -296,7 +296,7 @@ aix_sighandle_frame_cache (frame_info_ptr this_frame,
 }
 
 static void
-aix_sighandle_frame_this_id (frame_info_ptr this_frame,
+aix_sighandle_frame_this_id (const frame_info_ptr &this_frame,
 			     void **this_prologue_cache,
 			     struct frame_id *this_id)
 {
@@ -306,7 +306,7 @@ aix_sighandle_frame_this_id (frame_info_ptr this_frame,
 }
 
 static struct value *
-aix_sighandle_frame_prev_register (frame_info_ptr this_frame,
+aix_sighandle_frame_prev_register (const frame_info_ptr &this_frame,
 				   void **this_prologue_cache, int regnum)
 {
   struct trad_frame_cache *this_trad_cache
@@ -316,7 +316,7 @@ aix_sighandle_frame_prev_register (frame_info_ptr this_frame,
 
 static int
 aix_sighandle_frame_sniffer (const struct frame_unwind *self,
-			     frame_info_ptr this_frame,
+			     const frame_info_ptr &this_frame,
 			     void **this_prologue_cache)
 {
   CORE_ADDR pc = get_frame_pc (this_frame);
@@ -1336,7 +1336,8 @@ rs6000_aix_core_xfer_shared_libraries_aix (struct gdbarch *gdbarch,
   struct bfd_section *ldinfo_sec;
   int ldinfo_size;
 
-  ldinfo_sec = bfd_get_section_by_name (core_bfd, ".ldinfo");
+  ldinfo_sec = bfd_get_section_by_name (current_program_space->core_bfd (),
+					".ldinfo");
   if (ldinfo_sec == NULL)
     error (_("cannot find .ldinfo section from core file: %s"),
 	   bfd_errmsg (bfd_get_error ()));
@@ -1344,8 +1345,9 @@ rs6000_aix_core_xfer_shared_libraries_aix (struct gdbarch *gdbarch,
 
   gdb::byte_vector ldinfo_buf (ldinfo_size);
 
-  if (! bfd_get_section_contents (core_bfd, ldinfo_sec,
-				  ldinfo_buf.data (), 0, ldinfo_size))
+  if (! bfd_get_section_contents (current_program_space->core_bfd (),
+				  ldinfo_sec, ldinfo_buf.data (), 0,
+				  ldinfo_size))
     error (_("unable to read .ldinfo section from core file: %s"),
 	  bfd_errmsg (bfd_get_error ()));
 

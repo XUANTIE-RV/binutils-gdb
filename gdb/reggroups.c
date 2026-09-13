@@ -19,13 +19,12 @@
    You should have received a copy of the GNU General Public License
    along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
 
-#include "defs.h"
 #include "arch-utils.h"
 #include "reggroups.h"
 #include "gdbtypes.h"
 #include "regcache.h"
 #include "command.h"
-#include "gdbcmd.h"
+#include "cli/cli-cmds.h"
 #include "gdbsupport/gdb_obstack.h"
 
 /* See reggroups.h.  */

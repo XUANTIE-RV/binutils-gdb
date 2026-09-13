@@ -19,8 +19,8 @@
    You should have received a copy of the GNU General Public License
    along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
 
-#include "defs.h"
 #include "arch-utils.h"
+#include "extract-store-integer.h"
 #include "target.h"
 #include "inferior.h"
 #include "infrun.h"
@@ -50,7 +50,7 @@
 #include "ada-lang.h"
 #include "linespec.h"
 #include "extension.h"
-#include "gdbcmd.h"
+#include "cli/cli-cmds.h"
 #include "observable.h"
 #include <optional>
 #include "gdbsupport/byte-vector.h"
@@ -89,7 +89,7 @@ static void mi_execute_async_cli_command (const char *cli_command,
 					  const char *const *argv, int argc);
 static bool register_changed_p (int regnum, readonly_detached_regcache *,
 			       readonly_detached_regcache *);
-static void output_register (frame_info_ptr, int regnum, int format,
+static void output_register (const frame_info_ptr &, int regnum, int format,
 			     int skip_unavailable);
 
 /* Controls whether the frontend wants MI in async mode.  */
@@ -1097,7 +1097,7 @@ mi_cmd_data_list_register_values (const char *command, const char *const *argv,
    unavailable.  */
 
 static void
-output_register (frame_info_ptr frame, int regnum, int format,
+output_register (const frame_info_ptr &frame, int regnum, int format,
 		 int skip_unavailable)
 {
   struct ui_out *uiout = current_uiout;

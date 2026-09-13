@@ -167,9 +167,9 @@ public:
   const std::string &title () const
   { return m_title; }
 
-  /* Display string STR in the window at position (Y,X), abbreviated if
-     necessary.  */
-  void display_string (int y, int x, const char *str) const;
+  /* Clear the window, maybe draw the boarder, and then display string
+     STR centered in the window, abbreviated if necessary.  */
+  void center_string (const char *str);
 
   /* Display string STR in the window at the current cursor position,
      abbreviated if necessary.  */
@@ -296,9 +296,9 @@ extern struct tui_win_info *tui_win_list[MAX_MAJOR_WINDOWS];
 #define TUI_DATA_WIN \
   (gdb::checked_static_cast<tui_data_window *> (tui_win_list[DATA_WIN]))
 #define TUI_CMD_WIN \
-  (gdb::checked_static_cast<tui_cmd_window *> (tui_win_list[CMD_WIN]))
+  (dynamic_cast<tui_cmd_window *> (tui_win_list[CMD_WIN]))
 #define TUI_STATUS_WIN \
-  (gdb::checked_static_cast<tui_status_window *> (tui_win_list[STATUS_WIN]))
+  (dynamic_cast<tui_status_window *> (tui_win_list[STATUS_WIN]))
 
 /* All the windows that are currently instantiated, in layout
    order.  */

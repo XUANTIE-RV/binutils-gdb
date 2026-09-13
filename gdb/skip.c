@@ -15,13 +15,13 @@
    You should have received a copy of the GNU General Public License
    along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
 
-#include "defs.h"
 #include "skip.h"
+#include "event-top.h"
 #include "value.h"
 #include "valprint.h"
 #include "ui-out.h"
 #include "symtab.h"
-#include "gdbcmd.h"
+#include "cli/cli-cmds.h"
 #include "command.h"
 #include "completer.h"
 #include "stack.h"
@@ -723,7 +723,7 @@ If you don't specify any numbers or ranges, we'll delete all skip entries."),
   add_info ("skip", info_skip_command, _("\
 Display the status of skips.\n\
 Usage: info skip [NUMBER | RANGES]...\n\
-You can specify numbers (e.g. \"info skip 1 3\"), \n\
+You can specify numbers (e.g. \"info skip 1 3\"),\n\
 ranges (e.g. \"info skip 4-8\"), or both (e.g. \"info skip 1 3 4-8\").\n\n\
 If you don't specify any numbers or ranges, we'll show all skips."));
   set_cmd_completer (c, complete_skip_number);

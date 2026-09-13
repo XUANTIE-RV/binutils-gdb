@@ -18,7 +18,6 @@
    along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
 
 
-#include "defs.h"
 #include "compile-internal.h"
 #include "compile-cplus.h"
 #include "gdbsupport/gdb_assert.h"
@@ -32,7 +31,7 @@
 #include "gdbtypes.h"
 #include "dwarf2/loc.h"
 #include "cp-support.h"
-#include "gdbcmd.h"
+#include "cli/cli-cmds.h"
 #include "compile-c.h"
 #include "inferior.h"
 
@@ -227,7 +226,7 @@ convert_one_symbol (compile_cplus_instance *instance,
 static void
 convert_symbol_sym (compile_cplus_instance *instance,
 		    const char *identifier, struct block_symbol sym,
-		    domain_enum domain)
+		    domain_search_flags domain)
 {
   /* If we found a symbol and it is not in the  static or global
      scope, then we should first convert any static or global scope
@@ -355,12 +354,12 @@ gcc_cplus_convert_symbol (void *datum,
 	 This will find variables in the current scope.  */
 
       struct block_symbol sym
-	= lookup_symbol (identifier, instance->block (), VAR_DOMAIN, nullptr);
+	= lookup_symbol (identifier, instance->block (), SEARCH_VFT, nullptr);
 
       if (sym.symbol != nullptr)
 	{
 	  found = true;
-	  convert_symbol_sym (instance, identifier, sym, VAR_DOMAIN);
+	  convert_symbol_sym (instance, identifier, sym, SEARCH_VFT);
 	}
 
       /* Then use linespec.c's multi-symbol search.  This should find
@@ -368,7 +367,7 @@ gcc_cplus_convert_symbol (void *datum,
 
       symbol_searcher searcher;
       searcher.find_all_symbols (identifier, current_language,
-				 ALL_DOMAIN, nullptr, nullptr);
+				 SEARCH_ALL_DOMAINS, nullptr, nullptr);
 
       /* Convert any found symbols.  */
       for (const auto &it : searcher.matching_symbols ())
@@ -378,7 +377,7 @@ gcc_cplus_convert_symbol (void *datum,
 	    {
 	      found = true;
 	      convert_symbol_sym (instance, identifier, it,
-				  it.symbol->domain ());
+				  to_search_flags (it.symbol->domain ()));
 	    }
 	}
 
@@ -437,9 +436,10 @@ gcc_cplus_symbol_address (void *datum, struct gcc_cp_context *gcc_context,
   try
     {
       struct symbol *sym
-	= lookup_symbol (identifier, nullptr, VAR_DOMAIN, nullptr).symbol;
+	= lookup_symbol (identifier, nullptr, SEARCH_FUNCTION_DOMAIN,
+			 nullptr).symbol;
 
-      if (sym != nullptr && sym->aclass () == LOC_BLOCK)
+      if (sym != nullptr)
 	{
 	  if (compile_debug)
 	    gdb_printf (gdb_stdlog,

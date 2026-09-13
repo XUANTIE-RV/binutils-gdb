@@ -1,7 +1,10 @@
 		What has changed in GDB?
 	     (Organized release by release)
 
-*** Changes since GDB 14
+*** Changes in GDB 15
+
+* The MPX commands "show/set mpx bound" have been deprecated, as Intel
+  listed MPX as removed in 2019.
 
 * Building GDB and GDBserver now requires a C++17 compiler.
   For example, GCC 9 or later.
@@ -20,10 +23,28 @@ disassemble
   command will now give an error.  Previously the 'b' flag would
   always override the 'r' flag.
 
+gcore
+generate-core-file
+  GDB now generates sparse core files, on systems that support it.
+
 maintenance info line-table
   Add an EPILOGUE-BEGIN column to the output of the command.  It indicates
   if the line is considered the start of the epilgoue, and thus a point at
   which the frame can be considered destroyed.
+
+set unwindonsignal on|off
+show unwindonsignal
+  These commands are now aliases for the new set/show unwind-on-signal.
+
+target record-full
+  This command now gives an error if any unexpected arguments are
+  found after the command.
+
+list .
+  When using the command "list ." in a location that has no debug information
+  or no file loaded, GDB now says that there is no debug information to print
+  lines.  This makes it more obvious that there is no information, as opposed
+  to implying there is no inferior loaded.
 
 * New commands
 
@@ -46,6 +67,38 @@ maintenance info linux-lwps
 set remote thread-options-packet
 show remote thread-options-packet
   Set/show the use of the thread options packet.
+
+set direct-call-timeout SECONDS
+show direct-call-timeout
+set indirect-call-timeout SECONDS
+show indirect-call-timeout
+  These new settings can be used to limit how long GDB will wait for
+  an inferior function call to complete.  The direct timeout is used
+  for inferior function calls from e.g. 'call' and 'print' commands,
+  while the indirect timeout is used for inferior function calls from
+  within a conditional breakpoint expression.
+
+  The default for the direct timeout is unlimited, while the default
+  for the indirect timeout is 30 seconds.
+
+  These timeouts will only have an effect for targets that are
+  operating in async mode.  For non-async targets the timeouts are
+  ignored, GDB will wait indefinitely for an inferior function to
+  complete, unless interrupted by the user using Ctrl-C.
+
+set unwind-on-timeout on|off
+show unwind-on-timeout
+  These commands control whether GDB should unwind the stack when a
+  timeout occurs during an inferior function call.  The default is
+  off, in which case the inferior will remain in the frame where the
+  timeout occurred.  When on, GDB will unwind the stack removing the
+  dummy frame that was added for the inferior call, and restoring the
+  inferior state to how it was before the inferior call started.
+
+set unwind-on-signal on|off
+show unwind-on-signal
+  These new commands replaces the existing set/show unwindonsignal.  The
+  old command is maintained as an alias.
 
 * New features in the GDB remote stub, GDBserver
 
@@ -108,6 +161,11 @@ show remote thread-options-packet
      object, these will be stored in the object's new
      InferiorThread.__dict__ attribute.
 
+  ** New constants gdb.SYMBOL_TYPE_DOMAIN, gdb.SYMBOL_FUNCTION_DOMAIN,
+     and gdb.SEARCH_*_DOMAIN corresponding to all the existing symbol
+     domains.  Symbol lookup can now search in multiple domains at
+     once, and can also narrowly search for just a type or function.
+
 * Debugger Adapter Protocol changes
 
   ** GDB now emits the "process" event.
@@ -120,6 +178,13 @@ show remote thread-options-packet
 
   ** The "set debug dap-log-file" command is now documented.  This
      command was available in GDB 14 but not documented.
+
+* Guile API
+
+  ** New constants SYMBOL_TYPE_DOMAIN, SYMBOL_FUNCTION_DOMAIN, and
+     SEARCH_*_DOMAIN corresponding to all the existing symbol domains.
+     Symbol lookup can now search in multiple domains at once, and can
+     also narrowly search for just a type or function.
 
 * New remote packets
 
@@ -136,6 +201,16 @@ QThreadOptions in qSupported
   The qSupported packet allows GDB to inform the stub it supports the
   QThreadOptions packet, and the qSupported response can contain the
   set of thread options the remote stub supports.
+
+qIsAddressTagged
+  This new packet allows GDB to query the stub about a given address to check
+  if it is tagged or not.  Many memory tagging-related GDB commands need to
+  perform this check before they read/write the allocation tag related to an
+  address.  Currently, however, this is done through a 'vFile' request to read
+  the file /proc/<PID>/smaps and check if the address is in a region reported
+  as memory tagged.  Since not all targets have a notion of what the smaps
+  file is about, this new packet provides a more generic way to perform such
+  a check.
 
 *** Changes in GDB 14
 

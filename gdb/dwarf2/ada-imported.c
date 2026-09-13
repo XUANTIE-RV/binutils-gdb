@@ -17,7 +17,6 @@
    You should have received a copy of the GNU General Public License
    along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
 
-#include "defs.h"
 #include "symtab.h"
 #include "value.h"
 #include "dwarf2/loc.h"
@@ -32,7 +31,7 @@ get_imported_name (const struct symbol *sym)
 /* Implement the read_variable method from symbol_computed_ops.  */
 
 static struct value *
-ada_imported_read_variable (struct symbol *symbol, frame_info_ptr frame)
+ada_imported_read_variable (struct symbol *symbol, const frame_info_ptr &frame)
 {
   const char *name = get_imported_name (symbol);
   bound_minimal_symbol minsym = lookup_minimal_symbol_linkage (name, false);
@@ -103,7 +102,7 @@ ada_alias_get_block_value (const struct symbol *sym)
 {
   const char *name = get_imported_name (sym);
   block_symbol real_symbol = lookup_global_symbol (name, nullptr,
-						   VAR_DOMAIN);
+						   SEARCH_FUNCTION_DOMAIN);
   if (real_symbol.symbol == nullptr)
     error (_("could not find alias '%s' for function '%s'"),
 	   name, sym->print_name ());

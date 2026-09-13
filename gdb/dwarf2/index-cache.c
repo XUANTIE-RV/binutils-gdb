@@ -17,7 +17,6 @@
    You should have received a copy of the GNU General Public License
    along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
 
-#include "defs.h"
 #include "dwarf2/index-cache.h"
 
 #include "build-id.h"
@@ -33,6 +32,7 @@
 #include "gdbsupport/selftest.h"
 #include <string>
 #include <stdlib.h>
+#include "run-on-main-thread.h"
 
 /* When set to true, show debug messages about the index cache.  */
 static bool debug_index_cache = false;
@@ -90,8 +90,13 @@ index_cache::disable ()
 
 index_cache_store_context::index_cache_store_context (const index_cache &ic,
 						      dwarf2_per_bfd *per_bfd)
-  :  m_enabled (ic.enabled ())
+  :  m_enabled (ic.enabled ()),
+     m_dir (ic.m_dir),
+     m_per_bfd (per_bfd)
 {
+  /* Capturing globals may only be done on the main thread.  */
+  gdb_assert (is_main_thread ());
+
   if (!m_enabled)
     return;
 
@@ -104,7 +109,7 @@ index_cache_store_context::index_cache_store_context (const index_cache &ic,
       m_enabled = false;
       return;
     }
-  build_id_str = build_id_to_string (build_id);
+  m_build_id_str = build_id_to_string (build_id);
 
   /* Get build id of dwz file, if present.  */
   const dwz_file *dwz = dwarf2_get_dwz_file (per_bfd);
@@ -121,10 +126,10 @@ index_cache_store_context::index_cache_store_context (const index_cache &ic,
 	  return;
 	}
 
-      dwz_build_id_str = build_id_to_string (dwz_build_id);
+      m_dwz_build_id_str = build_id_to_string (dwz_build_id);
     }
 
-  if (ic.m_dir.empty ())
+  if (m_dir.empty ())
     {
       warning (_("The index cache directory name is empty, skipping store."));
       m_enabled = false;
@@ -134,7 +139,7 @@ index_cache_store_context::index_cache_store_context (const index_cache &ic,
   try
     {
       /* Try to create the containing directory.  */
-      if (!mkdir_recursive (ic.m_dir.c_str ()))
+      if (!mkdir_recursive (m_dir.c_str ()))
 	{
 	  warning (_("index cache: could not make cache directory: %s"),
 		   safe_strerror (errno));
@@ -153,31 +158,30 @@ index_cache_store_context::index_cache_store_context (const index_cache &ic,
 /* See dwarf-index-cache.h.  */
 
 void
-index_cache::store (dwarf2_per_bfd *per_bfd,
-		    const index_cache_store_context &ctx)
+index_cache_store_context::store () const
 {
-  if (!ctx.m_enabled)
+  if (!m_enabled)
     return;
 
-  const char *dwz_build_id_ptr = (ctx.dwz_build_id_str.has_value ()
-				  ? ctx.dwz_build_id_str->c_str ()
+  const char *dwz_build_id_ptr = (m_dwz_build_id_str.has_value ()
+				  ? m_dwz_build_id_str->c_str ()
 				  : nullptr);
 
   try
     {
       index_cache_debug ("writing index cache for objfile %s",
-			 bfd_get_filename (per_bfd->obfd));
+			 bfd_get_filename (m_per_bfd->obfd));
 
       /* Write the index itself to the directory, using the build id as the
 	 filename.  */
-      write_dwarf_index (per_bfd, m_dir.c_str (),
-			 ctx.build_id_str.c_str (), dwz_build_id_ptr,
+      write_dwarf_index (m_per_bfd, m_dir.c_str (),
+			 m_build_id_str.c_str (), dwz_build_id_ptr,
 			 dw_index_kind::GDB_INDEX);
     }
   catch (const gdb_exception_error &except)
     {
       index_cache_debug ("couldn't store index cache for objfile %s: %s",
-			 bfd_get_filename (per_bfd->obfd), except.what ());
+			 bfd_get_filename (m_per_bfd->obfd), except.what ());
     }
 }
 

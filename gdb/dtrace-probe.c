@@ -19,7 +19,7 @@
    You should have received a copy of the GNU General Public License
    along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
 
-#include "defs.h"
+#include "extract-store-integer.h"
 #include "probe.h"
 #include "elf-bfd.h"
 #include "gdbtypes.h"
@@ -129,7 +129,7 @@ public:
 
   /* See probe.h.  */
   struct value *evaluate_argument (unsigned n,
-				   frame_info_ptr frame) override;
+				   const frame_info_ptr &frame) override;
 
   /* See probe.h.  */
   void compile_to_ax (struct agent_expr *aexpr,
@@ -708,7 +708,7 @@ dtrace_probe::can_evaluate_arguments () const
 
 struct value *
 dtrace_probe::evaluate_argument (unsigned n,
-				 frame_info_ptr frame)
+				 const frame_info_ptr &frame)
 {
   struct gdbarch *gdbarch = this->get_gdbarch ();
   struct dtrace_probe_arg *arg;

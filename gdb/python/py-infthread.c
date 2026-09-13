@@ -17,7 +17,6 @@
    You should have received a copy of the GNU General Public License
    along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
 
-#include "defs.h"
 #include "gdbthread.h"
 #include "inferior.h"
 #include "python-internal.h"
@@ -214,7 +213,6 @@ thpy_get_ptid_string (PyObject *self, void *closure)
   catch (const gdb_exception &except)
     {
       GDB_PY_HANDLE_EXCEPTION (except);
-      return nullptr;
     }
 }
 

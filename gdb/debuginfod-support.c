@@ -16,7 +16,6 @@
    You should have received a copy of the GNU General Public License
    along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
 
-#include "defs.h"
 #include "diagnostics.h"
 #include <errno.h>
 #include "gdbsupport/scoped_fd.h"
@@ -155,7 +154,8 @@ progressfn (debuginfod_client *c, long cur, long total)
 
   if (check_quit_flag ())
     {
-      gdb_printf ("Cancelling download of %s %s...\n",
+      ui_file *outstream = get_unbuffered (gdb_stdout);
+      gdb_printf (outstream, _("Cancelling download of %s %s...\n"),
 		  data->desc, styled_fname.c_str ());
       return 1;
     }
@@ -187,15 +187,6 @@ progressfn (debuginfod_client *c, long cur, long total)
   return 0;
 }
 
-/* Cleanup ARG, which is a debuginfod_client pointer.  */
-
-static void
-cleanup_debuginfod_client (void *arg)
-{
-  debuginfod_client *client = static_cast<debuginfod_client *> (arg);
-  debuginfod_end (client);
-}
-
 /* Return a pointer to the single global debuginfod_client, initialising it
    first if needed.  */
 
@@ -220,7 +211,10 @@ get_debuginfod_client ()
 	     handlers, which is too late.
 
 	     So instead, we make use of GDB's final cleanup mechanism.  */
-	  make_final_cleanup (cleanup_debuginfod_client, global_client);
+	  add_final_cleanup ([] ()
+	    {
+	      debuginfod_end (global_client);
+	    });
 	  debuginfod_set_progressfn (global_client, progressfn);
 	}
     }
@@ -295,10 +289,14 @@ static void
 print_outcome (int fd, const char *desc, const char *fname)
 {
   if (fd < 0 && fd != -ENOENT)
-    gdb_printf (_("Download failed: %s.  Continuing without %s %ps.\n"),
-		safe_strerror (-fd),
-		desc,
-		styled_string (file_name_style.style (), fname));
+    {
+      ui_file *outstream = get_unbuffered (gdb_stdout);
+      gdb_printf (outstream,
+		  _("Download failed: %s.  Continuing without %s %ps.\n"),
+		  safe_strerror (-fd),
+		  desc,
+		  styled_string (file_name_style.style (), fname));
+    }
 }
 
 /* See debuginfod-support.h  */

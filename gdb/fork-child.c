@@ -19,9 +19,8 @@
    You should have received a copy of the GNU General Public License
    along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
 
-#include "defs.h"
 #include "inferior.h"
-#include "gdbcmd.h"
+#include "cli/cli-cmds.h"
 #include "terminal.h"
 #include "gdbthread.h"
 #include "ui.h"

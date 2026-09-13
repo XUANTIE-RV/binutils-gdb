@@ -19,7 +19,6 @@
    You should have received a copy of the GNU General Public License
    along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
 
-#include "defs.h"
 #include "frame.h"
 #include "gdbcore.h"
 #include "regcache.h"
@@ -67,7 +66,7 @@ static int amd64_sol2_gregset_reg_offset[] = {
    'mcontext_t' that contains the saved set of machine registers.  */
 
 static CORE_ADDR
-amd64_sol2_mcontext_addr (frame_info_ptr this_frame)
+amd64_sol2_mcontext_addr (const frame_info_ptr &this_frame)
 {
   CORE_ADDR sp, ucontext_addr;
 

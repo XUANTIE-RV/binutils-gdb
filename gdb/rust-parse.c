@@ -17,7 +17,6 @@
    You should have received a copy of the GNU General Public License
    along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
 
-#include "defs.h"
 
 #include "block.h"
 #include "charset.h"
@@ -308,7 +307,7 @@ struct rust_parser
   void update_innermost_block (struct block_symbol sym);
   struct block_symbol lookup_symbol (const char *name,
 				     const struct block *block,
-				     const domain_enum domain);
+				     const domain_search_flags domain);
   struct type *rust_lookup_type (const char *name);
 
   /* Clear some state.  This is only used for testing.  */
@@ -431,7 +430,7 @@ munge_name_and_block (const char **name, const struct block **block)
 
 struct block_symbol
 rust_parser::lookup_symbol (const char *name, const struct block *block,
-			    const domain_enum domain)
+			    const domain_search_flags domain)
 {
   struct block_symbol result;
 
@@ -454,7 +453,7 @@ rust_parser::rust_lookup_type (const char *name)
   const struct block *block = pstate->expression_context_block;
   munge_name_and_block (&name, &block);
 
-  result = ::lookup_symbol (name, block, STRUCT_DOMAIN, NULL);
+  result = ::lookup_symbol (name, block, SEARCH_TYPE_DOMAIN, nullptr);
   if (result.symbol != NULL)
     {
       update_innermost_block (result);
@@ -1221,7 +1220,7 @@ rust_parser::name_to_operation (const std::string &name)
 {
   struct block_symbol sym = lookup_symbol (name.c_str (),
 					   pstate->expression_context_block,
-					   VAR_DOMAIN);
+					   SEARCH_VFT);
   if (sym.symbol != nullptr && sym.symbol->aclass () != LOC_TYPEDEF)
     return make_operation<var_value_operation> (sym);
 

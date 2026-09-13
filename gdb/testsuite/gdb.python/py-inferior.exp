@@ -27,12 +27,26 @@ if { [gdb_compile_pthreads ${srcdir}/${subdir}/${srcfile} ${binfile} executable 
 }
 
 # Start with a fresh gdb.
-clean_restart ${testfile}
+save_vars { env(ASAN_OPTIONS) } {
+    # The call to gdb.selected_inferior().read_memory (0, 0xffffffffffffffff)
+    # triggers address sanitizer.  Suppress the error, leaving us with just
+    # this warning:
+    #   WARNING: AddressSanitizer failed to allocate 0xffffffffffffffff bytes
+    set_sanitizer ASAN_OPTIONS allocator_may_return_null 1
+
+    clean_restart ${testfile}
+}
 
 switch [get_endianness] {
     little { set python_pack_char "<" }
     big { set python_pack_char ">" }
 }
+
+gdb_test \
+    "python gdb.selected_inferior().read_memory (0, 0xffffffffffffffff)" \
+    [multi_line \
+	 [string_to_regexp "Python Exception <class 'MemoryError'>: "] \
+	 [string_to_regexp "Error occurred in Python."]]
 
 # Test memory read operations without execution.
 
@@ -122,8 +136,8 @@ gdb_test "python print(worker_thread._user_attribute)" "123" \
     "read back user defined attribute"
 gdb_test "python print(main_thread._user_attribute)" \
     [multi_line \
-	 "AttributeError: 'gdb\\.InferiorThread' object has no attribute '_user_attribute'" \
-	 "Error while executing Python code\\."] \
+	 "AttributeError.*: 'gdb\\.InferiorThread' object has no attribute '_user_attribute'" \
+	 "Error occurred in Python.*"] \
     "attempt to read non-existent user defined attribute"
 
 # Proceed to the next test.
@@ -162,8 +176,8 @@ set num [add_inferior]
 # but that the first inferior does still have the attribute.
 gdb_test "python print(gdb.inferiors()\[1\]._user_attr)" \
     [multi_line \
-	 "AttributeError: 'gdb\\.Inferior' object has no attribute '_user_attr'" \
-	 "Error while executing Python code\\."] \
+	 "AttributeError.*: 'gdb\\.Inferior' object has no attribute '_user_attr'" \
+	 "Error occurred in Python.*"] \
     "check new inferior doesn't have user defined attribute"
 gdb_test "python print(gdb.inferiors()\[0\]._user_attr)" \
     "123" "read back user defined attribute again"
@@ -366,21 +380,21 @@ with_test_prefix "is_valid" {
     # Test that other properties and methods handle the removed inferior
     # correctly.
     gdb_test "python print (inf_list\[1\].num)" \
-	"RuntimeError: Inferior no longer exists.*"
+	"RuntimeError.*: Inferior no longer exists.*"
     gdb_test "python print (inf_list\[1\].connection_num)" \
-	"RuntimeError: Inferior no longer exists.*"
+	"RuntimeError.*: Inferior no longer exists.*"
     gdb_test "python print (inf_list\[1\].connection)" \
-	"RuntimeError: Inferior no longer exists.*"
+	"RuntimeError.*: Inferior no longer exists.*"
     gdb_test "python print (inf_list\[1\].pid)" \
-	"RuntimeError: Inferior no longer exists.*"
+	"RuntimeError.*: Inferior no longer exists.*"
     gdb_test "python print (inf_list\[1\].was_attached)" \
-	"RuntimeError: Inferior no longer exists.*"
+	"RuntimeError.*: Inferior no longer exists.*"
     gdb_test "python print (inf_list\[1\].progspace)" \
-	"RuntimeError: Inferior no longer exists.*"
+	"RuntimeError.*: Inferior no longer exists.*"
     gdb_test "python print (inf_list\[1\].threads ())" \
-	"RuntimeError: Inferior no longer exists.*"
+	"RuntimeError.*: Inferior no longer exists.*"
     gdb_test "python print (inf_list\[1\].thread_from_thread_handle (1))" \
-	"RuntimeError: Inferior no longer exists.*"
+	"RuntimeError.*: Inferior no longer exists.*"
 }
 
 # Test gdb.selected_inferior()
@@ -392,7 +406,7 @@ with_test_prefix "selected_inferior" {
     gdb_test "py print (gdb.selected_inferior().connection.num)" "1" \
 	"first inferior's connection number, though connection object"
     # Figure out if inf 1 has a native target.
-    set inf_1_is_native [gdb_is_target_native]
+    set inf_1_is_native [gdb_protocol_is_native]
 
     set num [add_inferior "-no-connection"]
     gdb_test "inferior $num" ".*" "switch to inferior $num"

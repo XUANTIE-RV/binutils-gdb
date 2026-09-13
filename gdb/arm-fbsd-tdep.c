@@ -17,7 +17,6 @@
    You should have received a copy of the GNU General Public License
    along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
 
-#include "defs.h"
 
 #include "elf/common.h"
 #include "target-descriptions.h"
@@ -105,7 +104,7 @@ static const struct regcache_map_entry arm_fbsd_tls_regmap[] =
 
 static void
 arm_fbsd_sigframe_init (const struct tramp_frame *self,
-			frame_info_ptr this_frame,
+			const frame_info_ptr &this_frame,
 			struct trad_frame_cache *this_cache,
 			CORE_ADDR func)
 {
@@ -228,7 +227,7 @@ arm_fbsd_read_description_auxv (const std::optional<gdb::byte_vector> &auxv,
   if (arm_hwcap & HWCAP_VFP)
     {
       if (arm_hwcap & HWCAP_NEON)
-	return aarch32_read_description ();
+	return aarch32_read_description (tls);
       else if ((arm_hwcap & (HWCAP_VFPv3 | HWCAP_VFPD32))
 	       == (HWCAP_VFPv3 | HWCAP_VFPD32))
 	return arm_read_description (ARM_FP_TYPE_VFPV3, tls);

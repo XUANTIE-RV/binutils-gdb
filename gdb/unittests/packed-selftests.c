@@ -17,7 +17,6 @@
    You should have received a copy of the GNU General Public License
    along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
 
-#include "defs.h"
 #include "gdbsupport/selftest.h"
 #include "gdbsupport/packed.h"
 
@@ -46,15 +45,11 @@ static_assert (alignof (packed<test_enum, 4>) == 1);
 #define CHECK_TRAIT(TRAIT)			\
   static_assert (std::TRAIT<packed<test_enum, 1>>::value, "")
 
-#if HAVE_IS_TRIVIALLY_COPYABLE
-
 CHECK_TRAIT (is_trivially_copyable);
 CHECK_TRAIT (is_trivially_copy_constructible);
 CHECK_TRAIT (is_trivially_move_constructible);
 CHECK_TRAIT (is_trivially_copy_assignable);
 CHECK_TRAIT (is_trivially_move_assignable);
-
-#endif
 
 #undef CHECK_TRAIT
 

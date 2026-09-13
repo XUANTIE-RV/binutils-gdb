@@ -17,7 +17,6 @@
    You should have received a copy of the GNU General Public License
    along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
 
-#include "defs.h"
 #include "top.h"
 #include "charset.h"
 #include "value.h"
@@ -195,10 +194,11 @@ gdbpy_err_fetch::to_string () const
      Using str (aka PyObject_Str) will fetch the error message from
      gdb.GdbError ("message").  */
 
-  if (m_error_value.get () != nullptr && m_error_value.get () != Py_None)
-    return gdbpy_obj_to_string (m_error_value.get ());
+  gdbpy_ref<> value = this->value ();
+  if (value.get () != nullptr && value.get () != Py_None)
+    return gdbpy_obj_to_string (value.get ());
   else
-    return gdbpy_obj_to_string (m_error_type.get ());
+    return gdbpy_obj_to_string (this->type ().get ());
 }
 
 /* See python-internal.h.  */
@@ -206,7 +206,7 @@ gdbpy_err_fetch::to_string () const
 gdb::unique_xmalloc_ptr<char>
 gdbpy_err_fetch::type_to_string () const
 {
-  return gdbpy_obj_to_string (m_error_type.get ());
+  return gdbpy_obj_to_string (this->type ().get ());
 }
 
 /* Convert a GDB exception to the appropriate Python exception.
@@ -390,6 +390,35 @@ gdbpy_handle_exception ()
 
   if (fetched_error.type_matches (PyExc_KeyboardInterrupt))
     throw_quit ("Quit");
+  else if (fetched_error.type_matches (PyExc_SystemExit))
+    {
+      gdbpy_ref<> value = fetched_error.value ();
+      gdbpy_ref<> code (PyObject_GetAttrString (value.get (), "code"));
+      int exit_arg;
+
+      if (code.get () == Py_None)
+	{
+	  /* CODE == None: exit status is 0.  */
+	  exit_arg = 0;
+	}
+      else if (code.get () != nullptr && PyLong_Check (code.get ()))
+	{
+	  /* CODE == integer: exit status is aforementioned integer.  */
+	  exit_arg = PyLong_AsLong (code.get ());
+	}
+      else
+	{
+	  if (code.get () == nullptr)
+	    gdbpy_print_stack ();
+
+	  /* Otherwise: exit status is 1, print code to stderr.  */
+	  if (msg != nullptr)
+	    gdb_printf (gdb_stderr, "%s\n", msg.get ());
+	  exit_arg = 1;
+	}
+
+      quit_force (&exit_arg, 0);
+    }
   else if (! fetched_error.type_matches (gdbpy_gdberror_exc)
 	   || msg == NULL || *msg == '\0')
     {

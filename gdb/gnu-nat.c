@@ -49,7 +49,6 @@ extern "C"
 #include <portinfo.h>
 }
 
-#include "defs.h"
 
 #include <ctype.h>
 #include <setjmp.h>
@@ -65,7 +64,7 @@ extern "C"
 #include "target.h"
 #include "gdbsupport/gdb_wait.h"
 #include "gdbarch.h"
-#include "gdbcmd.h"
+#include "cli/cli-cmds.h"
 #include "gdbcore.h"
 #include "gdbthread.h"
 #include "gdbsupport/gdb_obstack.h"

@@ -19,7 +19,6 @@
    You should have received a copy of the GNU General Public License
    along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
 
-#include "defs.h"
 #include <ctype.h>
 #include "symtab.h"
 #include "frame.h"
@@ -222,23 +221,9 @@ tui_update_source_windows_with_line (struct symtab_and_line sal)
 void
 tui_source_window_base::do_erase_source_content (const char *str)
 {
-  int x_pos;
-  int half_width = (width - box_size ()) / 2;
-
   m_content.clear ();
-  if (handle != NULL)
-    {
-      werase (handle.get ());
-      check_and_display_highlight_if_needed ();
-
-      if (strlen (str) >= half_width)
-	x_pos = 1;
-      else
-	x_pos = half_width - strlen (str);
-      display_string (height / 2, x_pos, str);
-
-      refresh_window ();
-    }
+  if (handle != nullptr)
+    center_string (str);
 }
 
 /* See tui-winsource.h.  */
@@ -482,6 +467,16 @@ tui_source_window_base::rerender ()
       struct symtab *s = find_pc_line_symtab (get_frame_pc (frame));
       if (this != TUI_SRC_WIN)
 	find_line_pc (s, cursal.line, &cursal.pc);
+
+      /* This centering code is copied from tui_source_window::maybe_update.
+	 It would be nice to do centering more often, and do it in just one
+	 location.  But since this is a regression fix, handle this
+	 conservatively for now.  */
+      int start_line = (cursal.line - ((height - box_size ()) / 2)) + 1;
+      if (start_line <= 0)
+	start_line = 1;
+      cursal.line = start_line;
+
       update_source_window (gdbarch, cursal);
     }
   else
@@ -714,7 +709,7 @@ tui_source_window_base::update_exec_info (bool refresh_p)
       if (src_element->is_exec_point)
 	element[TUI_EXEC_POS] = '>';
 
-      display_string (i + box_width (), box_width (), element);
+      mvwaddstr (handle.get (), i + box_width (), box_width (), element);
 
       show_line_number (i);
     }

@@ -17,7 +17,6 @@
    You should have received a copy of the GNU General Public License
    along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
 
-#include "defs.h"
 #include "top.h"
 #include "charset.h"
 #include "value.h"
@@ -1046,7 +1045,6 @@ get_field_type (PyObject *field)
 static PyObject *
 valpy_getitem (PyObject *self, PyObject *key)
 {
-  struct gdb_exception except;
   value_object *self_value = (value_object *) self;
   gdb::unique_xmalloc_ptr<char> field;
   struct type *base_class_type = NULL, *field_type = NULL;
@@ -1178,10 +1176,8 @@ valpy_getitem (PyObject *self, PyObject *key)
     }
   catch (gdb_exception &ex)
     {
-      except = std::move (ex);
+      GDB_PY_HANDLE_EXCEPTION (ex);
     }
-
-  GDB_PY_HANDLE_EXCEPTION (except);
 
   return result;
 }
@@ -1214,10 +1210,11 @@ valpy_call (PyObject *self, PyObject *args, PyObject *keywords)
       GDB_PY_HANDLE_EXCEPTION (except);
     }
 
-  if (ftype->code () != TYPE_CODE_FUNC)
+  if (ftype->code () != TYPE_CODE_FUNC && ftype->code () != TYPE_CODE_METHOD)
     {
       PyErr_SetString (PyExc_RuntimeError,
-		       _("Value is not callable (not TYPE_CODE_FUNC)."));
+		       _("Value is not callable (not TYPE_CODE_FUNC"
+			 " or TYPE_CODE_METHOD)."));
       return NULL;
     }
 
@@ -1677,7 +1674,6 @@ valpy_absolute (PyObject *self)
 static int
 valpy_nonzero (PyObject *self)
 {
-  struct gdb_exception except;
   value_object *self_value = (value_object *) self;
   struct type *type;
   int nonzero = 0; /* Appease GCC warning.  */
@@ -1697,13 +1693,11 @@ valpy_nonzero (PyObject *self)
     }
   catch (gdb_exception &ex)
     {
-      except = std::move (ex);
+      /* This is not documented in the Python documentation, but if
+	 this function fails, return -1 as slot_nb_nonzero does (the
+	 default Python nonzero function).  */
+      GDB_PY_SET_HANDLE_EXCEPTION (ex);
     }
-
-  /* This is not documented in the Python documentation, but if this
-     function fails, return -1 as slot_nb_nonzero does (the default
-     Python nonzero function).  */
-  GDB_PY_SET_HANDLE_EXCEPTION (except);
 
   return nonzero;
 }

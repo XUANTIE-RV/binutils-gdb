@@ -22,6 +22,7 @@
 
 #include "mi/mi-cmds.h"
 #include "gdbsupport/array-view.h"
+#include "hashtab.h"
 #include <optional>
 
 struct breakpoint;
@@ -103,6 +104,10 @@ enum frame_filter_flag
 
     /* Set this flag if elided frames should not be printed.  */
     PRINT_HIDE = 1 << 5,
+
+    /* Set this flag if pretty printers for frame arguments should not
+       be invoked.  */
+    PRINT_RAW_FRAME_ARGUMENTS = 1 << 6,
   };
 
 DEF_ENUM_FLAGS_TYPE (enum frame_filter_flag, frame_filter_flags);
@@ -278,6 +283,9 @@ extern bool ext_lang_auto_load_enabled (const struct extension_language_defn *);
 
 extern void ext_lang_initialization (void);
 
+/* Shut down all extension languages.  */
+extern void ext_lang_shutdown ();
+
 extern void eval_ext_lang_from_control_command (struct command_line *cmd);
 
 extern void auto_load_ext_lang_scripts_for_objfile (struct objfile *);
@@ -291,7 +299,7 @@ extern int apply_ext_lang_val_pretty_printer
    const struct language_defn *language);
 
 extern enum ext_lang_bt_status apply_ext_lang_frame_filter
-  (frame_info_ptr frame, frame_filter_flags flags,
+  (const frame_info_ptr &frame, frame_filter_flags flags,
    enum ext_lang_frame_args args_type,
    struct ui_out *out, int frame_low, int frame_high);
 
@@ -420,5 +428,35 @@ private:
   struct active_ext_lang_state *m_prev_active_ext_lang_state;
   bool m_prev_cooperative_sigint_handling_disabled;
 };
+
+/* GDB's SIGINT handler basically sets a flag; code that might take a
+   long time before it gets back to the event loop, and which ought to
+   be interruptible, checks this flag using the QUIT macro, which, if
+   GDB has the terminal, throws a quit exception.
+
+   In addition to setting a flag, the SIGINT handler also marks a
+   select/poll-able file descriptor as read-ready.  That is used by
+   interruptible_select in order to support interrupting blocking I/O
+   in a race-free manner.
+
+   These functions use the extension_language_ops API to allow extension
+   language(s) and GDB SIGINT handling to coexist seamlessly.  */
+
+/* Return true if the quit flag has been set, false otherwise.
+   Note: The flag is cleared as a side-effect.
+   The flag is checked in all extension languages that support cooperative
+   SIGINT handling, not just the current one.  This simplifies transitions.  */
+
+extern bool check_quit_flag ();
+
+/* Set the quit flag.
+   This only sets the flag in the currently active extension language.
+   If the currently active extension language does not have cooperative
+   SIGINT handling, then GDB's global flag is set, and it is up to the
+   extension language to call check_quit_flag.  The extension language
+   is free to install its own SIGINT handler, but we still need to handle
+   the transition.  */
+
+extern void set_quit_flag ();
 
 #endif /* EXTENSION_H */

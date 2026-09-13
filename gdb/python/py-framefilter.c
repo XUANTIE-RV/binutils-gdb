@@ -17,7 +17,6 @@
    You should have received a copy of the GNU General Public License
    along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
 
-#include "defs.h"
 #include "objfiles.h"
 #include "symtab.h"
 #include "language.h"
@@ -414,12 +413,14 @@ static enum ext_lang_bt_status
 enumerate_args (PyObject *iter,
 		struct ui_out *out,
 		enum ext_lang_frame_args args_type,
+		bool raw_frame_args,
 		int print_args_field,
-		frame_info_ptr frame)
+		const frame_info_ptr &frame)
 {
   struct value_print_options opts;
 
   get_user_print_options (&opts);
+  opts.raw = raw_frame_args;
 
   if (args_type == CLI_SCALAR_VALUES)
     {
@@ -546,7 +547,7 @@ enumerate_locals (PyObject *iter,
 		  int indent,
 		  enum ext_lang_frame_args args_type,
 		  int print_args_field,
-		  frame_info_ptr frame)
+		  const frame_info_ptr &frame)
 {
   struct value_print_options opts;
 
@@ -634,7 +635,8 @@ static enum ext_lang_bt_status
 py_mi_print_variables (PyObject *filter, struct ui_out *out,
 		       struct value_print_options *opts,
 		       enum ext_lang_frame_args args_type,
-		       frame_info_ptr frame)
+		       const frame_info_ptr &frame,
+		       bool raw_frame_args_p)
 {
   gdbpy_ref<> args_iter (get_py_iter_from_func (filter, "frame_args"));
   if (args_iter == NULL)
@@ -647,8 +649,8 @@ py_mi_print_variables (PyObject *filter, struct ui_out *out,
   ui_out_emit_list list_emitter (out, "variables");
 
   if (args_iter != Py_None
-      && (enumerate_args (args_iter.get (), out, args_type, 1, frame)
-	  == EXT_LANG_BT_ERROR))
+      && (enumerate_args (args_iter.get (), out, args_type, raw_frame_args_p,
+			  1, frame) == EXT_LANG_BT_ERROR))
     return EXT_LANG_BT_ERROR;
 
   if (locals_iter != Py_None
@@ -668,7 +670,7 @@ py_print_locals (PyObject *filter,
 		 struct ui_out *out,
 		 enum ext_lang_frame_args args_type,
 		 int indent,
-		 frame_info_ptr frame)
+		 const frame_info_ptr &frame)
 {
   gdbpy_ref<> locals_iter (get_py_iter_from_func (filter, "frame_locals"));
   if (locals_iter == NULL)
@@ -693,7 +695,8 @@ static enum ext_lang_bt_status
 py_print_args (PyObject *filter,
 	       struct ui_out *out,
 	       enum ext_lang_frame_args args_type,
-	       frame_info_ptr frame)
+	       bool raw_frame_args,
+	       const frame_info_ptr &frame)
 {
   gdbpy_ref<> args_iter (get_py_iter_from_func (filter, "frame_args"));
   if (args_iter == NULL)
@@ -718,7 +721,8 @@ py_print_args (PyObject *filter,
 	}
     }
   else if (args_iter != Py_None
-	   && (enumerate_args (args_iter.get (), out, args_type, 0, frame)
+	   && (enumerate_args (args_iter.get (), out, args_type,
+			       raw_frame_args, 0, frame)
 	       == EXT_LANG_BT_ERROR))
     return EXT_LANG_BT_ERROR;
 
@@ -802,8 +806,9 @@ py_print_frame (PyObject *filter, frame_filter_flags flags,
   /* stack-list-variables.  */
   if (print_locals && print_args && ! print_frame_info)
     {
-      if (py_mi_print_variables (filter, out, &opts,
-				 args_type, frame) == EXT_LANG_BT_ERROR)
+      bool raw_frame_args = (flags & PRINT_RAW_FRAME_ARGUMENTS) != 0;
+      if (py_mi_print_variables (filter, out, &opts, args_type, frame,
+				 raw_frame_args) == EXT_LANG_BT_ERROR)
 	return EXT_LANG_BT_ERROR;
       return EXT_LANG_BT_OK;
     }
@@ -949,7 +954,9 @@ py_print_frame (PyObject *filter, frame_filter_flags flags,
      wrong.  */
   if (print_args && (location_print || out->is_mi_like_p ()))
     {
-      if (py_print_args (filter, out, args_type, frame) == EXT_LANG_BT_ERROR)
+      bool raw_frame_args = (flags & PRINT_RAW_FRAME_ARGUMENTS) != 0;
+      if (py_print_args (filter, out, args_type, raw_frame_args, frame)
+	  == EXT_LANG_BT_ERROR)
 	return EXT_LANG_BT_ERROR;
     }
 
@@ -1074,7 +1081,7 @@ py_print_frame (PyObject *filter, frame_filter_flags flags,
    frame FRAME.  */
 
 static PyObject *
-bootstrap_python_frame_filters (frame_info_ptr frame,
+bootstrap_python_frame_filters (const frame_info_ptr &frame,
 				int frame_low, int frame_high)
 {
   gdbpy_ref<> frame_obj (frame_info_to_frame_object (frame));
@@ -1129,7 +1136,7 @@ bootstrap_python_frame_filters (frame_info_ptr frame,
 
 enum ext_lang_bt_status
 gdbpy_apply_frame_filter (const struct extension_language_defn *extlang,
-			  frame_info_ptr frame, frame_filter_flags flags,
+			  const frame_info_ptr &frame, frame_filter_flags flags,
 			  enum ext_lang_frame_args args_type,
 			  struct ui_out *out, int frame_low, int frame_high)
 {

@@ -16,14 +16,13 @@
    You should have received a copy of the GNU General Public License
    along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
 
-#include "defs.h"
 #include "arch-utils.h"
 #include "symtab.h"
 #include "expression.h"
 #include "language.h"
 #include "command.h"
 #include "source.h"
-#include "gdbcmd.h"
+#include "cli/cli-cmds.h"
 #include "frame.h"
 #include "value.h"
 #include "gdbsupport/filestuff.h"
@@ -316,8 +315,9 @@ select_source_symtab ()
 
   /* Make the default place to list be the function `main'
      if one exists.  */
-  block_symbol bsym = lookup_symbol (main_name (), 0, VAR_DOMAIN, 0);
-  if (bsym.symbol != nullptr && bsym.symbol->aclass () == LOC_BLOCK)
+  block_symbol bsym = lookup_symbol (main_name (), nullptr,
+				     SEARCH_FUNCTION_DOMAIN, nullptr);
+  if (bsym.symbol != nullptr)
     {
       symtab_and_line sal = find_function_start_sal (bsym.symbol, true);
       if (sal.symtab == NULL)
@@ -1340,30 +1340,21 @@ print_source_lines_base (struct symtab *s, int line, int stopline,
 		   styled_string (file_name_style.style (), filename),
 		   safe_strerror (errcode));
 	}
-      else
+      else if (uiout->is_mi_like_p () || uiout->test_flags (ui_source_list))
 	{
+	  /* CLI expects only the "file" field.  MI expects both
+	     fields.  ui_source_list is set only for CLI, not for
+	     TUI.  */
+
 	  uiout->field_signed ("line", line);
 	  uiout->text ("\tin ");
 
-	  /* CLI expects only the "file" field.  TUI expects only the
-	     "fullname" field (and TUI does break if "file" is printed).
-	     MI expects both fields.  ui_source_list is set only for CLI,
-	     not for TUI.  */
-	  if (uiout->is_mi_like_p () || uiout->test_flags (ui_source_list))
-	    uiout->field_string ("file", symtab_to_filename_for_display (s),
-				 file_name_style.style ());
-	  if (uiout->is_mi_like_p () || !uiout->test_flags (ui_source_list))
+	  uiout->field_string ("file", symtab_to_filename_for_display (s),
+			       file_name_style.style ());
+	  if (uiout->is_mi_like_p ())
 	    {
 	      const char *s_fullname = symtab_to_fullname (s);
-	      char *local_fullname;
-
-	      /* ui_out_field_string may free S_FULLNAME by calling
-		 open_source_file for it again.  See e.g.,
-		 tui_field_string->tui_show_source.  */
-	      local_fullname = (char *) alloca (strlen (s_fullname) + 1);
-	      strcpy (local_fullname, s_fullname);
-
-	      uiout->field_string ("fullname", local_fullname);
+	      uiout->field_string ("fullname", s_fullname);
 	    }
 
 	  uiout->text ("\n");

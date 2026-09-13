@@ -19,7 +19,6 @@
    You should have received a copy of the GNU General Public License
    along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
 
-#include "defs.h"
 #include "symtab.h"
 #include "breakpoint.h"
 #include "frame.h"
@@ -213,7 +212,7 @@ tui_status_window::make_status_line () const
    name is demangled if demangling is turned on.  Returns a pointer to
    a static area holding the result.  */
 static char*
-tui_get_function_from_frame (frame_info_ptr fi)
+tui_get_function_from_frame (const frame_info_ptr &fi)
 {
   static char name[256];
   string_file stream;
@@ -262,14 +261,12 @@ tui_status_window::rerender ()
   wmove (handle.get (), 0, 0);
 }
 
-/* Function to print the frame information for the TUI.  The windows are
-   refreshed only if frame information has changed since the last refresh.
+/* Function to print the frame information for the TUI.  The windows
+   are refreshed only if frame information has changed since the last
+   refresh.  */
 
-   Return true if frame information has changed (and windows
-   subsequently refreshed), false otherwise.  */
-
-bool
-tui_show_frame_info (frame_info_ptr fi)
+void
+tui_show_frame_info (const frame_info_ptr &fi)
 {
   bool status_changed_p;
 
@@ -292,7 +289,7 @@ tui_show_frame_info (frame_info_ptr fi)
 	 not changed.  If frame information has not changed, then the windows'
 	 contents will not change.  So don't bother refreshing the windows.  */
       if (!status_changed_p)
-	return false;
+	return;
 
       for (struct tui_source_window_base *win_info : tui_source_windows ())
 	{
@@ -307,13 +304,11 @@ tui_show_frame_info (frame_info_ptr fi)
       status_changed_p = tui_location.set_location (NULL, sal, "");
 
       if (!status_changed_p)
-	return false;
+	return;
 
       for (struct tui_source_window_base *win_info : tui_source_windows ())
 	win_info->erase_source_content ();
     }
-
-  return true;
 }
 
 void

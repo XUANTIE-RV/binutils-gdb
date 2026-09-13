@@ -19,7 +19,6 @@
    You should have received a copy of the GNU General Public License
    along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
 
-#include "defs.h"
 #include "bfd.h"
 #include "symtab.h"
 #include "symfile.h"
@@ -31,7 +30,7 @@
 #include "value.h"
 #include "demangle.h"
 #include "complaints.h"
-#include "gdbcmd.h"
+#include "cli/cli-cmds.h"
 #include "cp-abi.h"
 #include "hashtab.h"
 #include "cp-support.h"
@@ -1655,9 +1654,9 @@ lookup_typename (const struct language_defn *language,
 {
   struct symbol *sym;
 
-  sym = lookup_symbol_in_language (name, block, VAR_DOMAIN,
+  sym = lookup_symbol_in_language (name, block, SEARCH_TYPE_DOMAIN,
 				   language->la_language, NULL).symbol;
-  if (sym != NULL && sym->aclass () == LOC_TYPEDEF)
+  if (sym != nullptr)
     {
       struct type *type = sym->type ();
       /* Ensure the length of TYPE is valid.  */
@@ -1699,7 +1698,7 @@ lookup_struct (const char *name, const struct block *block)
 {
   struct symbol *sym;
 
-  sym = lookup_symbol (name, block, STRUCT_DOMAIN, 0).symbol;
+  sym = lookup_symbol (name, block, SEARCH_STRUCT_DOMAIN, 0).symbol;
 
   if (sym == NULL)
     {
@@ -1722,7 +1721,7 @@ lookup_union (const char *name, const struct block *block)
   struct symbol *sym;
   struct type *t;
 
-  sym = lookup_symbol (name, block, STRUCT_DOMAIN, 0).symbol;
+  sym = lookup_symbol (name, block, SEARCH_STRUCT_DOMAIN, 0).symbol;
 
   if (sym == NULL)
     error (_("No union type named %s."), name);
@@ -1745,7 +1744,7 @@ lookup_enum (const char *name, const struct block *block)
 {
   struct symbol *sym;
 
-  sym = lookup_symbol (name, block, STRUCT_DOMAIN, 0).symbol;
+  sym = lookup_symbol (name, block, SEARCH_STRUCT_DOMAIN, 0).symbol;
   if (sym == NULL)
     {
       error (_("No enum type named %s."), name);
@@ -1772,7 +1771,8 @@ lookup_template_type (const char *name, struct type *type,
   nam += type->name ();
   nam += " >"; /* FIXME, extra space still introduced in gcc?  */
 
-  symbol *sym = lookup_symbol (nam.c_str (), block, VAR_DOMAIN, 0).symbol;
+  symbol *sym = lookup_symbol (nam.c_str (), block,
+			       SEARCH_STRUCT_DOMAIN, 0).symbol;
 
   if (sym == NULL)
     {
@@ -2037,13 +2037,14 @@ array_type_has_dynamic_stride (struct type *type)
 
 /* Worker for is_dynamic_type.  */
 
-static int
-is_dynamic_type_internal (struct type *type, int top_level)
+static bool
+is_dynamic_type_internal (struct type *type, bool top_level)
 {
   type = check_typedef (type);
 
-  /* We only want to recognize references at the outermost level.  */
-  if (top_level && type->code () == TYPE_CODE_REF)
+  /* We only want to recognize references and pointers at the outermost
+     level.  */
+  if (top_level && type->is_pointer_or_reference ())
     type = check_typedef (type->target_type ());
 
   /* Types that have a dynamic TYPE_DATA_LOCATION are considered
@@ -2055,20 +2056,20 @@ is_dynamic_type_internal (struct type *type, int top_level)
   if (TYPE_DATA_LOCATION (type) != NULL
       && (TYPE_DATA_LOCATION_KIND (type) == PROP_LOCEXPR
 	  || TYPE_DATA_LOCATION_KIND (type) == PROP_LOCLIST))
-    return 1;
+    return true;
 
   if (TYPE_ASSOCIATED_PROP (type))
-    return 1;
+    return true;
 
   if (TYPE_ALLOCATED_PROP (type))
-    return 1;
+    return true;
 
   struct dynamic_prop *prop = type->dyn_prop (DYN_PROP_VARIANT_PARTS);
   if (prop != nullptr && prop->kind () != PROP_TYPE)
-    return 1;
+    return true;
 
   if (TYPE_HAS_DYNAMIC_LENGTH (type))
-    return 1;
+    return true;
 
   switch (type->code ())
     {
@@ -2080,7 +2081,7 @@ is_dynamic_type_internal (struct type *type, int top_level)
 	   of the range type are static.  It allows us to assume that
 	   the subtype of a static range type is also static.  */
 	return (!has_static_range (type->bounds ())
-		|| is_dynamic_type_internal (type->target_type (), 0));
+		|| is_dynamic_type_internal (type->target_type (), false));
       }
 
     case TYPE_CODE_STRING:
@@ -2091,15 +2092,15 @@ is_dynamic_type_internal (struct type *type, int top_level)
 	gdb_assert (type->num_fields () == 1);
 
 	/* The array is dynamic if either the bounds are dynamic...  */
-	if (is_dynamic_type_internal (type->index_type (), 0))
-	  return 1;
+	if (is_dynamic_type_internal (type->index_type (), false))
+	  return true;
 	/* ... or the elements it contains have a dynamic contents...  */
-	if (is_dynamic_type_internal (type->target_type (), 0))
-	  return 1;
+	if (is_dynamic_type_internal (type->target_type (), false))
+	  return true;
 	/* ... or if it has a dynamic stride...  */
 	if (array_type_has_dynamic_stride (type))
-	  return 1;
-	return 0;
+	  return true;
+	return false;
       }
 
     case TYPE_CODE_STRUCT:
@@ -2115,8 +2116,8 @@ is_dynamic_type_internal (struct type *type, int top_level)
 	    if (type->field (i).is_static ())
 	      continue;
 	    /* If the field has dynamic type, then so does TYPE.  */
-	    if (is_dynamic_type_internal (type->field (i).type (), 0))
-	      return 1;
+	    if (is_dynamic_type_internal (type->field (i).type (), false))
+	      return true;
 	    /* If the field is at a fixed offset, then it is not
 	       dynamic.  */
 	    if (type->field (i).loc_kind () != FIELD_LOC_KIND_DWARF_BLOCK)
@@ -2126,26 +2127,26 @@ is_dynamic_type_internal (struct type *type, int top_level)
 	       handled via other means.  */
 	    if (is_cplus && BASETYPE_VIA_VIRTUAL (type, i))
 	      continue;
-	    return 1;
+	    return true;
 	  }
       }
       break;
     }
 
-  return 0;
+  return false;
 }
 
 /* See gdbtypes.h.  */
 
-int
+bool
 is_dynamic_type (struct type *type)
 {
-  return is_dynamic_type_internal (type, 1);
+  return is_dynamic_type_internal (type, true);
 }
 
 static struct type *resolve_dynamic_type_internal
   (struct type *type, struct property_addr_info *addr_stack,
-   const frame_info_ptr &frame, int top_level);
+   const frame_info_ptr &frame, bool top_level);
 
 /* Given a dynamic range type (dyn_range_type) and a stack of
    struct property_addr_info elements, return a static version
@@ -2177,21 +2178,35 @@ resolve_dynamic_range (struct type *dyn_range_type,
   gdb_assert (rank >= 0);
 
   const struct dynamic_prop *prop = &dyn_range_type->bounds ()->low;
-  if (resolve_p && dwarf2_evaluate_property (prop, frame, addr_stack, &value,
-					     { (CORE_ADDR) rank }))
-    low_bound.set_const_val (value);
+  if (resolve_p)
+    {
+      if (dwarf2_evaluate_property (prop, frame, addr_stack, &value,
+				    { (CORE_ADDR) rank }))
+	low_bound.set_const_val (value);
+      else if (prop->kind () == PROP_UNDEFINED)
+	low_bound.set_undefined ();
+      else
+	low_bound.set_optimized_out ();
+    }
   else
     low_bound.set_undefined ();
 
   prop = &dyn_range_type->bounds ()->high;
-  if (resolve_p && dwarf2_evaluate_property (prop, frame, addr_stack, &value,
-					     { (CORE_ADDR) rank }))
+  if (resolve_p)
     {
-      high_bound.set_const_val (value);
+      if (dwarf2_evaluate_property (prop, frame, addr_stack, &value,
+				    { (CORE_ADDR) rank }))
+	{
+	  high_bound.set_const_val (value);
 
-      if (dyn_range_type->bounds ()->flag_upper_bound_is_count)
-	high_bound.set_const_val
-	  (low_bound.const_val () + high_bound.const_val () - 1);
+	  if (dyn_range_type->bounds ()->flag_upper_bound_is_count)
+	    high_bound.set_const_val
+	      (low_bound.const_val () + high_bound.const_val () - 1);
+	}
+      else if (prop->kind () == PROP_UNDEFINED)
+	high_bound.set_undefined ();
+      else
+	high_bound.set_optimized_out ();
     }
   else
     high_bound.set_undefined ();
@@ -2221,7 +2236,7 @@ resolve_dynamic_range (struct type *dyn_range_type,
 
   static_target_type
     = resolve_dynamic_type_internal (dyn_range_type->target_type (),
-				     addr_stack, frame, 0);
+				     addr_stack, frame, false);
   LONGEST bias = dyn_range_type->bounds ()->bias;
   type_allocator alloc (dyn_range_type);
   static_range_type = create_range_type_with_stride
@@ -2458,7 +2473,7 @@ resolve_dynamic_union (struct type *type,
 	continue;
 
       t = resolve_dynamic_type_internal (resolved_type->field (i).type (),
-					 addr_stack, frame, 0);
+					 addr_stack, frame, false);
       resolved_type->field (i).set_type (t);
 
       struct type *real_type = check_typedef (t);
@@ -2702,7 +2717,7 @@ resolve_dynamic_struct (struct type *type,
 
       resolved_type->field (i).set_type
 	(resolve_dynamic_type_internal (resolved_type->field (i).type (),
-					&pinfo, frame, 0));
+					&pinfo, frame, false));
       gdb_assert (resolved_type->field (i).loc_kind ()
 		  == FIELD_LOC_KIND_BITPOS);
 
@@ -2748,7 +2763,7 @@ static struct type *
 resolve_dynamic_type_internal (struct type *type,
 			       struct property_addr_info *addr_stack,
 			       const frame_info_ptr &frame,
-			       int top_level)
+			       bool top_level)
 {
   struct type *real_type = check_typedef (type);
   struct type *resolved_type = nullptr;
@@ -2779,6 +2794,8 @@ resolve_dynamic_type_internal (struct type *type,
       switch (type->code ())
 	{
 	case TYPE_CODE_REF:
+	case TYPE_CODE_PTR:
+	case TYPE_CODE_RVALUE_REF:
 	  {
 	    struct property_addr_info pinfo;
 
@@ -2791,10 +2808,15 @@ resolve_dynamic_type_internal (struct type *type,
 	      pinfo.addr = read_memory_typed_address (addr_stack->addr, type);
 	    pinfo.next = addr_stack;
 
-	    resolved_type = copy_type (type);
-	    resolved_type->set_target_type
-	      (resolve_dynamic_type_internal (type->target_type (),
-					      &pinfo, frame, top_level));
+	    /* Special case a NULL pointer here -- we don't want to
+	       dereference it.  */
+	    if (pinfo.addr != 0)
+	      {
+		resolved_type = copy_type (type);
+		resolved_type->set_target_type
+		  (resolve_dynamic_type_internal (type->target_type (),
+						  &pinfo, frame, true));
+	      }
 	    break;
 	  }
 
@@ -2867,7 +2889,7 @@ resolve_dynamic_type (struct type *type,
   if (in_frame != nullptr)
     frame = *in_frame;
 
-  return resolve_dynamic_type_internal (type, &pinfo, frame, 1);
+  return resolve_dynamic_type_internal (type, &pinfo, frame, true);
 }
 
 /* See gdbtypes.h  */
@@ -2919,9 +2941,9 @@ type::remove_dyn_prop (dynamic_prop_node_kind kind)
       if (curr_node->prop_kind == kind)
 	{
 	  /* Update the linked list but don't free anything.
-	     The property was allocated on objstack and it is not known
+	     The property was allocated on obstack and it is not known
 	     if we are on top of it.  Nevertheless, everything is released
-	     when the complete objstack is freed.  */
+	     when the complete obstack is freed.  */
 	  if (NULL == prev_node)
 	    this->main_type->dyn_prop_list = curr_node->next;
 	  else
@@ -2987,14 +3009,19 @@ check_typedef (struct type *type)
 	    return make_qualified_type (type, instance_flags, NULL);
 
 	  name = type->name ();
-	  /* FIXME: shouldn't we look in STRUCT_DOMAIN and/or
-	     VAR_DOMAIN as appropriate?  */
 	  if (name == NULL)
 	    {
 	      stub_noname_complaint ();
 	      return make_qualified_type (type, instance_flags, NULL);
 	    }
-	  sym = lookup_symbol (name, 0, STRUCT_DOMAIN, 0).symbol;
+	  domain_search_flag flag
+	    = ((type->language () == language_c
+		|| type->language () == language_objc
+		|| type->language () == language_opencl
+		|| type->language () == language_minimal)
+	       ? SEARCH_STRUCT_DOMAIN
+	       : SEARCH_TYPE_DOMAIN);
+	  sym = lookup_symbol (name, nullptr, flag, nullptr).symbol;
 	  if (sym)
 	    type->set_target_type (sym->type ());
 	  else					/* TYPE_CODE_UNDEF */
@@ -3075,8 +3102,6 @@ check_typedef (struct type *type)
   else if (type->is_stub () && !currently_reading_symtab)
     {
       const char *name = type->name ();
-      /* FIXME: shouldn't we look in STRUCT_DOMAIN and/or VAR_DOMAIN
-	 as appropriate?  */
       struct symbol *sym;
 
       if (name == NULL)
@@ -3084,7 +3109,14 @@ check_typedef (struct type *type)
 	  stub_noname_complaint ();
 	  return make_qualified_type (type, instance_flags, NULL);
 	}
-      sym = lookup_symbol (name, 0, STRUCT_DOMAIN, 0).symbol;
+      domain_search_flag flag
+	= ((type->language () == language_c
+	    || type->language () == language_objc
+	    || type->language () == language_opencl
+	    || type->language () == language_minimal)
+	   ? SEARCH_STRUCT_DOMAIN
+	   : SEARCH_TYPE_DOMAIN);
+      sym = lookup_symbol (name, nullptr, flag, nullptr).symbol;
       if (sym)
 	{
 	  /* Same as above for opaque types, we can replace the stub
@@ -4170,6 +4202,19 @@ types_equal (struct type *a, struct type *b)
       for (i = 0; i < a->num_fields (); ++i)
 	if (!types_equal (a->field (i).type (), b->field (i).type ()))
 	  return false;
+
+      return true;
+    }
+
+  /* Two array types are the same if they have the same element types
+     and array bounds.  */
+  if (a->code () == TYPE_CODE_ARRAY)
+    {
+      if (!types_equal (a->target_type (), b->target_type ()))
+	return false;
+
+      if (*a->bounds () != *b->bounds ())
+	return false;
 
       return true;
     }

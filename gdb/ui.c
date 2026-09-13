@@ -15,7 +15,6 @@
    You should have received a copy of the GNU General Public License
    along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
 
-#include "defs.h"
 #include "ui.h"
 
 #include "cli/cli-cmds.h"
@@ -225,7 +224,7 @@ new_ui_command (const char *args, int from_tty)
 
     current_ui = ui.get ();
 
-    set_top_level_interpreter (interpreter_name);
+    set_top_level_interpreter (interpreter_name, true);
 
     top_level_interpreter ()->pre_command_loop ();
 

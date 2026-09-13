@@ -584,6 +584,10 @@ gcc(1), ld(1), and the Info entries for @file{binutils} and @file{ld}.
    [@b{-m31}|@b{-m64}] [@b{-mesa}|@b{-mzarch}] [@b{-march}=@var{CPU}]
    [@b{-mregnames}|@b{-mno-regnames}]
    [@b{-mwarn-areg-zero}]
+   [@b{-mwarn-regtype-mismatch=strict}
+    @b{-mwarn-regtype-mismatch=relaxed}
+    @b{-mwarn-regtype-mismatch=no}
+    @b{-mno-warn-regtype-mismatch}]
 @end ifset
 @ifset SCORE
 
@@ -1963,6 +1967,22 @@ Allow or disallow symbolic names for registers.
 @item -mwarn-areg-zero
 Warn whenever the operand for a base or index register has been specified
 but evaluates to zero.
+@item -mwarn-regtype-mismatch=strict
+@itemx -mwarn-regtype-mismatch=relaxed
+@itemx -mwarn-regtype-mismatch=no
+@itemx -mno-warn-regtype-mismatch
+Controls whether the assembler performs register name type checks and generates
+a warning message in case of a mismatch with the operand register type.
+The default (which can be restored by using the @option{relaxed} argument) is
+to perform relaxed register name type checks, which allow floating point
+register (FPR) names %f0 to %f15 to be specified as argument to vector register
+(VR) operands and vector register (VR) names %v0 to %v15 to be specified as
+argument to floating point register (FPR) operands.  This is acceptable as the
+FPR are embedded into the lower half of the VR.
+Using the @option{strict} argument strict register name type checks are
+performed.
+The @option{no} argument, which is equivalent to
+@samp{-mno-warn-regtype-mismatch}, disables any register name type checks.
 @end table
 @end ifset
 @c man end
@@ -4761,6 +4781,10 @@ write @samp{<4.3 !> 5.4!!>} to get the literal text @samp{4.3 > 5.4!}.
 @item Expression results as strings
 You can write @samp{%@var{expr}} to evaluate the expression @var{expr}
 and use the result as a string.
+
+@item No passing arguments to macros based upon keyword assignment.
+In altmacro mode arguments cannot be passed to macros by keyword assignment.
+See @xref{altmacro-keyword-arguments} for more details
 @end ftable
 
 @node Ascii
@@ -5835,7 +5859,7 @@ processing must also be performed upon the  symbols as well.
 @end ifset
 
 @node Irp
-@section @code{.irp @var{symbol},@var{values}}@dots{}
+@section @code{.irp @var{symbol},@var{value}}@dots{}
 
 @cindex @code{irp} directive
 Evaluate a sequence of statements assigning different values to @var{symbol}.
@@ -5869,12 +5893,13 @@ For some caveats with the spelling of @var{symbol}, see also @ref{Macro}.
 
 @cindex @code{irpc} directive
 Evaluate a sequence of statements assigning different values to @var{symbol}.
-The sequence of statements starts at the @code{.irpc} directive, and is
-terminated by an @code{.endr} directive.  For each character in @var{value},
-@var{symbol} is set to the character, and the sequence of statements is
-assembled.  If no @var{value} is listed, the sequence of statements is
-assembled once, with @var{symbol} set to the null string.  To refer to
-@var{symbol} within the sequence of statements, use @var{\symbol}.
+The sequence of statements starts at the line following the @code{.irpc}
+directive, and is terminated by an @code{.endr} directive.  For each character
+in each (possibly double quoted) @var{values}, @var{symbol} is set to the
+character, and the sequence of statements is assembled.  If no @var{values} is
+listed, the sequence of statements is assembled once, with @var{symbol} set to
+the null string.  To refer to @var{symbol} within the sequence of statements,
+use @var{\symbol}.
 
 For example, assembling
 
@@ -6197,7 +6222,31 @@ will get assigned all remaining arguments specified at invocation time.
 
 When you call a macro, you can specify the argument values either by
 position, or by keyword.  For example, @samp{sum 9,17} is equivalent to
-@samp{sum to=17, from=9}.
+@samp{sum to=17, from=9}.  You can also omit values when using keywords,
+so for example @samp{sum to=6} is equivalent to @samp{sum 0, 6}.
+
+@anchor{altmacro-keyword-arguments}
+Note however that when operating in altmacro mode arguments can only be
+specified by position, not keyword.  @xref{Altmacro,,@code{.altmacro}}.
+
+Thus for example:
+
+@example
+.macro foo bar=1, baz=2
+.print "\bar \baz"
+.endm
+
+foo baz=3
+.altmacro
+foo baz=3
+@end example
+
+Will print:
+
+@smallexample
+1 3
+baz=3 2
+@end smallexample
 
 @end table
 
@@ -6313,6 +6362,14 @@ Exit early from the current macro definition.
 @command{@value{AS}} maintains a counter of how many macros it has
 executed in this pseudo-variable; you can copy that number to your
 output with @samp{\@@}, but @emph{only within a macro definition}.
+
+@cindex number of times a macro has been executed
+@cindex macro, execution count
+@item \+
+Similar to the @code{\@@} pseudo-variable, @command{@value{AS}} also maintains
+a per-macro count of the number of times that that macro has been executed.
+You can copy that number to your output with @samp{\+}, but
+@emph{only within a macro definition}.
 
 @item LOCAL @var{name} [ , @dots{} ]
 @emph{Warning: @code{LOCAL} is only available if you select ``alternate

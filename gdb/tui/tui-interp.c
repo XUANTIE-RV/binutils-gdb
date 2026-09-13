@@ -17,7 +17,6 @@
    You should have received a copy of the GNU General Public License
    along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
 
-#include "defs.h"
 #include "cli/cli-interp.h"
 #include "interps.h"
 #include "ui.h"
@@ -51,6 +50,9 @@ public:
   void suspend () override;
   void exec (const char *command_str) override;
   ui_out *interp_ui_out () override;
+
+  bool supports_new_ui () const override
+  { return false; }
 };
 
 /* Cleanup the tui before exiting.  */

@@ -17,9 +17,9 @@
    You should have received a copy of the GNU General Public License
    along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
 
-#include "defs.h"
 #include "arch-utils.h"
 #include <ctype.h>
+#include "event-top.h"
 #include "hashtab.h"
 #include "symtab.h"
 #include "frame.h"
@@ -28,7 +28,7 @@
 #include "gdbtypes.h"
 #include "expression.h"
 #include "gdbcore.h"
-#include "gdbcmd.h"
+#include "cli/cli-cmds.h"
 #include "value.h"
 #include "command.h"
 #include "inferior.h"
@@ -2154,7 +2154,7 @@ update_watchpoint (struct watchpoint *b, bool reparse)
     {
       std::vector<value_ref_ptr> val_chain;
       struct value *v, *result;
-      struct program_space *frame_pspace;
+      struct program_space *wp_pspace;
 
       fetch_subexp_value (b->exp.get (), b->exp->op.get (), &v, &result,
 			  &val_chain, false);
@@ -2173,7 +2173,10 @@ update_watchpoint (struct watchpoint *b, bool reparse)
 	  b->val_valid = true;
 	}
 
-      frame_pspace = get_frame_program_space (get_selected_frame (NULL));
+      if (b->exp_valid_block == nullptr)
+	wp_pspace = current_program_space;
+      else
+	wp_pspace = get_frame_program_space (get_selected_frame (NULL));
 
       /* Look at each value on the value chain.  */
       gdb_assert (!val_chain.empty ());
@@ -2233,7 +2236,7 @@ update_watchpoint (struct watchpoint *b, bool reparse)
 
 		  bp_location *loc = b->allocate_location ();
 		  loc->gdbarch = v->type ()->arch ();
-		  loc->pspace = frame_pspace;
+		  loc->pspace = wp_pspace;
 		  loc->address
 		    = gdbarch_remove_non_address_bits (loc->gdbarch, addr);
 		  b->add_location (*loc);
@@ -2358,7 +2361,7 @@ update_watchpoint (struct watchpoint *b, bool reparse)
 	 bpstat_stop_status requires a location to be able to report
 	 stops, so make sure there's at least a dummy one.  */
       if (b->type == bp_watchpoint && !b->has_locations ())
-	add_dummy_location (b, frame_pspace);
+	add_dummy_location (b, wp_pspace);
     }
   else if (!within_current_scope)
     {
@@ -4216,43 +4219,31 @@ remove_breakpoint (struct bp_location *bl)
   return remove_breakpoint_1 (bl, REMOVE_BREAKPOINT);
 }
 
-/* Clear the "inserted" flag in all breakpoints.  */
+/* See breakpoint.h.  */
 
 void
-mark_breakpoints_out (void)
+mark_breakpoints_out (program_space *pspace)
 {
   for (bp_location *bl : all_bp_locations ())
-    if (bl->pspace == current_program_space)
+    if (bl->pspace == pspace)
       bl->inserted = 0;
 }
 
-/* Clear the "inserted" flag in all breakpoints and delete any
-   breakpoints which should go away between runs of the program.
-
-   Plus other such housekeeping that has to be done for breakpoints
-   between runs.
-
-   Note: this function gets called at the end of a run (by
-   generic_mourn_inferior) and when a run begins (by
-   init_wait_for_inferior).  */
-
-
+/* See breakpoint.h.  */
 
 void
-breakpoint_init_inferior (enum inf_context context)
+breakpoint_init_inferior (inferior *inf, inf_context context)
 {
-  struct program_space *pspace = current_program_space;
-
   /* If breakpoint locations are shared across processes, then there's
      nothing to do.  */
-  if (gdbarch_has_global_breakpoints (current_inferior ()->arch ()))
+  if (gdbarch_has_global_breakpoints (inf->arch ()))
     return;
 
-  mark_breakpoints_out ();
+  mark_breakpoints_out (inf->pspace);
 
   for (breakpoint &b : all_breakpoints_safe ())
     {
-      if (b.has_locations () && b.first_loc ().pspace != pspace)
+      if (b.has_locations () && b.first_loc ().pspace != inf->pspace)
 	continue;
 
       switch (b.type)
@@ -5044,7 +5035,7 @@ print_solib_event (bool is_catchpoint)
       current_uiout->text (_("  Inferior loaded "));
       ui_out_emit_list list_emitter (current_uiout, "added");
       bool first = true;
-      for (shobj *iter : current_program_space->added_solibs)
+      for (solib *iter : current_program_space->added_solibs)
 	{
 	  if (!first)
 	    current_uiout->text ("    ");
@@ -5677,6 +5668,8 @@ bpstat_check_breakpoint_conditions (bpstat *bs, thread_info *thread)
 	{
 	  try
 	    {
+	      scoped_restore reset_in_cond_eval
+		= make_scoped_restore (&thread->control.in_cond_eval, true);
 	      condition_result = breakpoint_cond_eval (cond);
 	    }
 	  catch (const gdb_exception_error &ex)
@@ -7092,10 +7085,11 @@ breakpoint_1 (const char *bp_num_list, bool show_internal,
       if (!filter)
 	{
 	  if (bp_num_list == NULL || *bp_num_list == '\0')
-	    uiout->message ("No breakpoints or watchpoints.\n");
+	    uiout->message ("No breakpoints, watchpoints, tracepoints, "
+			    "or catchpoints.\n");
 	  else
-	    uiout->message ("No breakpoint or watchpoint matching '%s'.\n",
-			    bp_num_list);
+	    uiout->message ("No breakpoint, watchpoint, tracepoint, "
+			    "or catchpoint matching '%s'.\n", bp_num_list);
 	}
     }
   else
@@ -7984,11 +7978,10 @@ create_and_insert_solib_event_breakpoint (struct gdbarch *gdbarch, CORE_ADDR add
   return b;
 }
 
-/* Disable any breakpoints that are on code in shared libraries.  Only
-   apply to enabled breakpoints, disabled ones can just stay disabled.  */
+/* See breakpoint.h.  */
 
 void
-disable_breakpoints_in_shlibs (void)
+disable_breakpoints_in_shlibs (program_space *pspace)
 {
   for (bp_location *loc : all_bp_locations ())
     {
@@ -8004,7 +7997,7 @@ disable_breakpoints_in_shlibs (void)
 	   || (b->type == bp_jit_event)
 	   || (b->type == bp_hardware_breakpoint)
 	   || (is_tracepoint (b)))
-	  && loc->pspace == current_program_space
+	  && loc->pspace == pspace
 	  && !loc->shlib_disabled
 	  && solib_name_from_address (loc->pspace, loc->address)
 	  )
@@ -8019,7 +8012,7 @@ disable_breakpoints_in_shlibs (void)
    disabled ones can just stay disabled.  */
 
 static void
-disable_breakpoints_in_unloaded_shlib (program_space *pspace, const shobj &solib)
+disable_breakpoints_in_unloaded_shlib (program_space *pspace, const solib &solib)
 {
   bool disabled_shlib_breaks = false;
 
@@ -8537,11 +8530,15 @@ bp_loc_is_permanent (struct bp_location *loc)
 static void
 update_dprintf_command_list (struct breakpoint *b)
 {
+  gdb_assert (b->type == bp_dprintf);
+  gdb_assert (b->extra_string != nullptr);
+
   const char *dprintf_args = b->extra_string.get ();
   gdb::unique_xmalloc_ptr<char> printf_line = nullptr;
 
-  if (!dprintf_args)
-    return;
+  /* Trying to create a dprintf breakpoint without a format and args
+     string should be detected at creation time.  */
+  gdb_assert (dprintf_args != nullptr);
 
   dprintf_args = skip_spaces (dprintf_args);
 
@@ -8705,19 +8702,14 @@ code_breakpoint::code_breakpoint (struct gdbarch *gdbarch_,
       /* Do not set breakpoint locations conditions yet.  As locations
 	 are inserted, they get sorted based on their addresses.  Let
 	 the list stabilize to have reliable location numbers.  */
-
-      /* Dynamic printf requires and uses additional arguments on the
-	 command line, otherwise it's an error.  */
-      if (type == bp_dprintf)
-	{
-	  if (extra_string != nullptr)
-	    update_dprintf_command_list (this);
-	  else
-	    error (_("Format string required"));
-	}
-      else if (extra_string != nullptr)
-	error (_("Garbage '%s' at end of command"), extra_string.get ());
     }
+
+  /* Dynamic printf requires and uses additional arguments on the
+     command line, otherwise it's an error.  */
+  if (type == bp_dprintf)
+    update_dprintf_command_list (this);
+  else if (extra_string != nullptr)
+    error (_("Garbage '%s' at end of command"), extra_string.get ());
 
   /* The order of the locations is now stable.  Set the location
      condition using the location's number.  */
@@ -9231,11 +9223,27 @@ create_breakpoint (struct gdbarch *gdbarch,
   gdb_assert (inferior == -1 || inferior > 0);
   gdb_assert (thread == -1 || inferior == -1);
 
+  /* If PARSE_EXTRA is true then the thread and inferior details will be
+     parsed from the EXTRA_STRING, the THREAD and INFERIOR arguments
+     should be -1.  */
+  gdb_assert (!parse_extra || thread == -1);
+  gdb_assert (!parse_extra || inferior == -1);
+
   gdb_assert (ops != NULL);
 
   /* If extra_string isn't useful, set it to NULL.  */
   if (extra_string != NULL && *extra_string == '\0')
     extra_string = NULL;
+
+  /* A bp_dprintf must always have an accompanying EXTRA_STRING containing
+     the dprintf format and arguments -- PARSE_EXTRA should always be false
+     in this case.
+
+     For all other breakpoint types, EXTRA_STRING should be nullptr unless
+     PARSE_EXTRA is true.  */
+  gdb_assert ((type_wanted == bp_dprintf)
+	      ? (extra_string != nullptr && !parse_extra)
+	      : (extra_string == nullptr || parse_extra));
 
   try
     {
@@ -9300,6 +9308,8 @@ create_breakpoint (struct gdbarch *gdbarch,
 
       if (parse_extra)
 	{
+	  gdb_assert (type_wanted != bp_dprintf);
+
 	  gdb::unique_xmalloc_ptr<char> rest;
 	  gdb::unique_xmalloc_ptr<char> cond;
 
@@ -9308,15 +9318,15 @@ create_breakpoint (struct gdbarch *gdbarch,
 	  find_condition_and_thread_for_sals (lsal.sals, extra_string,
 					      &cond, &thread, &inferior,
 					      &task, &rest);
+
+	  if (rest.get () != nullptr && *(rest.get ()) != '\0')
+	    error (_("Garbage '%s' at end of command"), rest.get ());
+
 	  cond_string_copy = std::move (cond);
 	  extra_string_copy = std::move (rest);
 	}
       else
 	{
-	  if (type_wanted != bp_dprintf
-	      && extra_string != NULL && *extra_string != '\0')
-		error (_("Garbage '%s' at end of location"), extra_string);
-
 	  /* Check the validity of the condition.  We should error out
 	     if the condition is invalid at all of the locations and
 	     if it is not forced.  In the PARSE_EXTRA case above, this
@@ -9527,21 +9537,18 @@ dprintf_command (const char *arg, int from_tty)
 
   /* If non-NULL, ARG should have been advanced past the location;
      the next character must be ','.  */
-  if (arg != NULL)
+  if (arg == nullptr || arg[0] != ',' || arg[1] == '\0')
+    error (_("Format string required"));
+  else
     {
-      if (arg[0] != ',' || arg[1] == '\0')
-	error (_("Format string required"));
-      else
-	{
-	  /* Skip the comma.  */
-	  ++arg;
-	}
+      /* Skip the comma.  */
+      ++arg;
     }
 
   create_breakpoint (get_current_arch (),
 		     locspec.get (),
 		     NULL, -1, -1,
-		     arg, false, 1 /* parse arg */,
+		     arg, false, 0 /* parse arg */,
 		     0, bp_dprintf,
 		     0 /* Ignore count */,
 		     pending_break_support,
@@ -12415,9 +12422,6 @@ dprintf_breakpoint::re_set ()
 {
   re_set_default ();
 
-  /* extra_string should never be non-NULL for dprintf.  */
-  gdb_assert (extra_string != NULL);
-
   /* 1 - connect to target 1, that can run breakpoint commands.
      2 - create a dprintf, which resolves fine.
      3 - disconnect from target 1
@@ -12428,8 +12432,7 @@ dprintf_breakpoint::re_set ()
      answers for target_can_run_breakpoint_commands().
      Given absence of finer grained resetting, we get to do
      it all the time.  */
-  if (extra_string != NULL)
-    update_dprintf_command_list (this);
+  update_dprintf_command_list (this);
 }
 
 /* Implement the "print_recreate" method for dprintf.  */
@@ -12712,9 +12715,9 @@ delete_command (const char *arg, int from_tty)
     {
       int breaks_to_delete = 0;
 
-      /* Delete all breakpoints if no argument.  Do not delete
-	 internal breakpoints, these have to be deleted with an
-	 explicit breakpoint number argument.  */
+      /* Delete all breakpoints, watchpoints, tracepoints, and catchpoints
+	 if no argument.  Do not delete internal breakpoints, these have to
+	 be deleted with an explicit breakpoint number argument.  */
       for (breakpoint &b : all_breakpoints ())
 	if (user_breakpoint_p (&b))
 	  {
@@ -12724,7 +12727,9 @@ delete_command (const char *arg, int from_tty)
 
       /* Ask user only if there are some breakpoints to delete.  */
       if (!from_tty
-	  || (breaks_to_delete && query (_("Delete all breakpoints? "))))
+	  || (breaks_to_delete
+	      && query (_("Delete all breakpoints, watchpoints, tracepoints, "
+			  "and catchpoints? "))))
 	for (breakpoint &b : all_breakpoints_safe ())
 	  if (user_breakpoint_p (&b))
 	    delete_breakpoint (&b);
@@ -14145,6 +14150,12 @@ create_tracepoint_from_upload (struct uploaded_tp *utp)
 
   location_spec_up locspec = string_to_location_spec (&addr_str,
 						      current_language);
+
+
+  gdb_assert (addr_str != nullptr);
+  if (*addr_str != '\0')
+    error (_("Garbage '%s' at end of location"), addr_str);
+
   if (!create_breakpoint (get_current_arch (),
 			  locspec.get (),
 			  utp->cond_string.get (), -1, -1, addr_str,
@@ -14249,7 +14260,7 @@ delete_trace_command (const char *arg, int from_tty)
     {
       int breaks_to_delete = 0;
 
-      /* Delete all breakpoints if no argument.
+      /* Delete all tracepoints if no argument.
 	 Do not delete internal or call-dummy breakpoints, these
 	 have to be deleted with an explicit breakpoint number 
 	 argument.  */
@@ -14587,7 +14598,7 @@ command" [PROBE_MODIFIER] [LOCATION] [thread THREADNUM]\n\
 \t[-force-condition] [if CONDITION]\n\
 PROBE_MODIFIER shall be present if the command is to be placed in a\n\
 probe point.  Accepted values are `-probe' (for a generic, automatically\n\
-guessed probe type), `-probe-stap' (for a SystemTap probe) or \n\
+guessed probe type), `-probe-stap' (for a SystemTap probe) or\n\
 `-probe-dtrace' (for a DTrace probe).\n\
 LOCATION may be a linespec, address, or explicit location as described\n\
 below.\n\
@@ -14843,7 +14854,8 @@ This command may be abbreviated \"disable\"."),
 Delete all or some breakpoints.\n\
 Usage: delete [BREAKPOINTNUM]...\n\
 Arguments are breakpoint numbers with spaces in between.\n\
-To delete all breakpoints, give no argument.\n\
+To delete all breakpoints, watchpoints, tracepoints, and catchpoints,\n\
+give no argument.\n\
 \n\
 Also a prefix command for deletion of other GDB objects."),
 		      &deletelist, 1, &cmdlist);
@@ -14854,7 +14866,8 @@ Also a prefix command for deletion of other GDB objects."),
 Delete all or some breakpoints or auto-display expressions.\n\
 Usage: delete breakpoints [BREAKPOINTNUM]...\n\
 Arguments are breakpoint numbers with spaces in between.\n\
-To delete all breakpoints, give no argument.\n\
+To delete all breakpoints, watchpoints, tracepoints, and catchpoints,\n\
+give no argument.\n\
 This command may be abbreviated \"delete\"."),
 	   &deletelist);
 
@@ -15016,7 +15029,7 @@ Do \"help tracepoints\" for info on other tracepoint commands."));
 Set a static tracepoint at location or marker.\n\
 \n\
 strace [LOCATION] [if CONDITION]\n\
-LOCATION may be a linespec, explicit, or address location (described below) \n\
+LOCATION may be a linespec, explicit, or address location (described below)\n\
 or -m MARKER_ID.\n\n\
 If a marker id is specified, probe the marker with that name.  With\n\
 no LOCATION, uses current execution address of the selected stack frame.\n\

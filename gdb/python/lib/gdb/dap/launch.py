@@ -13,24 +13,14 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-import gdb
-
 # These are deprecated in 3.9, but required in older versions.
 from typing import Mapping, Optional, Sequence
 
-from .events import exec_and_expect_stop, expect_process, suppress_stop
-from .server import request, capability
-from .startup import exec_and_log, DAPException
+import gdb
 
-
-# The program being launched, or None.  This should only be accessed
-# from the gdb thread.
-_program = None
-
-
-# True if the program was attached, False otherwise.  This should only
-# be accessed from the gdb thread.
-_attach = False
+from .events import exec_and_expect_stop, expect_process, expect_stop
+from .server import capability, request
+from .startup import DAPException, exec_and_log
 
 
 # Any parameters here are necessarily extensions -- DAP requires this
@@ -46,10 +36,6 @@ def launch(
     stopAtBeginningOfMainSubprogram: bool = False,
     **extra,
 ):
-    global _program
-    _program = program
-    global _attach
-    _attach = False
     if cwd is not None:
         exec_and_log("cd " + cwd)
     if program is not None:
@@ -64,6 +50,8 @@ def launch(
         inf.clear_env()
         for name, value in env.items():
             inf.set_env(name, value)
+    expect_process("process")
+    exec_and_expect_stop("run")
 
 
 @request("attach")
@@ -74,11 +62,6 @@ def attach(
     target: Optional[str] = None,
     **args,
 ):
-    # Ensure configurationDone does not try to run.
-    global _attach
-    _attach = True
-    global _program
-    _program = program
     if program is not None:
         exec_and_log("file " + program)
     if pid is not None:
@@ -88,14 +71,12 @@ def attach(
     else:
         raise DAPException("attach requires either 'pid' or 'target'")
     expect_process("attach")
-    suppress_stop()
+    expect_stop("attach")
     exec_and_log(cmd)
 
 
 @capability("supportsConfigurationDoneRequest")
-@request("configurationDone", response=False)
+@request("configurationDone")
 def config_done(**args):
-    global _attach
-    if not _attach:
-        expect_process("process")
-        exec_and_expect_stop("run")
+    # Nothing to do.
+    return None

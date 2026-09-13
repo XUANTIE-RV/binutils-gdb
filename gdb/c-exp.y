@@ -35,7 +35,6 @@
 
 %{
 
-#include "defs.h"
 #include <ctype.h>
 #include "expression.h"
 #include "value.h"
@@ -1087,9 +1086,10 @@ block	:	block COLONCOLON name
 			  std::string copy = copy_name ($3);
 			  struct symbol *tem
 			    = lookup_symbol (copy.c_str (), $1,
-					     VAR_DOMAIN, NULL).symbol;
+					     SEARCH_FUNCTION_DOMAIN,
+					     nullptr).symbol;
 
-			  if (!tem || tem->aclass () != LOC_BLOCK)
+			  if (tem == nullptr)
 			    error (_("No function \"%s\" in specified context."),
 				   copy.c_str ());
 			  $$ = tem->value_block (); }
@@ -1113,7 +1113,7 @@ variable:	block COLONCOLON name
 			  std::string copy = copy_name ($3);
 			  struct block_symbol sym
 			    = lookup_symbol (copy.c_str (), $1,
-					     VAR_DOMAIN, NULL);
+					     SEARCH_VFT, NULL);
 
 			  if (sym.symbol == 0)
 			    error (_("No symbol \"%s\" in specified context."),
@@ -1168,7 +1168,7 @@ variable:	qualified_name
 			  struct block_symbol sym
 			    = lookup_symbol (name.c_str (),
 					     (const struct block *) NULL,
-					     VAR_DOMAIN, NULL);
+					     SEARCH_VFT, NULL);
 			  pstate->push_symbol (name.c_str (), sym);
 			}
 	;
@@ -1833,7 +1833,7 @@ name_not_typename :	NAME
 			  $$.sym
 			    = lookup_symbol ($1.ptr,
 					     pstate->expression_context_block,
-					     VAR_DOMAIN,
+					     SEARCH_VFT,
 					     &is_a_field_of_this);
 			  $$.is_a_field_of_this
 			    = is_a_field_of_this.type != NULL;
@@ -1940,46 +1940,41 @@ parse_number (struct parser_state *par_state,
   /* We have found a "L" or "U" (or "i") suffix.  */
   int found_suffix = 0;
 
-  char *p;
-
-  p = (char *) alloca (len);
-  memcpy (p, buf, len);
-
   if (parsed_float)
     {
-      if (len >= 1 && p[len - 1] == 'i')
+      if (len >= 1 && buf[len - 1] == 'i')
 	{
 	  imaginary_p = true;
 	  --len;
 	}
 
       /* Handle suffixes for decimal floating-point: "df", "dd" or "dl".  */
-      if (len >= 2 && p[len - 2] == 'd' && p[len - 1] == 'f')
+      if (len >= 2 && buf[len - 2] == 'd' && buf[len - 1] == 'f')
 	{
 	  putithere->typed_val_float.type
 	    = parse_type (par_state)->builtin_decfloat;
 	  len -= 2;
 	}
-      else if (len >= 2 && p[len - 2] == 'd' && p[len - 1] == 'd')
+      else if (len >= 2 && buf[len - 2] == 'd' && buf[len - 1] == 'd')
 	{
 	  putithere->typed_val_float.type
 	    = parse_type (par_state)->builtin_decdouble;
 	  len -= 2;
 	}
-      else if (len >= 2 && p[len - 2] == 'd' && p[len - 1] == 'l')
+      else if (len >= 2 && buf[len - 2] == 'd' && buf[len - 1] == 'l')
 	{
 	  putithere->typed_val_float.type
 	    = parse_type (par_state)->builtin_declong;
 	  len -= 2;
 	}
       /* Handle suffixes: 'f' for float, 'l' for long double.  */
-      else if (len >= 1 && TOLOWER (p[len - 1]) == 'f')
+      else if (len >= 1 && TOLOWER (buf[len - 1]) == 'f')
 	{
 	  putithere->typed_val_float.type
 	    = parse_type (par_state)->builtin_float;
 	  len -= 1;
 	}
-      else if (len >= 1 && TOLOWER (p[len - 1]) == 'l')
+      else if (len >= 1 && TOLOWER (buf[len - 1]) == 'l')
 	{
 	  putithere->typed_val_float.type
 	    = parse_type (par_state)->builtin_long_double;
@@ -1992,7 +1987,7 @@ parse_number (struct parser_state *par_state,
 	    = parse_type (par_state)->builtin_double;
 	}
 
-      if (!parse_float (p, len,
+      if (!parse_float (buf, len,
 			putithere->typed_val_float.type,
 			putithere->typed_val_float.val))
 	return ERROR;
@@ -2005,14 +2000,14 @@ parse_number (struct parser_state *par_state,
     }
 
   /* Handle base-switching prefixes 0x, 0t, 0d, 0 */
-  if (p[0] == '0' && len > 1)
-    switch (p[1])
+  if (buf[0] == '0' && len > 1)
+    switch (buf[1])
       {
       case 'x':
       case 'X':
 	if (len >= 3)
 	  {
-	    p += 2;
+	    buf += 2;
 	    base = 16;
 	    len -= 2;
 	  }
@@ -2022,7 +2017,7 @@ parse_number (struct parser_state *par_state,
       case 'B':
 	if (len >= 3)
 	  {
-	    p += 2;
+	    buf += 2;
 	    base = 2;
 	    len -= 2;
 	  }
@@ -2034,7 +2029,7 @@ parse_number (struct parser_state *par_state,
       case 'D':
 	if (len >= 3)
 	  {
-	    p += 2;
+	    buf += 2;
 	    base = 10;
 	    len -= 2;
 	  }
@@ -2047,7 +2042,7 @@ parse_number (struct parser_state *par_state,
 
   while (len-- > 0)
     {
-      c = *p++;
+      c = *buf++;
       if (c >= 'A' && c <= 'Z')
 	c += 'a' - 'A';
       if (c != 'l' && c != 'u' && c != 'i')
@@ -2760,6 +2755,10 @@ lex_one_token (struct parser_state *par_state, bool *is_quoted_name)
 	    hex = 0;
 	  }
 
+	/* If the token includes the C++14 digits separator, we make a
+	   copy so that we don't have to handle the separator in
+	   parse_number.  */
+	std::optional<std::string> no_tick;
 	for (;; ++p)
 	  {
 	    /* This test includes !hex because 'e' is a valid hex digit
@@ -2776,26 +2775,35 @@ lex_one_token (struct parser_state *par_state, bool *is_quoted_name)
 	    else if (((got_e && (p[-1] == 'e' || p[-1] == 'E'))
 		      || (got_p && (p[-1] == 'p' || p[-1] == 'P')))
 		     && (*p == '-' || *p == '+'))
-	      /* This is the sign of the exponent, not the end of the
-		 number.  */
-	      continue;
+	      {
+		/* This is the sign of the exponent, not the end of
+		   the number.  */
+	      }
+	    else if (*p == '\'')
+	      {
+		if (!no_tick.has_value ())
+		  no_tick.emplace (tokstart, p);
+		continue;
+	      }
 	    /* We will take any letters or digits.  parse_number will
 	       complain if past the radix, or if L or U are not final.  */
 	    else if ((*p < '0' || *p > '9')
 		     && ((*p < 'a' || *p > 'z')
 				  && (*p < 'A' || *p > 'Z')))
 	      break;
+	    if (no_tick.has_value ())
+	      no_tick->push_back (*p);
 	  }
-	toktype = parse_number (par_state, tokstart, p - tokstart,
-				got_dot | got_e | got_p, &yylval);
+	if (no_tick.has_value ())
+	  toktype = parse_number (par_state, no_tick->c_str (),
+				  no_tick->length (),
+				  got_dot | got_e | got_p, &yylval);
+	else
+	  toktype = parse_number (par_state, tokstart, p - tokstart,
+				  got_dot | got_e | got_p, &yylval);
 	if (toktype == ERROR)
-	  {
-	    char *err_copy = (char *) alloca (p - tokstart + 1);
-
-	    memcpy (err_copy, tokstart, p - tokstart);
-	    err_copy[p - tokstart] = 0;
-	    error (_("Invalid number \"%s\"."), err_copy);
-	  }
+	  error (_("Invalid number \"%.*s\"."), (int) (p - tokstart),
+		 tokstart);
 	pstate->lexptr = p;
 	return toktype;
       }
@@ -2969,7 +2977,7 @@ lex_one_token (struct parser_state *par_state, bool *is_quoted_name)
 
 	    if (lookup_symbol (copy.c_str (),
 			       pstate->expression_context_block,
-			       VAR_DOMAIN,
+			       SEARCH_VFT,
 			       (par_state->language ()->la_language
 				== language_cplus ? &is_a_field_of_this
 				: NULL)).symbol
@@ -3037,7 +3045,7 @@ classify_name (struct parser_state *par_state, const struct block *block,
      we can refer to it unconditionally below.  */
   memset (&is_a_field_of_this, 0, sizeof (is_a_field_of_this));
 
-  bsym = lookup_symbol (copy.c_str (), block, VAR_DOMAIN,
+  bsym = lookup_symbol (copy.c_str (), block, SEARCH_VFT,
 			par_state->language ()->name_of_this ()
 			? &is_a_field_of_this : NULL);
 
@@ -3060,7 +3068,7 @@ classify_name (struct parser_state *par_state, const struct block *block,
 	{
 	  struct field_of_this_result inner_is_a_field_of_this;
 
-	  bsym = lookup_symbol (copy.c_str (), block, STRUCT_DOMAIN,
+	  bsym = lookup_symbol (copy.c_str (), block, SEARCH_STRUCT_DOMAIN,
 				&inner_is_a_field_of_this);
 	  if (bsym.symbol != NULL)
 	    {
@@ -3167,7 +3175,7 @@ classify_inner_name (struct parser_state *par_state,
   std::string copy = copy_name (yylval.ssym.stoken);
   /* N.B. We assume the symbol can only be in VAR_DOMAIN.  */
   yylval.ssym.sym = cp_lookup_nested_symbol (type, copy.c_str (), block,
-					     VAR_DOMAIN);
+					     SEARCH_VFT);
 
   /* If no symbol was found, search for a matching base class named
      COPY.  This will allow users to enter qualified names of class members
@@ -3439,14 +3447,8 @@ c_print_token (FILE *file, int type, YYSTYPE value)
 
     case CHAR:
     case STRING:
-      {
-	char *copy = (char *) alloca (value.tsval.length + 1);
-
-	memcpy (copy, value.tsval.ptr, value.tsval.length);
-	copy[value.tsval.length] = '\0';
-
-	parser_fprintf (file, "tsval<type=%d, %s>", value.tsval.type, copy);
-      }
+      parser_fprintf (file, "tsval<type=%d, %.*s>", value.tsval.type,
+		      value.tsval.length, value.tsval.ptr);
       break;
 
     case NSSTRING:

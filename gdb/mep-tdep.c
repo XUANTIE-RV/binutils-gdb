@@ -19,13 +19,13 @@
    You should have received a copy of the GNU General Public License
    along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
 
-#include "defs.h"
+#include "extract-store-integer.h"
 #include "frame.h"
 #include "frame-unwind.h"
 #include "frame-base.h"
 #include "symtab.h"
 #include "gdbtypes.h"
-#include "gdbcmd.h"
+#include "cli/cli-cmds.h"
 #include "gdbcore.h"
 #include "value.h"
 #include "inferior.h"
@@ -1913,7 +1913,7 @@ typedef BP_MANIPULATION (mep_break_insn) mep_breakpoint;
 
 
 static struct mep_prologue *
-mep_analyze_frame_prologue (frame_info_ptr this_frame,
+mep_analyze_frame_prologue (const frame_info_ptr &this_frame,
 			    void **this_prologue_cache)
 {
   if (! *this_prologue_cache)
@@ -1943,7 +1943,7 @@ mep_analyze_frame_prologue (frame_info_ptr this_frame,
 /* Given the next frame and a prologue cache, return this frame's
    base.  */
 static CORE_ADDR
-mep_frame_base (frame_info_ptr this_frame,
+mep_frame_base (const frame_info_ptr &this_frame,
 		void **this_prologue_cache)
 {
   struct mep_prologue *p
@@ -1971,7 +1971,7 @@ mep_frame_base (frame_info_ptr this_frame,
 
 
 static void
-mep_frame_this_id (frame_info_ptr this_frame,
+mep_frame_this_id (const frame_info_ptr &this_frame,
 		   void **this_prologue_cache,
 		   struct frame_id *this_id)
 {
@@ -1981,7 +1981,7 @@ mep_frame_this_id (frame_info_ptr this_frame,
 
 
 static struct value *
-mep_frame_prev_register (frame_info_ptr this_frame,
+mep_frame_prev_register (const frame_info_ptr &this_frame,
 			 void **this_prologue_cache, int regnum)
 {
   struct mep_prologue *p

@@ -29,8 +29,7 @@
    the readline command interface, and it is probably simpler to just let
    them take over the input in their resume proc.  */
 
-#include "defs.h"
-#include "gdbcmd.h"
+#include "cli/cli-cmds.h"
 #include "ui-out.h"
 #include "gdbsupport/event-loop.h"
 #include "event-top.h"
@@ -188,13 +187,16 @@ interp_lookup (struct ui *ui, const char *name)
 /* See interps.h.  */
 
 void
-set_top_level_interpreter (const char *name)
+set_top_level_interpreter (const char *name, bool for_new_ui)
 {
   /* Find it.  */
   struct interp *interp = interp_lookup (current_ui, name);
 
   if (interp == NULL)
     error (_("Interpreter `%s' unrecognized"), name);
+  if (for_new_ui && !interp->supports_new_ui ())
+    error (_("interpreter '%s' cannot be used with a new UI"), name);
+
   /* Install it.  */
   interp_set (interp, true);
 }
@@ -273,7 +275,6 @@ clear_interpreter_hooks (void)
   deprecated_print_frame_info_listing_hook = 0;
   /*print_frame_more_info_hook = 0; */
   deprecated_query_hook = 0;
-  deprecated_warning_hook = 0;
   deprecated_readline_begin_hook = 0;
   deprecated_readline_hook = 0;
   deprecated_readline_end_hook = 0;
@@ -295,7 +296,6 @@ interpreter_exec_cmd (const char *args, int from_tty)
   scoped_restore save_stderr = make_scoped_restore (&gdb_stderr);
   scoped_restore save_stdlog = make_scoped_restore (&gdb_stdlog);
   scoped_restore save_stdtarg = make_scoped_restore (&gdb_stdtarg);
-  scoped_restore save_stdtargerr = make_scoped_restore (&gdb_stdtargerr);
 
   if (args == NULL)
     error_no_arg (_("interpreter-exec command"));
@@ -488,7 +488,7 @@ interps_notify_target_resumed (ptid_t ptid)
 /* See interps.h.  */
 
 void
-interps_notify_solib_loaded (const shobj &so)
+interps_notify_solib_loaded (const solib &so)
 {
   interps_notify (&interp::on_solib_loaded, so);
 }
@@ -496,7 +496,7 @@ interps_notify_solib_loaded (const shobj &so)
 /* See interps.h.  */
 
 void
-interps_notify_solib_unloaded (const shobj &so)
+interps_notify_solib_unloaded (const solib &so)
 {
   interps_notify (&interp::on_solib_unloaded, so);
 }

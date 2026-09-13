@@ -20,7 +20,6 @@
    You should have received a copy of the GNU General Public License
    along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
 
-#include "defs.h"
 #include "annotate.h"
 #include "symtab.h"
 #include "gdbtypes.h"
@@ -552,7 +551,7 @@ f_language::value_print_inner (struct value *val, struct ui_file *stream,
 		     value field before printing its value.  */
 		  struct block_symbol sym
 		    = lookup_symbol (field_name, get_selected_block (nullptr),
-				     VAR_DOMAIN, nullptr);
+				     SEARCH_VFT, nullptr);
 		  if (sym.symbol == nullptr)
 		    error (_("failed to find symbol for name list component %s"),
 			   field_name);

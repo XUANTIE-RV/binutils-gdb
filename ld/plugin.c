@@ -506,7 +506,9 @@ add_symbols (void *handle, int nsyms, const struct ld_plugin_symbol *syms)
   int n;
 
   ASSERT (called_plugin);
-  symptrs = xmalloc (nsyms * sizeof *symptrs);
+  symptrs = bfd_alloc (abfd, nsyms * sizeof *symptrs);
+  if (symptrs == NULL)
+    return LDPS_ERR;
   for (n = 0; n < nsyms; n++)
     {
       enum ld_plugin_status rv;
@@ -514,6 +516,8 @@ add_symbols (void *handle, int nsyms, const struct ld_plugin_symbol *syms)
 
       bfdsym = bfd_make_empty_symbol (abfd);
       symptrs[n] = bfdsym;
+      if (bfdsym == NULL)
+	return LDPS_ERR;
       rv = asymbol_from_plugin_symbol (abfd, bfdsym, syms + n);
       if (rv != LDPS_OK)
 	return rv;
@@ -1363,14 +1367,17 @@ plugin_call_cleanup (void)
     {
       if (curplug->cleanup_handler && !curplug->cleanup_done)
 	{
-	  enum ld_plugin_status rv;
-	  curplug->cleanup_done = true;
-	  called_plugin = curplug;
-	  rv = (*curplug->cleanup_handler) ();
-	  called_plugin = NULL;
-	  if (rv != LDPS_OK)
-	    info_msg (_("%P: %s: error in plugin cleanup: %d (ignored)\n"),
-		      curplug->name, rv);
+	  if (!config.plugin_save_temps)
+	    {
+	      enum ld_plugin_status rv;
+	      curplug->cleanup_done = true;
+	      called_plugin = curplug;
+	      rv = (*curplug->cleanup_handler) ();
+	      called_plugin = NULL;
+	      if (rv != LDPS_OK)
+		info_msg (_("%P: %s: error in plugin cleanup: %d (ignored)\n"),
+			  curplug->name, rv);
+	    }
 	  dlclose (curplug->dlhandle);
 	}
       curplug = curplug->next;

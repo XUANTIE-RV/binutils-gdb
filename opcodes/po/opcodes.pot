@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: https://sourceware.org/bugzilla/\n"
-"POT-Creation-Date: 2024-01-29 14:44+0000\n"
+"POT-Creation-Date: 2024-01-15 15:02+0000\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -30,17 +30,17 @@ msgstr ""
 msgid "unrecognised disassembler option: %s"
 msgstr ""
 
-#: aarch64-dis.c:3956
+#: aarch64-dis.c:3955
 #, c-format
 msgid "this `%s' should have an immediately preceding `%s'"
 msgstr ""
 
-#: aarch64-dis.c:3963
+#: aarch64-dis.c:3962
 #, c-format
 msgid "expected `%s' after previous `%s'"
 msgstr ""
 
-#: aarch64-dis.c:4389
+#: aarch64-dis.c:4388
 #, c-format
 msgid ""
 "\n"
@@ -48,42 +48,42 @@ msgid ""
 "with the -M switch (multiple options should be separated by commas):\n"
 msgstr ""
 
-#: aarch64-dis.c:4393
+#: aarch64-dis.c:4392
 #, c-format
 msgid ""
 "\n"
 "  no-aliases         Don't print instruction aliases.\n"
 msgstr ""
 
-#: aarch64-dis.c:4396
+#: aarch64-dis.c:4395
 #, c-format
 msgid ""
 "\n"
 "  aliases            Do print instruction aliases.\n"
 msgstr ""
 
-#: aarch64-dis.c:4399
+#: aarch64-dis.c:4398
 #, c-format
 msgid ""
 "\n"
 "  no-notes         Don't print instruction notes.\n"
 msgstr ""
 
-#: aarch64-dis.c:4402
+#: aarch64-dis.c:4401
 #, c-format
 msgid ""
 "\n"
 "  notes            Do print instruction notes.\n"
 msgstr ""
 
-#: aarch64-dis.c:4406
+#: aarch64-dis.c:4405
 #, c-format
 msgid ""
 "\n"
 "  debug_dump         Temp switch for debug trace.\n"
 msgstr ""
 
-#: aarch64-dis.c:4410 arc-dis.c:1607 arc-dis.c:1630 arc-dis.c:1633
+#: aarch64-dis.c:4409 arc-dis.c:1607 arc-dis.c:1630 arc-dis.c:1633
 #: kvx-dis.c:1586 loongarch-dis.c:337 mips-dis.c:2903 mips-dis.c:2915
 #: mips-dis.c:2918 nfp-dis.c:2995 riscv-dis.c:1489 riscv-dis.c:1492
 #, c-format
@@ -326,71 +326,71 @@ msgstr ""
 msgid "'ROR' operator not allowed"
 msgstr ""
 
-#: aarch64-opc.c:4715
+#: aarch64-opc.c:4716
 msgid "reading from a write-only register"
 msgstr ""
 
-#: aarch64-opc.c:4717
+#: aarch64-opc.c:4718
 msgid "writing to a read-only register"
 msgstr ""
 
-#: aarch64-opc.c:5241
+#: aarch64-opc.c:5242
 msgid "the three register operands must be distinct from one another"
 msgstr ""
 
-#: aarch64-opc.c:5352
+#: aarch64-opc.c:5353
 msgid "destination register differs from preceding instruction"
 msgstr ""
 
-#: aarch64-opc.c:5355
+#: aarch64-opc.c:5356
 msgid "source register differs from preceding instruction"
 msgstr ""
 
-#: aarch64-opc.c:5358
+#: aarch64-opc.c:5359
 msgid "size register differs from preceding instruction"
 msgstr ""
 
-#: aarch64-opc.c:5406
+#: aarch64-opc.c:5407
 msgid "instruction opens new dependency sequence without ending previous one"
 msgstr ""
 
-#: aarch64-opc.c:5435
+#: aarch64-opc.c:5436
 msgid "previous `movprfx' sequence not closed"
 msgstr ""
 
-#: aarch64-opc.c:5454
+#: aarch64-opc.c:5455
 msgid "SVE instruction expected after `movprfx'"
 msgstr ""
 
-#: aarch64-opc.c:5467
+#: aarch64-opc.c:5468
 msgid "SVE `movprfx' compatible instruction expected"
 msgstr ""
 
-#: aarch64-opc.c:5555
+#: aarch64-opc.c:5556
 msgid "predicated instruction expected after `movprfx'"
 msgstr ""
 
-#: aarch64-opc.c:5567
+#: aarch64-opc.c:5568
 msgid "merging predicate expected due to preceding `movprfx'"
 msgstr ""
 
-#: aarch64-opc.c:5579
+#: aarch64-opc.c:5580
 msgid "predicate register differs from that in preceding `movprfx'"
 msgstr ""
 
-#: aarch64-opc.c:5598
+#: aarch64-opc.c:5599
 msgid "output register of preceding `movprfx' not used in current instruction"
 msgstr ""
 
-#: aarch64-opc.c:5611
+#: aarch64-opc.c:5612
 msgid "output register of preceding `movprfx' expected as output"
 msgstr ""
 
-#: aarch64-opc.c:5623
+#: aarch64-opc.c:5624
 msgid "output register of preceding `movprfx' used as input"
 msgstr ""
 
-#: aarch64-opc.c:5639
+#: aarch64-opc.c:5640
 msgid "register size not compatible with previous `movprfx'"
 msgstr ""
 

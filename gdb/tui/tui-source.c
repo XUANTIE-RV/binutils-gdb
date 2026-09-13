@@ -19,7 +19,6 @@
    You should have received a copy of the GNU General Public License
    along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
 
-#include "defs.h"
 #include <math.h>
 #include <ctype.h>
 #include "symtab.h"
@@ -199,7 +198,7 @@ tui_source_window::line_is_displayed (int line) const
 }
 
 void
-tui_source_window::maybe_update (frame_info_ptr fi, symtab_and_line sal)
+tui_source_window::maybe_update (const frame_info_ptr &fi, symtab_and_line sal)
 {
   int start_line = (sal.line - ((height - box_size ()) / 2)) + 1;
   if (start_line <= 0)

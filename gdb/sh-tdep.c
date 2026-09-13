@@ -20,14 +20,14 @@
 /* Contributed by Steve Chamberlain
    sac@cygnus.com.  */
 
-#include "defs.h"
+#include "extract-store-integer.h"
 #include "frame.h"
 #include "frame-base.h"
 #include "frame-unwind.h"
 #include "dwarf2/frame.h"
 #include "symtab.h"
 #include "gdbtypes.h"
-#include "gdbcmd.h"
+#include "cli/cli-cmds.h"
 #include "gdbcore.h"
 #include "value.h"
 #include "dis-asm.h"
@@ -1401,6 +1401,11 @@ sh_sh2a_register_type (struct gdbarch *gdbarch, int reg_nr)
     return builtin_type (gdbarch)->builtin_float;
   else if (reg_nr >= DR0_REGNUM && reg_nr <= DR_LAST_REGNUM)
     return builtin_type (gdbarch)->builtin_double;
+  else if (reg_nr == PC_REGNUM || reg_nr == PR_REGNUM || reg_nr == VBR_REGNUM
+	   || reg_nr == SPC_REGNUM)
+    return builtin_type (gdbarch)->builtin_func_ptr;
+  else if (reg_nr == R0_REGNUM + 15 || reg_nr == GBR_REGNUM)
+    return builtin_type (gdbarch)->builtin_data_ptr;
   else
     return builtin_type (gdbarch)->builtin_int;
 }
@@ -1413,6 +1418,11 @@ sh_sh3e_register_type (struct gdbarch *gdbarch, int reg_nr)
   if ((reg_nr >= gdbarch_fp0_regnum (gdbarch)
        && (reg_nr <= FP_LAST_REGNUM)) || (reg_nr == FPUL_REGNUM))
     return builtin_type (gdbarch)->builtin_float;
+  else if (reg_nr == PC_REGNUM || reg_nr == PR_REGNUM || reg_nr == VBR_REGNUM
+	   || reg_nr == SPC_REGNUM)
+    return builtin_type (gdbarch)->builtin_func_ptr;
+  else if (reg_nr == R0_REGNUM + 15 || reg_nr == GBR_REGNUM)
+    return builtin_type (gdbarch)->builtin_data_ptr;
   else
     return builtin_type (gdbarch)->builtin_int;
 }
@@ -1434,6 +1444,11 @@ sh_sh4_register_type (struct gdbarch *gdbarch, int reg_nr)
     return builtin_type (gdbarch)->builtin_double;
   else if (reg_nr >= FV0_REGNUM && reg_nr <= FV_LAST_REGNUM)
     return sh_sh4_build_float_register_type (gdbarch, 3);
+  else if (reg_nr == PC_REGNUM || reg_nr == PR_REGNUM || reg_nr == VBR_REGNUM
+	   || reg_nr == SPC_REGNUM)
+    return builtin_type (gdbarch)->builtin_func_ptr;
+  else if (reg_nr == R0_REGNUM + 15 || reg_nr == GBR_REGNUM)
+    return builtin_type (gdbarch)->builtin_data_ptr;
   else
     return builtin_type (gdbarch)->builtin_int;
 }
@@ -1441,7 +1456,13 @@ sh_sh4_register_type (struct gdbarch *gdbarch, int reg_nr)
 static struct type *
 sh_default_register_type (struct gdbarch *gdbarch, int reg_nr)
 {
-  return builtin_type (gdbarch)->builtin_int;
+  if (reg_nr == PC_REGNUM || reg_nr == PR_REGNUM || reg_nr == VBR_REGNUM
+      || reg_nr == SPC_REGNUM)
+    return builtin_type (gdbarch)->builtin_func_ptr;
+  else if (reg_nr == R0_REGNUM + 15 || reg_nr == GBR_REGNUM)
+    return builtin_type (gdbarch)->builtin_data_ptr;
+  else
+    return builtin_type (gdbarch)->builtin_int;
 }
 
 /* Is a register in a reggroup?
@@ -1755,7 +1776,7 @@ sh_sh2a_register_sim_regno (struct gdbarch *gdbarch, int nr)
 static void
 sh_dwarf2_frame_init_reg (struct gdbarch *gdbarch, int regnum,
 			  struct dwarf2_frame_state_reg *reg,
-			  frame_info_ptr this_frame)
+			  const frame_info_ptr &this_frame)
 {
   /* Mark the PC as the destination for the return address.  */
   if (regnum == gdbarch_pc_regnum (gdbarch))
@@ -1825,7 +1846,7 @@ sh_alloc_frame_cache (void)
 }
 
 static struct sh_frame_cache *
-sh_frame_cache (frame_info_ptr this_frame, void **this_cache)
+sh_frame_cache (const frame_info_ptr &this_frame, void **this_cache)
 {
   struct gdbarch *gdbarch = get_frame_arch (this_frame);
   struct sh_frame_cache *cache;
@@ -1892,7 +1913,7 @@ sh_frame_cache (frame_info_ptr this_frame, void **this_cache)
 }
 
 static struct value *
-sh_frame_prev_register (frame_info_ptr this_frame,
+sh_frame_prev_register (const frame_info_ptr &this_frame,
 			void **this_cache, int regnum)
 {
   struct gdbarch *gdbarch = get_frame_arch (this_frame);
@@ -1917,7 +1938,7 @@ sh_frame_prev_register (frame_info_ptr this_frame,
 }
 
 static void
-sh_frame_this_id (frame_info_ptr this_frame, void **this_cache,
+sh_frame_this_id (const frame_info_ptr &this_frame, void **this_cache,
 		  struct frame_id *this_id)
 {
   struct sh_frame_cache *cache = sh_frame_cache (this_frame, this_cache);
@@ -1940,7 +1961,7 @@ static const struct frame_unwind sh_frame_unwind = {
 };
 
 static CORE_ADDR
-sh_frame_base_address (frame_info_ptr this_frame, void **this_cache)
+sh_frame_base_address (const frame_info_ptr &this_frame, void **this_cache)
 {
   struct sh_frame_cache *cache = sh_frame_cache (this_frame, this_cache);
 
@@ -1955,7 +1976,7 @@ static const struct frame_base sh_frame_base = {
 };
 
 static struct sh_frame_cache *
-sh_make_stub_cache (frame_info_ptr this_frame)
+sh_make_stub_cache (const frame_info_ptr &this_frame)
 {
   struct gdbarch *gdbarch = get_frame_arch (this_frame);
   struct sh_frame_cache *cache;
@@ -1969,7 +1990,7 @@ sh_make_stub_cache (frame_info_ptr this_frame)
 }
 
 static void
-sh_stub_this_id (frame_info_ptr this_frame, void **this_cache,
+sh_stub_this_id (const frame_info_ptr &this_frame, void **this_cache,
 		 struct frame_id *this_id)
 {
   struct sh_frame_cache *cache;
@@ -1983,7 +2004,7 @@ sh_stub_this_id (frame_info_ptr this_frame, void **this_cache,
 
 static int
 sh_stub_unwind_sniffer (const struct frame_unwind *self,
-			frame_info_ptr this_frame,
+			const frame_info_ptr &this_frame,
 			void **this_prologue_cache)
 {
   CORE_ADDR addr_in_block;

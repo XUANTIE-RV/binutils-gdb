@@ -18,7 +18,7 @@
    You should have received a copy of the GNU General Public License
    along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
 
-#include "defs.h"
+#include "extract-store-integer.h"
 #include "language.h"
 #include "gdbcore.h"
 #include "inferior.h"
@@ -2163,7 +2163,8 @@ ppc64_sysv_abi_return_value (struct gdbarch *gdbarch, struct value *function,
 }
 
 CORE_ADDR
-ppc_sysv_get_return_buf_addr (struct type *val_type, frame_info_ptr cur_frame)
+ppc_sysv_get_return_buf_addr (struct type *val_type,
+			      const frame_info_ptr &cur_frame)
 {
   /* The PowerPC ABI specifies aggregates that are not returned by value
      are returned in a storage buffer provided by the caller.  The

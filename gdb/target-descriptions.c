@@ -19,9 +19,8 @@
    You should have received a copy of the GNU General Public License
    along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
 
-#include "defs.h"
 #include "arch-utils.h"
-#include "gdbcmd.h"
+#include "cli/cli-cmds.h"
 #include "gdbtypes.h"
 #include "reggroups.h"
 #include "target.h"
@@ -1299,7 +1298,6 @@ public:
     gdb_printf ("  Original: %s */\n\n",
 		lbasename (m_filename_after_features.c_str ()));
 
-    gdb_printf ("#include \"defs.h\"\n");
     gdb_printf ("#include \"osabi.h\"\n");
     gdb_printf ("#include \"target-descriptions.h\"\n");
     gdb_printf ("\n");

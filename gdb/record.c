@@ -17,8 +17,7 @@
    You should have received a copy of the GNU General Public License
    along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
 
-#include "defs.h"
-#include "gdbcmd.h"
+#include "cli/cli-cmds.h"
 #include "completer.h"
 #include "record.h"
 #include "observable.h"
@@ -27,6 +26,7 @@
 #include "cli/cli-utils.h"
 #include "disasm.h"
 #include "interps.h"
+#include "top.h"
 
 #include <ctype.h>
 
@@ -261,11 +261,16 @@ show_record_debug (struct ui_file *file, int from_tty,
 	      value);
 }
 
-/* Alias for "target record".  */
+/* Alias for "target record-full".  */
 
 static void
 cmd_record_start (const char *args, int from_tty)
 {
+  /* As 'record' is a prefix command then if the user types 'record blah'
+     GDB will search for the 'blah' sub-command and either run that instead
+     of calling this function, or throw an error if 'blah' doesn't exist.
+     As a result, we only get here if no args are given.  */
+  gdb_assert (args == nullptr);
   execute_command ("target record-full", from_tty);
 }
 
@@ -792,8 +797,6 @@ A size of \"unlimited\" means unlimited lines.  The default is 10."),
     = add_prefix_cmd ("record", class_obscure, cmd_record_start,
 		      _("Start recording."),
 		      &record_cmdlist, 0, &cmdlist);
-  set_cmd_completer (record_cmd, filename_completer);
-
   add_com_alias ("rec", record_cmd, class_obscure, 1);
 
   set_show_commands setshow_record_cmds

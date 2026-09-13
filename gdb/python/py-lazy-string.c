@@ -17,7 +17,6 @@
    You should have received a copy of the GNU General Public License
    along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
 
-#include "defs.h"
 #include "python-internal.h"
 #include "charset.h"
 #include "value.h"
@@ -267,7 +266,7 @@ stpy_lazy_string_elt_type (lazy_string_object *lazy)
     {
     case TYPE_CODE_PTR:
     case TYPE_CODE_ARRAY:
-      return realtype->target_type ();
+      return check_typedef (realtype->target_type ());
     default:
       /* This is done to preserve existing behaviour.  PR 20769.
 	 E.g., gdb.parse_and_eval("my_int_variable").lazy_string().type.  */

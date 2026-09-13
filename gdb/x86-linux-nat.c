@@ -17,7 +17,6 @@
    You should have received a copy of the GNU General Public License
    along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
 
-#include "defs.h"
 #include "inferior.h"
 #include "elf/common.h"
 #include "gdb_proc_service.h"
@@ -180,6 +179,12 @@ x86_linux_nat_target::read_description ()
 	  /* Get XCR0 from XSAVE extended state.  */
 	  xcr0 = xstateregs[(I386_LINUX_XSAVE_XCR0_OFFSET
 			     / sizeof (uint64_t))];
+
+#ifdef __x86_64__
+	  /* No MPX on x32.  */
+	  if (is_x32)
+	    xcr0 &= ~X86_XSTATE_MPX;
+#endif
 
 	  m_xsave_layout = x86_fetch_xsave_layout (xcr0, x86_xsave_length ());
 	}

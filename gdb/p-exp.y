@@ -43,7 +43,6 @@
    Probably also lots of other problems, less well defined PM.  */
 %{
 
-#include "defs.h"
 #include <ctype.h>
 #include "expression.h"
 #include "value.h"
@@ -75,6 +74,8 @@ static int yylex (void);
 static void yyerror (const char *);
 
 static char *uptok (const char *, int);
+
+static const char *pascal_skip_string (const char *str);
 
 using namespace expr;
 %}
@@ -629,9 +630,10 @@ block	:	block COLONCOLON name
 			  std::string copy = copy_name ($3);
 			  struct symbol *tem
 			    = lookup_symbol (copy.c_str (), $1,
-					     VAR_DOMAIN, NULL).symbol;
+					     SEARCH_FUNCTION_DOMAIN,
+					     nullptr).symbol;
 
-			  if (!tem || tem->aclass () != LOC_BLOCK)
+			  if (tem == nullptr)
 			    error (_("No function \"%s\" in specified context."),
 				   copy.c_str ());
 			  $$ = tem->value_block (); }
@@ -642,7 +644,7 @@ variable:	block COLONCOLON name
 
 			  std::string copy = copy_name ($3);
 			  sym = lookup_symbol (copy.c_str (), $1,
-					       VAR_DOMAIN, NULL);
+					       SEARCH_VFT, NULL);
 			  if (sym.symbol == 0)
 			    error (_("No symbol \"%s\" in specified context."),
 				   copy.c_str ());
@@ -672,7 +674,7 @@ variable:	qualified_name
 
 			  struct block_symbol sym
 			    = lookup_symbol (name.c_str (), nullptr,
-					     VAR_DOMAIN, nullptr);
+					     SEARCH_VFT, nullptr);
 			  pstate->push_symbol (name.c_str (), sym);
 			}
 	;
@@ -1041,6 +1043,28 @@ uptok (const char *tokstart, int namelen)
   return uptokstart;
 }
 
+/* Skip over a Pascal string.  STR must point to the opening single quote
+   character.  This function returns a pointer to the character after the
+   closing single quote character.
+
+   This function does not support embedded, escaped single quotes, which
+   is done by placing two consecutive single quotes into a string.
+   Support for this would be easy to add, but this function is only used
+   from the Python expression parser, and if we did skip over escaped
+   quotes then the rest of the expression parser wouldn't handle them
+   correctly.  */
+static const char *
+pascal_skip_string (const char *str)
+{
+  gdb_assert (*str == '\'');
+
+  do
+    ++str;
+  while (*str != '\0' && *str != '\'');
+
+  return str;
+}
+
 /* Read one token, getting characters through lexptr.  */
 
 static int
@@ -1119,7 +1143,7 @@ yylex (void)
       c = *pstate->lexptr++;
       if (c != '\'')
 	{
-	  namelen = skip_quoted (tokstart) - tokstart;
+	  namelen = pascal_skip_string (tokstart) - tokstart;
 	  if (namelen > 2)
 	    {
 	      pstate->lexptr = tokstart + namelen;
@@ -1215,13 +1239,8 @@ yylex (void)
 	toktype = parse_number (pstate, tokstart,
 				p - tokstart, got_dot | got_e, &yylval);
 	if (toktype == ERROR)
-	  {
-	    char *err_copy = (char *) alloca (p - tokstart + 1);
-
-	    memcpy (err_copy, tokstart, p - tokstart);
-	    err_copy[p - tokstart] = 0;
-	    error (_("Invalid number \"%s\"."), err_copy);
-	  }
+	  error (_("Invalid number \"%.*s\"."), (int) (p - tokstart),
+		 tokstart);
 	pstate->lexptr = p;
 	return toktype;
       }
@@ -1400,7 +1419,7 @@ yylex (void)
 	  static const char this_name[] = "this";
 
 	  if (lookup_symbol (this_name, pstate->expression_context_block,
-			     VAR_DOMAIN, NULL).symbol)
+			     SEARCH_VFT, NULL).symbol)
 	    {
 	      free (uptokstart);
 	      return THIS;
@@ -1440,7 +1459,7 @@ yylex (void)
       sym = NULL;
     else
       sym = lookup_symbol (tmp.c_str (), pstate->expression_context_block,
-			   VAR_DOMAIN, &is_a_field_of_this).symbol;
+			   SEARCH_VFT, &is_a_field_of_this).symbol;
     /* second chance uppercased (as Free Pascal does).  */
     if (!sym && is_a_field_of_this.type == NULL && !is_a_field)
       {
@@ -1456,7 +1475,7 @@ yylex (void)
 	 sym = NULL;
        else
 	 sym = lookup_symbol (tmp.c_str (), pstate->expression_context_block,
-			      VAR_DOMAIN, &is_a_field_of_this).symbol;
+			      SEARCH_VFT, &is_a_field_of_this).symbol;
       }
     /* Third chance Capitalized (as GPC does).  */
     if (!sym && is_a_field_of_this.type == NULL && !is_a_field)
@@ -1479,7 +1498,7 @@ yylex (void)
 	 sym = NULL;
        else
 	 sym = lookup_symbol (tmp.c_str (), pstate->expression_context_block,
-			      VAR_DOMAIN, &is_a_field_of_this).symbol;
+			      SEARCH_VFT, &is_a_field_of_this).symbol;
       }
 
     if (is_a_field || (is_a_field_of_this.type != NULL))
@@ -1576,7 +1595,7 @@ yylex (void)
 		      cur_sym
 			= lookup_symbol (ncopy,
 					 pstate->expression_context_block,
-					 VAR_DOMAIN, NULL).symbol;
+					 SEARCH_VFT, NULL).symbol;
 		      if (cur_sym)
 			{
 			  if (cur_sym->aclass () == LOC_TYPEDEF)

@@ -17,7 +17,6 @@
    You should have received a copy of the GNU General Public License
    along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
 
-#include "defs.h"
 #include "arch-utils.h"
 #include "symtab.h"
 #include "gdbtypes.h"
@@ -26,7 +25,7 @@
 #include "infrun.h"
 #include "gdbsupport/environ.h"
 #include "value.h"
-#include "gdbcmd.h"
+#include "cli/cli-cmds.h"
 #include "symfile.h"
 #include "gdbcore.h"
 #include "target.h"
@@ -55,7 +54,6 @@
 #include <optional>
 #include "source.h"
 #include "cli/cli-style.h"
-#include "dwarf2/loc.h"
 
 /* Local functions: */
 
@@ -1484,23 +1482,6 @@ get_return_value (struct symbol *func_symbol, struct value *function)
   return value;
 }
 
-/* The captured function return value/type and its position in the
-   value history.  */
-
-struct return_value_info
-{
-  /* The captured return value.  May be NULL if we weren't able to
-     retrieve it.  See get_return_value.  */
-  struct value *value;
-
-  /* The return type.  In some cases, we'll not be able extract the
-     return value, but we always know the type.  */
-  struct type *type;
-
-  /* If we captured a value, this is the value history index.  */
-  int value_history_index;
-};
-
 /* Helper for print_return_value.  */
 
 static void
@@ -1743,7 +1724,7 @@ finish_backward (struct finish_command_fsm *sm)
    frame that called the function we're about to step out of.  */
 
 static void
-finish_forward (struct finish_command_fsm *sm, frame_info_ptr frame)
+finish_forward (struct finish_command_fsm *sm, const frame_info_ptr &frame)
 {
   struct frame_id frame_id = get_frame_id (frame);
   struct gdbarch *gdbarch = get_frame_arch (frame);
@@ -1757,9 +1738,6 @@ finish_forward (struct finish_command_fsm *sm, frame_info_ptr frame)
 					     get_stack_frame_id (frame),
 					     bp_finish);
 
-  /* set_momentary_breakpoint invalidates FRAME.  */
-  frame = nullptr;
-
   set_longjmp_breakpoint (tp, frame_id);
 
   /* We want to print return value, please...  */
@@ -1771,9 +1749,10 @@ finish_forward (struct finish_command_fsm *sm, frame_info_ptr frame)
 /* Skip frames for "finish".  */
 
 static frame_info_ptr
-skip_finish_frames (frame_info_ptr frame)
+skip_finish_frames (const frame_info_ptr &initial_frame)
 {
   frame_info_ptr start;
+  frame_info_ptr frame = initial_frame;
 
   do
     {
@@ -2259,7 +2238,7 @@ default_print_one_register_info (struct ui_file *file,
 void
 default_print_registers_info (struct gdbarch *gdbarch,
 			      struct ui_file *file,
-			      frame_info_ptr frame,
+			      const frame_info_ptr &frame,
 			      int regnum, int print_all)
 {
   int i;
@@ -2419,7 +2398,7 @@ info_registers_command (const char *addr_exp, int from_tty)
 
 static void
 print_vector_info (struct ui_file *file,
-		   frame_info_ptr frame, const char *args)
+		   const frame_info_ptr &frame, const char *args)
 {
   struct gdbarch *gdbarch = get_frame_arch (frame);
 
@@ -2827,14 +2806,14 @@ detach_command (const char *args, int from_tty)
   /* Hold a strong reference to the target while (maybe)
      detaching the parent.  Otherwise detaching could close the
      target.  */
-  auto target_ref
-    = target_ops_ref::new_reference (current_inferior ()->process_target ());
+  inferior *inf = current_inferior ();
+  auto target_ref = target_ops_ref::new_reference (inf->process_target ());
 
   /* Save this before detaching, since detaching may unpush the
      process_stratum target.  */
   bool was_non_stop_p = target_is_non_stop_p ();
 
-  target_detach (current_inferior (), from_tty);
+  target_detach (inf, from_tty);
 
   update_previous_thread ();
 
@@ -2843,11 +2822,11 @@ detach_command (const char *args, int from_tty)
      this within target_detach because that is also used when
      following child forks, and in that case we will want to transfer
      breakpoints to the child, not delete them.  */
-  breakpoint_init_inferior (inf_exited);
+  breakpoint_init_inferior (inf, inf_exited);
 
   /* If the solist is global across inferiors, don't clear it when we
      detach from a single inferior.  */
-  if (!gdbarch_has_global_solist (current_inferior ()->arch ()))
+  if (!gdbarch_has_global_solist (inf->arch ()))
     no_shared_libraries (nullptr, from_tty);
 
   if (deprecated_detach_hook)
@@ -2956,7 +2935,7 @@ interrupt_command (const char *args, int from_tty)
 
 void
 default_print_float_info (struct gdbarch *gdbarch, struct ui_file *file,
-			  frame_info_ptr frame, const char *args)
+			  const frame_info_ptr &frame, const char *args)
 {
   int regnum;
   int printed_something = 0;
@@ -3097,7 +3076,7 @@ shell that will start the program (specified by the \"$SHELL\" environment\n\
 variable).  Input and output redirection with \">\", \"<\", or \">>\"\n\
 are also allowed.\n\
 \n\
-With no arguments, uses arguments last specified (with \"run\" or \n\
+With no arguments, uses arguments last specified (with \"run\" or\n\
 \"set args\").  To cancel previous arguments and run with no arguments,\n\
 use \"set args\" without arguments.\n\
 \n\
@@ -3113,10 +3092,10 @@ _initialize_infcmd ()
   /* Add the filename of the terminal connected to inferior I/O.  */
   auto tty_set_show
     = add_setshow_optional_filename_cmd ("inferior-tty", class_run, _("\
-Set terminal for future runs of program being debugged."), _("		\
-Show terminal for future runs of program being debugged."), _("		\
-Usage: set inferior-tty [TTY]\n\n					\
-If TTY is omitted, the default behavior of using the same terminal as GDB\n \
+Set terminal for future runs of program being debugged."), _("\
+Show terminal for future runs of program being debugged."), _("\
+Usage: set inferior-tty [TTY]\n\n\
+If TTY is omitted, the default behavior of using the same terminal as GDB\n\
 is restored."),
 					 set_tty_value,
 					 get_tty_value,
@@ -3137,8 +3116,8 @@ Follow this command with any number of args, to be passed to the program."),
 
   auto cwd_set_show
     = add_setshow_string_noescape_cmd ("cwd", class_run, _("\
-Set the current working directory to be used when the inferior is started.\n \
-Changing this setting does not have any effect on inferiors that are\n	\
+Set the current working directory to be used when the inferior is started.\n\
+Changing this setting does not have any effect on inferiors that are\n\
 already running."),
 				       _("\
 Show the current working directory that is used when the inferior is started."),
@@ -3323,7 +3302,7 @@ which means to set the ignore count of that breakpoint to N - 1 (so that\n\
 the breakpoint won't break until the Nth time it is reached).\n\
 \n\
 If non-stop mode is enabled, continue only the current thread,\n\
-otherwise all the threads in the program are continued.  To \n\
+otherwise all the threads in the program are continued.  To\n\
 continue all stopped threads in non-stop mode, use the -a option.\n\
 Specifying -a and an ignore count simultaneously is an error."));
   add_com_alias ("c", continue_cmd, class_run, 1);
@@ -3349,7 +3328,7 @@ RUN_ARGS_HELP));
   add_com ("interrupt", class_run, interrupt_command,
 	   _("Interrupt the execution of the debugged program.\n\
 If non-stop mode is enabled, interrupt only the current thread,\n\
-otherwise all the threads in the program are stopped.  To \n\
+otherwise all the threads in the program are stopped.  To\n\
 interrupt all running threads in non-stop mode, use the -a option."));
 
   cmd_list_element *info_registers_cmd

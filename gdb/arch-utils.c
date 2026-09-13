@@ -17,10 +17,10 @@
    You should have received a copy of the GNU General Public License
    along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
 
-#include "defs.h"
 
 #include "arch-utils.h"
-#include "gdbcmd.h"
+#include "extract-store-integer.h"
+#include "cli/cli-cmds.h"
 #include "inferior.h"
 #include "infrun.h"
 #include "regcache.h"
@@ -37,6 +37,7 @@
 #include "auxv.h"
 #include "observable.h"
 #include "solib-target.h"
+#include "event-top.h"
 
 #include "gdbsupport/version.h"
 
@@ -103,7 +104,7 @@ default_memtag_to_string (struct gdbarch *gdbarch, struct value *tag)
 /* See arch-utils.h */
 
 bool
-default_tagged_address_p (struct gdbarch *gdbarch, struct value *address)
+default_tagged_address_p (struct gdbarch *gdbarch, CORE_ADDR address)
 {
   /* By default, assume the address is untagged.  */
   return false;
@@ -140,7 +141,7 @@ default_get_memtag (struct gdbarch *gdbarch, struct value *address,
 }
 
 CORE_ADDR
-generic_skip_trampoline_code (frame_info_ptr frame, CORE_ADDR pc)
+generic_skip_trampoline_code (const frame_info_ptr &frame, CORE_ADDR pc)
 {
   return 0;
 }
@@ -166,23 +167,23 @@ generic_stack_frame_destroyed_p (struct gdbarch *gdbarch, CORE_ADDR pc)
 
 int
 default_code_of_frame_writable (struct gdbarch *gdbarch,
-				frame_info_ptr frame)
+				const frame_info_ptr &frame)
 {
   return 1;
 }
 
 /* Helper functions for gdbarch_inner_than */
 
-int
+bool
 core_addr_lessthan (CORE_ADDR lhs, CORE_ADDR rhs)
 {
-  return (lhs < rhs);
+  return lhs < rhs;
 }
 
-int
+bool
 core_addr_greaterthan (CORE_ADDR lhs, CORE_ADDR rhs)
 {
-  return (lhs > rhs);
+  return lhs > rhs;
 }
 
 /* Misc helper functions for targets.  */
@@ -590,7 +591,7 @@ gdbarch_update_p (struct gdbarch_info info)
   if (info.abfd == NULL)
     info.abfd = current_program_space->exec_bfd ();
   if (info.abfd == NULL)
-    info.abfd = core_bfd;
+    info.abfd = current_program_space->core_bfd ();
 
   /* Check for the current target description.  */
   if (info.target_desc == NULL)
@@ -1040,7 +1041,11 @@ default_print_insn (bfd_vma memaddr, disassemble_info *info)
 				 info->mach, current_program_space->exec_bfd ());
 
   gdb_assert (disassemble_fn != NULL);
-  return (*disassemble_fn) (memaddr, info);
+  int res = (*disassemble_fn) (memaddr, info);
+
+  QUIT;
+
+  return res;
 }
 
 /* See arch-utils.h.  */
@@ -1079,7 +1084,7 @@ default_type_align (struct gdbarch *gdbarch, struct type *type)
 /* See arch-utils.h.  */
 
 std::string
-default_get_pc_address_flags (frame_info_ptr frame, CORE_ADDR pc)
+default_get_pc_address_flags (const frame_info_ptr &frame, CORE_ADDR pc)
 {
   return "";
 }
@@ -1105,7 +1110,8 @@ default_use_target_description_from_corefile_notes (struct gdbarch *gdbarch,
 }
 
 CORE_ADDR
-default_get_return_buf_addr (struct type *val_type, frame_info_ptr cur_frame)
+default_get_return_buf_addr (struct type *val_type,
+			     const frame_info_ptr &cur_frame)
 {
   return 0;
 }
@@ -1155,11 +1161,11 @@ pstring (const char *string)
 }
 
 static const char *
-pstring_ptr (char **string)
+pstring_ptr (std::string *string)
 {
-  if (string == NULL || *string == NULL)
+  if (string == nullptr)
     return "(null)";
-  return *string;
+  return string->c_str ();
 }
 
 /* Helper function to print a list of strings, represented as "const

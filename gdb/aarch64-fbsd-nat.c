@@ -17,7 +17,6 @@
    You should have received a copy of the GNU General Public License
    along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
 
-#include "defs.h"
 #include "arch-utils.h"
 #include "inferior.h"
 #include "regcache.h"
@@ -164,9 +163,7 @@ aarch64_fbsd_nat_target::stopped_data_address (CORE_ADDR *addr_p)
 bool
 aarch64_fbsd_nat_target::stopped_by_watchpoint ()
 {
-  CORE_ADDR addr;
-
-  return stopped_data_address (&addr);
+  return stopped_data_address (nullptr);
 }
 
 /* Implement the "stopped_by_hw_breakpoint" target_ops method.  */

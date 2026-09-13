@@ -17,7 +17,8 @@
    You should have received a copy of the GNU General Public License
    along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
 
-#include "defs.h"
+#include "event-top.h"
+#include "extract-store-integer.h"
 #include "symtab.h"
 #include "gdbtypes.h"
 #include "value.h"
@@ -27,7 +28,7 @@
 #include "target.h"
 #include "demangle.h"
 #include "language.h"
-#include "gdbcmd.h"
+#include "cli/cli-cmds.h"
 #include "regcache.h"
 #include "cp-abi.h"
 #include "block.h"
@@ -118,15 +119,9 @@ find_function_in_inferior (const char *name, struct objfile **objf_p)
 {
   struct block_symbol sym;
 
-  sym = lookup_symbol (name, 0, VAR_DOMAIN, 0);
+  sym = lookup_symbol (name, nullptr, SEARCH_TYPE_DOMAIN, nullptr);
   if (sym.symbol != NULL)
     {
-      if (sym.symbol->aclass () != LOC_BLOCK)
-	{
-	  error (_("\"%s\" exists in this program but is not a function."),
-		 name);
-	}
-
       if (objf_p)
 	*objf_p = sym.symbol->objfile ();
 
@@ -417,7 +412,8 @@ value_cast (struct type *type, struct value *arg2)
      In this case we want to preserve the LVAL of ARG2 as this allows the
      resulting value to be used in more places.  We do this by calling
      VALUE_COPY if appropriate.  */
-  if (types_deeply_equal (arg2->type (), type))
+  if (types_deeply_equal (make_unqualified_type (arg2->type ()),
+			  make_unqualified_type (type)))
     {
       /* If the types are exactly equal then we can avoid creating a new
 	 value completely.  */
@@ -700,10 +696,17 @@ value_reinterpret_cast (struct type *type, struct value *arg)
       || (dest_code == TYPE_CODE_MEMBERPTR && arg_code == TYPE_CODE_INT)
       || (dest_code == TYPE_CODE_INT && arg_code == TYPE_CODE_MEMBERPTR)
       || (dest_code == arg_code
-	  && (dest_code == TYPE_CODE_PTR
-	      || dest_code == TYPE_CODE_METHODPTR
+	  && (dest_code == TYPE_CODE_METHODPTR
 	      || dest_code == TYPE_CODE_MEMBERPTR)))
     result = value_cast (dest_type, arg);
+  else if (dest_code == TYPE_CODE_PTR && arg_code == TYPE_CODE_PTR)
+    {
+      /* Don't do any up- or downcasting.  */
+      result = arg->copy ();
+      result->deprecated_set_type (dest_type);
+      result->set_enclosing_type (dest_type);
+      result->set_pointed_to_offset (0);
+    }
   else
     error (_("Invalid reinterpret_cast"));
 
@@ -982,7 +985,7 @@ value_one (struct type *type)
    e.g. in case the type is a variable length array.  */
 
 static struct value *
-get_value_at (struct type *type, CORE_ADDR addr, frame_info_ptr frame,
+get_value_at (struct type *type, CORE_ADDR addr, const frame_info_ptr &frame,
 	      int lazy)
 {
   struct value *val;
@@ -1035,7 +1038,7 @@ value_at_non_lval (struct type *type, CORE_ADDR addr)
    e.g. in case the type is a variable length array.  */
 
 struct value *
-value_at_lazy (struct type *type, CORE_ADDR addr, frame_info_ptr frame)
+value_at_lazy (struct type *type, CORE_ADDR addr, const frame_info_ptr &frame)
 {
   return get_value_at (type, addr, frame, 1);
 }
@@ -1354,6 +1357,8 @@ struct value *
 value_repeat (struct value *arg1, int count)
 {
   struct value *val;
+
+  arg1 = coerce_ref (arg1);
 
   if (arg1->lval () != lval_memory)
     error (_("Only values in memory can be extended with '@'."));
@@ -3708,7 +3713,7 @@ value_struct_elt_for_reference (struct type *domain, int offset,
 	    {
 	      struct symbol *s = 
 		lookup_symbol (TYPE_FN_FIELD_PHYSNAME (f, j),
-			       0, VAR_DOMAIN, 0).symbol;
+			       0, SEARCH_FUNCTION_DOMAIN, 0).symbol;
 
 	      if (s == NULL)
 		return NULL;
@@ -3739,7 +3744,7 @@ value_struct_elt_for_reference (struct type *domain, int offset,
 	    {
 	      struct symbol *s = 
 		lookup_symbol (TYPE_FN_FIELD_PHYSNAME (f, j),
-			       0, VAR_DOMAIN, 0).symbol;
+			       0, SEARCH_FUNCTION_DOMAIN, 0).symbol;
 
 	      if (s == NULL)
 		return NULL;
@@ -3819,7 +3824,7 @@ value_maybe_namespace_elt (const struct type *curtype,
   struct value *result;
 
   sym = cp_lookup_symbol_namespace (namespace_name, name,
-				    get_selected_block (0), VAR_DOMAIN);
+				    get_selected_block (0), SEARCH_VFT);
 
   if (sym.symbol == NULL)
     return NULL;

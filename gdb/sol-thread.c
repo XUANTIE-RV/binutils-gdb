@@ -48,7 +48,6 @@
    symbols, etc...  The ps_* routines actually do most of their work
    by calling functions in procfs.c.  */
 
-#include "defs.h"
 #include <thread.h>
 #include <proc_service.h>
 #include <thread_db.h>
@@ -58,7 +57,7 @@
 #include <fcntl.h>
 #include <sys/stat.h>
 #include <dlfcn.h>
-#include "gdbcmd.h"
+#include "cli/cli-cmds.h"
 #include "gdbcore.h"
 #include "regcache.h"
 #include "solib.h"
@@ -606,7 +605,7 @@ check_for_thread_db (void)
   ptid_t ptid;
 
   /* Don't attempt to use thread_db for remote targets.  */
-  if (!(target_can_run () || core_bfd))
+  if (!(target_can_run () || current_program_space->core_bfd () != nullptr))
     return;
 
   /* Do nothing if we couldn't load libthread_db.so.1.  */

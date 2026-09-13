@@ -44,7 +44,102 @@ using addrmap_foreach_const_fn
 /* The base class for addrmaps.  */
 struct addrmap
 {
-  virtual ~addrmap () = default;
+  /* Return the object associated with ADDR in MAP.  */
+  const void *find (CORE_ADDR addr) const
+  { return this->do_find (addr); }
+
+  void *find (CORE_ADDR addr)
+  { return this->do_find (addr); }
+
+  /* Relocate all the addresses in MAP by OFFSET.  (This can be applied
+     to either mutable or immutable maps.)  */
+  virtual void relocate (CORE_ADDR offset) = 0;
+
+  /* Call FN for every address in MAP, following an in-order traversal.
+     If FN ever returns a non-zero value, the iteration ceases
+     immediately, and the value is returned.  Otherwise, this function
+     returns 0.  */
+  int foreach (addrmap_foreach_const_fn fn) const
+  { return this->do_foreach (fn); }
+
+  int foreach (addrmap_foreach_fn fn)
+  { return this->do_foreach (fn); }
+
+
+protected:
+  ~addrmap () = default;
+
+private:
+  /* Worker for find, implemented by sub-classes.  */
+  virtual void *do_find (CORE_ADDR addr) const = 0;
+
+  /* Worker for foreach, implemented by sub-classes.  */
+  virtual int do_foreach (addrmap_foreach_fn fn) const = 0;
+};
+
+struct addrmap_mutable;
+
+/* Fixed address maps.  */
+struct addrmap_fixed final : public addrmap,
+			     public allocate_on_obstack<addrmap_fixed>
+{
+public:
+
+  addrmap_fixed (struct obstack *obstack, const addrmap_mutable *mut);
+  DISABLE_COPY_AND_ASSIGN (addrmap_fixed);
+
+  /* It's fine to use the default move operators, because this addrmap
+     does not own the storage for the elements.  */
+  addrmap_fixed (addrmap_fixed &&other) = default;
+  addrmap_fixed &operator= (addrmap_fixed &&) = default;
+
+  void relocate (CORE_ADDR offset) override;
+
+private:
+  void *do_find (CORE_ADDR addr) const override;
+  int do_foreach (addrmap_foreach_fn fn) const override;
+
+  /* A transition: a point in an address map where the value changes.
+     The map maps ADDR to VALUE, but if ADDR > 0, it maps ADDR-1 to
+     something else.  */
+  struct addrmap_transition
+  {
+    CORE_ADDR addr;
+    void *value;
+  };
+
+  /* The number of transitions in TRANSITIONS.  */
+  size_t num_transitions;
+
+  /* An array of transitions, sorted by address.  For every point in
+     the map where either ADDR == 0 or ADDR is mapped to one value and
+     ADDR - 1 is mapped to something different, we have an entry here
+     containing ADDR and VALUE.  (Note that this means we always have
+     an entry for address 0).  */
+  struct addrmap_transition *transitions;
+};
+
+/* Mutable address maps.  */
+
+struct addrmap_mutable final : public addrmap
+{
+public:
+
+  addrmap_mutable ();
+  ~addrmap_mutable ();
+  DISABLE_COPY_AND_ASSIGN (addrmap_mutable);
+
+  addrmap_mutable (addrmap_mutable &&other)
+    : tree (other.tree)
+  {
+    other.tree = nullptr;
+  }
+
+  addrmap_mutable &operator= (addrmap_mutable &&other)
+  {
+    std::swap (tree, other.tree);
+    return *this;
+  }
 
   /* In the mutable address map MAP, associate the addresses from START
      to END_INCLUSIVE that are currently associated with NULL with OBJ
@@ -83,90 +178,8 @@ struct addrmap
      semantics than to provide an interface which allows it to be
      implemented efficiently, but doesn't reveal too much of the
      representation.  */
-  virtual void set_empty (CORE_ADDR start, CORE_ADDR end_inclusive,
-			  void *obj) = 0;
-
-  /* Return the object associated with ADDR in MAP.  */
-  const void *find (CORE_ADDR addr) const
-  { return this->do_find (addr); }
-
-  void *find (CORE_ADDR addr)
-  { return this->do_find (addr); }
-
-  /* Relocate all the addresses in MAP by OFFSET.  (This can be applied
-     to either mutable or immutable maps.)  */
-  virtual void relocate (CORE_ADDR offset) = 0;
-
-  /* Call FN for every address in MAP, following an in-order traversal.
-     If FN ever returns a non-zero value, the iteration ceases
-     immediately, and the value is returned.  Otherwise, this function
-     returns 0.  */
-  int foreach (addrmap_foreach_const_fn fn) const
-  { return this->do_foreach (fn); }
-
-  int foreach (addrmap_foreach_fn fn)
-  { return this->do_foreach (fn); }
-
-
-private:
-  /* Worker for find, implemented by sub-classes.  */
-  virtual void *do_find (CORE_ADDR addr) const = 0;
-
-  /* Worker for foreach, implemented by sub-classes.  */
-  virtual int do_foreach (addrmap_foreach_fn fn) const = 0;
-};
-
-struct addrmap_mutable;
-
-/* Fixed address maps.  */
-struct addrmap_fixed : public addrmap,
-		       public allocate_on_obstack
-{
-public:
-
-  addrmap_fixed (struct obstack *obstack, addrmap_mutable *mut);
-  DISABLE_COPY_AND_ASSIGN (addrmap_fixed);
-
   void set_empty (CORE_ADDR start, CORE_ADDR end_inclusive,
-		  void *obj) override;
-  void relocate (CORE_ADDR offset) override;
-
-private:
-  void *do_find (CORE_ADDR addr) const override;
-  int do_foreach (addrmap_foreach_fn fn) const override;
-
-  /* A transition: a point in an address map where the value changes.
-     The map maps ADDR to VALUE, but if ADDR > 0, it maps ADDR-1 to
-     something else.  */
-  struct addrmap_transition
-  {
-    CORE_ADDR addr;
-    void *value;
-  };
-
-  /* The number of transitions in TRANSITIONS.  */
-  size_t num_transitions;
-
-  /* An array of transitions, sorted by address.  For every point in
-     the map where either ADDR == 0 or ADDR is mapped to one value and
-     ADDR - 1 is mapped to something different, we have an entry here
-     containing ADDR and VALUE.  (Note that this means we always have
-     an entry for address 0).  */
-  struct addrmap_transition *transitions;
-};
-
-/* Mutable address maps.  */
-
-struct addrmap_mutable : public addrmap
-{
-public:
-
-  addrmap_mutable ();
-  ~addrmap_mutable ();
-  DISABLE_COPY_AND_ASSIGN (addrmap_mutable);
-
-  void set_empty (CORE_ADDR start, CORE_ADDR end_inclusive,
-		  void *obj) override;
+		  void *obj);
   void relocate (CORE_ADDR offset) override;
 
 private:

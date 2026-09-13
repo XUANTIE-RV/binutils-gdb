@@ -187,6 +187,9 @@ static const struct ld_option ld_options[] =
     '\0', N_("PLUGIN"), N_("Load named plugin"), ONE_DASH },
   { {"plugin-opt", required_argument, NULL, OPTION_PLUGIN_OPT},
     '\0', N_("ARG"), N_("Send arg to last-loaded plugin"), ONE_DASH },
+  { {"plugin-save-temps", no_argument, NULL, OPTION_PLUGIN_SAVE_TEMPS},
+    '\0', NULL, N_("Store plugin intermediate files permanently"),
+    ONE_DASH },
   { {"flto", optional_argument, NULL, OPTION_IGNORE},
     '\0', NULL, N_("Ignored for GCC LTO option compatibility"),
     ONE_DASH },
@@ -484,6 +487,9 @@ static const struct ld_option ld_options[] =
   { {"sort-section", required_argument, NULL, OPTION_SORT_SECTION},
     '\0', N_("name|alignment"),
     N_("Sort sections by name or maximum alignment"), TWO_DASHES },
+  { {"section-ordering-file", required_argument, NULL, OPTION_SECTION_ORDERING_FILE},
+    '\0', N_("FILE"),
+    N_("Sort sections by statements in FILE"), TWO_DASHES },
   { {"spare-dynamic-tags", required_argument, NULL, OPTION_SPARE_DYNAMIC_TAGS},
     '\0', N_("COUNT"), N_("How many tags to reserve in .dynamic section"),
     TWO_DASHES },
@@ -1211,6 +1217,9 @@ parse_args (unsigned argc, char **argv)
 	  if (plugin_opt_plugin_arg (optarg))
 	    einfo (_("%F%P: bad -plugin-opt option\n"));
 	  break;
+	case OPTION_PLUGIN_SAVE_TEMPS:
+	  config.plugin_save_temps = true;
+	  break;
 #endif /* BFD_SUPPORTS_PLUGINS */
 	case 'q':
 	  link_info.emitrelocations = true;
@@ -1393,6 +1402,12 @@ parse_args (unsigned argc, char **argv)
 	  else
 	    einfo (_("%F%P: invalid section sorting option: %s\n"),
 		   optarg);
+	  break;
+	case OPTION_SECTION_ORDERING_FILE:
+	  if (command_line.section_ordering_file != NULL
+	      && strcmp (optarg, command_line.section_ordering_file) != 0)
+	    einfo (_("%P: warning: section ordering file changed.  Ignoring earlier definition\n"));
+	  command_line.section_ordering_file = optarg;
 	  break;
 	case OPTION_STATS:
 	  config.stats = true;

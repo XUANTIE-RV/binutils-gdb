@@ -16,7 +16,7 @@
    You should have received a copy of the GNU General Public License
    along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
 
-#include "defs.h"
+#include "extract-store-integer.h"
 #include "fbsd-tdep.h"
 #include "osabi.h"
 #include "riscv-tdep.h"
@@ -108,7 +108,7 @@ riscv_fbsd_iterate_over_regset_sections (struct gdbarch *gdbarch,
 
 static void
 riscv_fbsd_sigframe_init (const struct tramp_frame *self,
-			  frame_info_ptr this_frame,
+			  const frame_info_ptr &this_frame,
 			  struct trad_frame_cache *this_cache,
 			  CORE_ADDR func)
 {

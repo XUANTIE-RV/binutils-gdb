@@ -625,7 +625,7 @@ output_sframe_internal (void)
   struct sframe_func_entry *sframe_fde;
   struct sframe_row_entry *sframe_fre;
   unsigned char abi_arch = 0;
-  int fixed_bp_offset = SFRAME_CFA_FIXED_FP_INVALID;
+  int fixed_fp_offset = SFRAME_CFA_FIXED_FP_INVALID;
   int fixed_ra_offset = SFRAME_CFA_FIXED_RA_INVALID;
   unsigned int addr_size;
 
@@ -658,12 +658,12 @@ output_sframe_internal (void)
   gas_assert (abi_arch);
   out_one (abi_arch);
 
-  /* Offset for the BP register from CFA.  Neither of the AMD64 or AAPCS64
-     ABIs have a fixed offset for the BP register from the CFA.  This may be
+  /* Offset for the FP register from CFA.  Neither of the AMD64 or AAPCS64
+     ABIs have a fixed offset for the FP register from the CFA.  This may be
      useful in future (but not without additional support in the toolchain)
      for specialized handling/encoding for cases where, for example,
      -fno-omit-frame-pointer is used.  */
-  out_one (fixed_bp_offset);
+  out_one (fixed_fp_offset);
 
   /* Offset for the return address from CFA is fixed for some ABIs
      (e.g., AMD64), output a SFRAME_CFA_FIXED_RA_INVALID otherwise.  */
@@ -846,6 +846,8 @@ sframe_xlate_ctx_cleanup (struct sframe_xlate_ctx *xlate_ctx)
 	  fre = fre_next;
 	}
     }
+
+  XDELETE (xlate_ctx->cur_fre);
 
   sframe_xlate_ctx_init (xlate_ctx);
 }
@@ -1360,6 +1362,8 @@ create_sframe_all (void)
 	  sframe_fde_link (sframe_fde);
 	}
     }
+
+  XDELETE (xlate_ctx);
 }
 
 void

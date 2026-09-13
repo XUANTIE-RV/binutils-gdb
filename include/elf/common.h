@@ -496,6 +496,7 @@
 #define PT_OPENBSD_RANDOMIZE (PT_LOOS + 0x5a3dbe6)  /* Fill with random data.  */
 #define PT_OPENBSD_WXNEEDED  (PT_LOOS + 0x5a3dbe7)  /* Program does W^X violations.  */
 #define PT_OPENBSD_NOBTCFI   (PT_LOOS + 0x5a3dbe8)  /* No branch target CFI.  */
+#define PT_OPENBSD_SYSCALLS  (PT_LOOS + 0x5a3dbe9)  /* System call sites.  */
 #define PT_OPENBSD_BOOTDATA  (PT_LOOS + 0x5a41be6)  /* Section for boot arguments.  */
 
 /* Mbind segments */
@@ -1035,6 +1036,9 @@
 
 /* Values for FDO .note.package notes as defined on https://systemd.io/COREDUMP_PACKAGE_METADATA/  */
 #define FDO_PACKAGING_METADATA	0xcafe1a7e
+
+/* Values for FDO .note.dlopen notes as defined on https://systemd.io/ELF_DLOPEN_METADATA/  */
+#define FDO_DLOPEN_METADATA 0x407c0c0a
 
 /* These three macros disassemble and assemble a symbol table st_info field,
    which contains the symbol binding and symbol type.  The STB_ and STT_

@@ -1499,7 +1499,7 @@ elf_i386_scan_relocs (bfd *abfd,
   /* Get the section contents.  */
   if (elf_section_data (sec)->this_hdr.contents != NULL)
     contents = elf_section_data (sec)->this_hdr.contents;
-  else if (!bfd_malloc_and_get_section (abfd, sec, &contents))
+  else if (!_bfd_elf_mmap_section_contents (abfd, sec, &contents))
     {
       sec->check_relocs_failed = 1;
       return false;
@@ -1932,8 +1932,8 @@ elf_i386_scan_relocs (bfd *abfd,
 
   if (elf_section_data (sec)->this_hdr.contents != contents)
     {
-      if (!converted && !_bfd_link_keep_memory (info))
-	free (contents);
+      if (!converted)
+	_bfd_elf_munmap_section_contents (sec, contents);
       else
 	{
 	  /* Cache the section contents for elf_link_input_bfd if any
@@ -1951,14 +1951,13 @@ elf_i386_scan_relocs (bfd *abfd,
 
  error_return:
   if (elf_section_data (sec)->this_hdr.contents != contents)
-    free (contents);
+    _bfd_elf_munmap_section_contents (sec, contents);
   sec->check_relocs_failed = 1;
   return false;
 }
 
 static bool
-elf_i386_always_size_sections (bfd *output_bfd,
-			       struct bfd_link_info *info)
+elf_i386_early_size_sections (bfd *output_bfd, struct bfd_link_info *info)
 {
   bfd *abfd;
 
@@ -1971,7 +1970,7 @@ elf_i386_always_size_sections (bfd *output_bfd,
 					     elf_i386_scan_relocs))
       return false;
 
-  return _bfd_x86_elf_always_size_sections (output_bfd, info);
+  return _bfd_x86_elf_early_size_sections (output_bfd, info);
 }
 
 /* Set the correct type for an x86 ELF section.  We do this by the
@@ -3581,8 +3580,6 @@ elf_i386_finish_dynamic_symbol (bfd *output_bfd,
   bool use_plt_second;
 
   htab = elf_x86_hash_table (info, I386_ELF_DATA);
-  if (htab == NULL)
-    return false;
 
   plt_entry_size = htab->plt.plt_entry_size;
 
@@ -4479,7 +4476,7 @@ elf_i386_link_setup_gnu_properties (struct bfd_link_info *info)
 #define bfd_elf32_get_synthetic_symtab	      elf_i386_get_synthetic_symtab
 
 #define elf_backend_relocs_compatible	      _bfd_elf_relocs_compatible
-#define elf_backend_always_size_sections      elf_i386_always_size_sections
+#define elf_backend_early_size_sections	      elf_i386_early_size_sections
 #define elf_backend_create_dynamic_sections   _bfd_elf_create_dynamic_sections
 #define elf_backend_fake_sections	      elf_i386_fake_sections
 #define elf_backend_finish_dynamic_sections   elf_i386_finish_dynamic_sections

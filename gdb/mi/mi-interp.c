@@ -17,7 +17,6 @@
    You should have received a copy of the GNU General Public License
    along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
 
-#include "defs.h"
 
 #include "mi-interp.h"
 
@@ -133,8 +132,6 @@ mi_interp::resume ()
   gdb_stdlog = mi->log;
   /* Route target output through the MI.  */
   gdb_stdtarg = mi->targ;
-  /* Route target error through the MI as well.  */
-  gdb_stdtargerr = mi->targ;
 
   deprecated_show_load_progress = mi_load_progress;
 }
@@ -724,7 +721,7 @@ mi_interp::on_target_resumed (ptid_t ptid)
 /* See mi-interp.h.  */
 
 void
-mi_output_solib_attribs (ui_out *uiout, const shobj &solib)
+mi_output_solib_attribs (ui_out *uiout, const solib &solib)
 {
   gdbarch *gdbarch = current_inferior ()->arch ();
 
@@ -745,7 +742,7 @@ mi_output_solib_attribs (ui_out *uiout, const shobj &solib)
 }
 
 void
-mi_interp::on_solib_loaded (const shobj &solib)
+mi_interp::on_solib_loaded (const solib &solib)
 {
   ui_out *uiout = this->interp_ui_out ();
 
@@ -762,7 +759,7 @@ mi_interp::on_solib_loaded (const shobj &solib)
 }
 
 void
-mi_interp::on_solib_unloaded (const shobj &solib)
+mi_interp::on_solib_unloaded (const solib &solib)
 {
   ui_out *uiout = this->interp_ui_out ();
 

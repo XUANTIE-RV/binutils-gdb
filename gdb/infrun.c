@@ -18,7 +18,7 @@
    You should have received a copy of the GNU General Public License
    along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
 
-#include "defs.h"
+#include "cli/cli-cmds.h"
 #include "displaced-stepping.h"
 #include "infrun.h"
 #include <ctype.h>
@@ -27,7 +27,6 @@
 #include "inferior.h"
 #include "breakpoint.h"
 #include "gdbcore.h"
-#include "gdbcmd.h"
 #include "target.h"
 #include "target-connection.h"
 #include "gdbthread.h"
@@ -88,9 +87,9 @@ static void follow_inferior_reset_breakpoints (void);
 
 static bool currently_stepping (struct thread_info *tp);
 
-static void insert_hp_step_resume_breakpoint_at_frame (frame_info_ptr);
+static void insert_hp_step_resume_breakpoint_at_frame (const frame_info_ptr &);
 
-static void insert_step_resume_breakpoint_at_caller (frame_info_ptr);
+static void insert_step_resume_breakpoint_at_caller (const frame_info_ptr &);
 
 static void insert_longjmp_resume_breakpoint (struct gdbarch *, CORE_ADDR);
 
@@ -1247,7 +1246,7 @@ follow_exec (ptid_t ptid, const char *exec_file_target)
      value that was overwritten with a TRAP instruction).  Since
      we now have a new a.out, those shadow contents aren't valid.  */
 
-  mark_breakpoints_out ();
+  mark_breakpoints_out (current_program_space);
 
   /* The target reports the exec event to the main thread, even if
      some other thread does the exec, and even if the main thread was
@@ -1297,7 +1296,7 @@ follow_exec (ptid_t ptid, const char *exec_file_target)
   /* We've followed the inferior through an exec.  Therefore, the
      inferior has essentially been killed & reborn.  */
 
-  breakpoint_init_inferior (inf_execd);
+  breakpoint_init_inferior (current_inferior (), inf_execd);
 
   gdb::unique_xmalloc_ptr<char> exec_file_host
     = exec_file_find (exec_file_target, nullptr);
@@ -2406,6 +2405,14 @@ user_visible_resume_ptid (int step)
 	 mode.  */
       resume_ptid = inferior_ptid;
     }
+  else if (inferior_ptid != null_ptid
+	   && inferior_thread ()->control.in_cond_eval)
+    {
+      /* The inferior thread is evaluating a BP condition.  Other threads
+	 might be stopped or running and we do not want to change their
+	 state, thus, resume only the current thread.  */
+      resume_ptid = inferior_ptid;
+    }
   else if (!sched_multi && target_supports_multi_process ())
     {
       /* Resume all threads of the current process (and none of other
@@ -3201,12 +3208,24 @@ schedlock_applies (struct thread_info *tp)
 					    execution_direction)));
 }
 
-/* Set process_stratum_target::COMMIT_RESUMED_STATE in all target
-   stacks that have threads executing and don't have threads with
-   pending events.  */
+/* When FORCE_P is false, set process_stratum_target::COMMIT_RESUMED_STATE
+   in all target stacks that have threads executing and don't have threads
+   with pending events.
+
+   When FORCE_P is true, set process_stratum_target::COMMIT_RESUMED_STATE
+   in all target stacks that have threads executing regardless of whether
+   there are pending events or not.
+
+   Passing FORCE_P as false makes sense when GDB is going to wait for
+   events from all threads and will therefore spot the pending events.
+   However, if GDB is only going to wait for events from select threads
+   (i.e. when performing an inferior call) then a pending event on some
+   other thread will not be spotted, and if we fail to commit the resume
+   state for the thread performing the inferior call, then the inferior
+   call will never complete (or even start).  */
 
 static void
-maybe_set_commit_resumed_all_targets ()
+maybe_set_commit_resumed_all_targets (bool force_p)
 {
   scoped_restore_current_thread restore_thread;
 
@@ -3235,7 +3254,7 @@ maybe_set_commit_resumed_all_targets ()
 	 status to report, handle it before requiring the target to
 	 commit its resumed threads: handling the status might lead to
 	 resuming more threads.  */
-      if (proc_target->has_resumed_with_pending_wait_status ())
+      if (!force_p && proc_target->has_resumed_with_pending_wait_status ())
 	{
 	  infrun_debug_printf ("not requesting commit-resumed for target %s, a"
 			       " thread has a pending waitstatus",
@@ -3245,7 +3264,7 @@ maybe_set_commit_resumed_all_targets ()
 
       switch_to_inferior_no_thread (inf);
 
-      if (target_has_pending_events ())
+      if (!force_p && target_has_pending_events ())
 	{
 	  infrun_debug_printf ("not requesting commit-resumed for target %s, "
 			       "target has pending events",
@@ -3338,7 +3357,7 @@ scoped_disable_commit_resumed::reset ()
     {
       /* This is the outermost instance, re-enable
 	 COMMIT_RESUMED_STATE on the targets where it's possible.  */
-      maybe_set_commit_resumed_all_targets ();
+      maybe_set_commit_resumed_all_targets (false);
     }
   else
     {
@@ -3371,7 +3390,7 @@ scoped_disable_commit_resumed::reset_and_commit ()
 /* See infrun.h.  */
 
 scoped_enable_commit_resumed::scoped_enable_commit_resumed
-  (const char *reason)
+  (const char *reason, bool force_p)
   : m_reason (reason),
     m_prev_enable_commit_resumed (enable_commit_resumed)
 {
@@ -3383,7 +3402,7 @@ scoped_enable_commit_resumed::scoped_enable_commit_resumed
 
       /* Re-enable COMMIT_RESUMED_STATE on the targets where it's
 	 possible.  */
-      maybe_set_commit_resumed_all_targets ();
+      maybe_set_commit_resumed_all_targets (force_p);
 
       maybe_call_commit_resumed_all_targets ();
     }
@@ -3819,7 +3838,7 @@ init_wait_for_inferior (void)
 {
   /* These are meaningless until the first time through wait_for_inferior.  */
 
-  breakpoint_init_inferior (inf_starting);
+  breakpoint_init_inferior (current_inferior (), inf_starting);
 
   clear_proceed_status (0);
 
@@ -3838,7 +3857,7 @@ static void handle_step_into_function_backward (struct gdbarch *gdbarch,
 						struct execution_control_state *ecs);
 static void handle_signal_stop (struct execution_control_state *ecs);
 static void check_exception_resume (struct execution_control_state *,
-				    frame_info_ptr);
+				    const frame_info_ptr &);
 
 static void end_stepping_range (struct execution_control_state *ecs);
 static void stop_waiting (struct execution_control_state *ecs);
@@ -4125,7 +4144,8 @@ do_target_wait_1 (inferior *inf, ptid_t ptid,
    more events.  Polls for events from all inferiors/targets.  */
 
 static bool
-do_target_wait (execution_control_state *ecs, target_wait_flags options)
+do_target_wait (ptid_t wait_ptid, execution_control_state *ecs,
+		target_wait_flags options)
 {
   int num_inferiors = 0;
   int random_selector;
@@ -4135,9 +4155,11 @@ do_target_wait (execution_control_state *ecs, target_wait_flags options)
      polling the rest of the inferior list starting from that one in a
      circular fashion until the whole list is polled once.  */
 
-  auto inferior_matches = [] (inferior *inf)
+  ptid_t wait_ptid_pid {wait_ptid.pid ()};
+  auto inferior_matches = [&wait_ptid_pid] (inferior *inf)
     {
-      return inf->process_target () != nullptr;
+      return (inf->process_target () != nullptr
+	      && ptid_t (inf->pid).matches (wait_ptid_pid));
     };
 
   /* First see how many matching inferiors we have.  */
@@ -4176,7 +4198,7 @@ do_target_wait (execution_control_state *ecs, target_wait_flags options)
 
   auto do_wait = [&] (inferior *inf)
   {
-    ecs->ptid = do_target_wait_1 (inf, minus_one_ptid, &ecs->ws, options);
+    ecs->ptid = do_target_wait_1 (inf, wait_ptid, &ecs->ws, options);
     ecs->target = inf->process_target ();
     return (ecs->ws.kind () != TARGET_WAITKIND_IGNORE);
   };
@@ -4626,7 +4648,17 @@ fetch_inferior_event ()
        the event.  */
     scoped_disable_commit_resumed disable_commit_resumed ("handling event");
 
-    if (!do_target_wait (&ecs, TARGET_WNOHANG))
+    /* Is the current thread performing an inferior function call as part
+       of a breakpoint condition evaluation?  */
+    bool in_cond_eval = (inferior_ptid != null_ptid
+			 && inferior_thread ()->control.in_cond_eval);
+
+    /* If the thread is in the middle of the condition evaluation, wait for
+       an event from the current thread.  Otherwise, wait for an event from
+       any thread.  */
+    ptid_t waiton_ptid = in_cond_eval ? inferior_ptid : minus_one_ptid;
+
+    if (!do_target_wait (waiton_ptid, &ecs, TARGET_WNOHANG))
       {
 	infrun_debug_printf ("do_target_wait returned no event");
 	disable_commit_resumed.reset_and_commit ();
@@ -4684,7 +4716,12 @@ fetch_inferior_event ()
 	    bool should_notify_stop = true;
 	    bool proceeded = false;
 
-	    stop_all_threads_if_all_stop_mode ();
+	    /* If the thread that stopped just completed an inferior
+	       function call as part of a condition evaluation, then we
+	       don't want to stop all the other threads.  */
+	    if (ecs.event_thread == nullptr
+		|| !ecs.event_thread->control.in_cond_eval)
+	      stop_all_threads_if_all_stop_mode ();
 
 	    clean_up_just_stopped_threads_fsms (&ecs);
 
@@ -4711,7 +4748,7 @@ fetch_inferior_event ()
 		  proceeded = normal_stop ();
 	      }
 
-	    if (!proceeded)
+	    if (!proceeded && !in_cond_eval)
 	      {
 		inferior_event_handler (INF_EXEC_COMPLETE);
 		cmd_done = 1;
@@ -4771,7 +4808,7 @@ fetch_inferior_event ()
 /* See infrun.h.  */
 
 void
-set_step_info (thread_info *tp, frame_info_ptr frame,
+set_step_info (thread_info *tp, const frame_info_ptr &frame,
 	       struct symtab_and_line sal)
 {
   /* This can be removed once this function no longer implicitly relies on the
@@ -5003,8 +5040,10 @@ adjust_pc_after_break (struct thread_info *thread,
 }
 
 static bool
-stepped_in_from (frame_info_ptr frame, struct frame_id step_frame_id)
+stepped_in_from (const frame_info_ptr &initial_frame, frame_id step_frame_id)
 {
+  frame_info_ptr frame = initial_frame;
+
   for (frame = get_prev_frame (frame);
        frame != nullptr;
        frame = get_prev_frame (frame))
@@ -7017,11 +7056,6 @@ handle_signal_stop (struct execution_control_state *ecs)
 					   ecs->event_thread->stop_pc (),
 					   ecs->ws);
 	  skip_inline_frames (ecs->event_thread, stop_chain);
-
-	  /* Re-fetch current thread's frame in case that invalidated
-	     the frame cache.  */
-	  frame = get_current_frame ();
-	  gdbarch = get_frame_arch (frame);
 	}
     }
 
@@ -7318,6 +7352,37 @@ update_line_range_start (CORE_ADDR pc, struct execution_control_state *ecs)
   return start_line_pc;
 }
 
+namespace {
+
+/* Helper class for process_event_stop_test implementing lazy evaluation.  */
+template<typename T>
+class lazy_loader
+{
+  using fetcher_t = std::function<T ()>;
+
+public:
+  explicit lazy_loader (fetcher_t &&f) : m_loader (std::move (f))
+  { }
+
+  T &operator* ()
+  {
+    if (!m_value.has_value ())
+      m_value.emplace (m_loader ());
+    return m_value.value ();
+  }
+
+  T *operator-> ()
+  {
+    return &**this;
+  }
+
+private:
+  std::optional<T> m_value;
+  fetcher_t m_loader;
+};
+
+}
+
 /* Come here when we've got some debug event / signal we can explain
    (IOW, not a random signal), and test whether it should cause a
    stop, or whether we should resume the inferior (transparently).
@@ -7349,16 +7414,11 @@ process_event_stop_test (struct execution_control_state *ecs)
      bp_jit_event).  Run them now.  */
   bpstat_run_callbacks (ecs->event_thread->control.stop_bpstat);
 
-  /* If we hit an internal event that triggers symbol changes, the
-     current frame will be invalidated within bpstat_what (e.g., if we
-     hit an internal solib event).  Re-fetch it.  */
-  frame = get_current_frame ();
-  gdbarch = get_frame_arch (frame);
-
   /* Shorthand to make if statements smaller.  */
   struct frame_id original_frame_id
     = ecs->event_thread->control.step_frame_id;
-  struct frame_id curr_frame_id = get_frame_id (get_current_frame ());
+  lazy_loader<frame_id> curr_frame_id
+    ([] () { return get_frame_id (get_current_frame ()); });
 
   switch (what.main_action)
     {
@@ -7446,7 +7506,7 @@ process_event_stop_test (struct execution_control_state *ecs)
 
 	if (init_frame)
 	  {
-	    if (curr_frame_id == ecs->event_thread->initiating_frame)
+	    if (*curr_frame_id == ecs->event_thread->initiating_frame)
 	      {
 		/* Case 2.  Fall through.  */
 	      }
@@ -7599,11 +7659,6 @@ process_event_stop_test (struct execution_control_state *ecs)
       return;
     }
 
-  /* Re-fetch current thread's frame in case the code above caused
-     the frame cache to be re-initialized, making our FRAME variable
-     a dangling pointer.  */
-  frame = get_current_frame ();
-  gdbarch = get_frame_arch (frame);
   fill_in_stop_func (gdbarch, ecs);
 
   /* If stepping through a line, keep going if still within it.
@@ -7619,7 +7674,7 @@ process_event_stop_test (struct execution_control_state *ecs)
   if (pc_in_thread_step_range (ecs->event_thread->stop_pc (),
 			       ecs->event_thread)
       && (execution_direction != EXEC_REVERSE
-	  || curr_frame_id == original_frame_id))
+	  || *curr_frame_id == original_frame_id))
     {
       infrun_debug_printf
 	("stepping inside range [%s-%s]",
@@ -7784,7 +7839,7 @@ process_event_stop_test (struct execution_control_state *ecs)
   if ((get_stack_frame_id (frame)
        != ecs->event_thread->control.step_stack_frame_id)
       && get_frame_type (frame) != SIGTRAMP_FRAME
-      && ((frame_unwind_caller_id (get_current_frame ())
+      && ((frame_unwind_caller_id (frame)
 	   == ecs->event_thread->control.step_stack_frame_id)
 	  && ((ecs->event_thread->control.step_stack_frame_id
 	       != outer_frame_id)
@@ -8062,12 +8117,12 @@ process_event_stop_test (struct execution_control_state *ecs)
      frame machinery detected some skipped call sites, we have entered
      a new inline function.  */
 
-  if ((curr_frame_id == original_frame_id)
+  if ((*curr_frame_id == original_frame_id)
       && inline_skipped_frames (ecs->event_thread))
     {
       infrun_debug_printf ("stepped into inlined function");
 
-      symtab_and_line call_sal = find_frame_sal (get_current_frame ());
+      symtab_and_line call_sal = find_frame_sal (frame);
 
       if (ecs->event_thread->control.step_over_calls != STEP_OVER_ALL)
 	{
@@ -8109,9 +8164,9 @@ process_event_stop_test (struct execution_control_state *ecs)
      to go further up to find the exact frame ID, we are stepping
      through a more inlined call beyond its call site.  */
 
-  if (get_frame_type (get_current_frame ()) == INLINE_FRAME
-      && (curr_frame_id != original_frame_id)
-      && stepped_in_from (get_current_frame (), original_frame_id))
+  if (get_frame_type (frame) == INLINE_FRAME
+      && (*curr_frame_id != original_frame_id)
+      && stepped_in_from (frame, original_frame_id))
     {
       infrun_debug_printf ("stepping through inlined function");
 
@@ -8164,7 +8219,7 @@ process_event_stop_test (struct execution_control_state *ecs)
 	  end_stepping_range (ecs);
 	  return;
 	}
-      else if (curr_frame_id == original_frame_id)
+      else if (*curr_frame_id == original_frame_id)
 	{
 	  /* We are not at the start of a statement, and we have not changed
 	     frame.
@@ -8190,9 +8245,9 @@ process_event_stop_test (struct execution_control_state *ecs)
 	}
     }
   else if (execution_direction == EXEC_REVERSE
-	  && curr_frame_id != original_frame_id
-	  && original_frame_id.code_addr_p && curr_frame_id.code_addr_p
-	  && original_frame_id.code_addr == curr_frame_id.code_addr)
+	  && *curr_frame_id != original_frame_id
+	  && original_frame_id.code_addr_p && curr_frame_id->code_addr_p
+	  && original_frame_id.code_addr == curr_frame_id->code_addr)
     {
       /* If we enter here, we're leaving a recursive function call.  In this
 	 situation, we shouldn't refresh the step information, because if we
@@ -8710,7 +8765,7 @@ insert_step_resume_breakpoint_at_sal (struct gdbarch *gdbarch,
    RETURN_FRAME.pc.  */
 
 static void
-insert_hp_step_resume_breakpoint_at_frame (frame_info_ptr return_frame)
+insert_hp_step_resume_breakpoint_at_frame (const frame_info_ptr &return_frame)
 {
   gdb_assert (return_frame != nullptr);
 
@@ -8741,7 +8796,7 @@ insert_hp_step_resume_breakpoint_at_frame (frame_info_ptr return_frame)
    of frame_unwind_caller_id for an example).  */
 
 static void
-insert_step_resume_breakpoint_at_caller (frame_info_ptr next_frame)
+insert_step_resume_breakpoint_at_caller (const frame_info_ptr &next_frame)
 {
   /* We shouldn't have gotten here if we don't know where the call site
      is.  */
@@ -8788,7 +8843,7 @@ insert_longjmp_resume_breakpoint (struct gdbarch *gdbarch, CORE_ADDR pc)
 static void
 insert_exception_resume_breakpoint (struct thread_info *tp,
 				    const struct block *b,
-				    frame_info_ptr frame,
+				    const frame_info_ptr &frame,
 				    struct symbol *sym)
 {
   try
@@ -8799,7 +8854,7 @@ insert_exception_resume_breakpoint (struct thread_info *tp,
       struct breakpoint *bp;
 
       vsym = lookup_symbol_search_name (sym->search_name (),
-					b, VAR_DOMAIN);
+					b, SEARCH_VAR_DOMAIN);
       value = read_var_value (vsym.symbol, vsym.block, frame);
       /* If the value was optimized out, revert to the old behavior.  */
       if (! value->optimized_out ())
@@ -8816,9 +8871,6 @@ insert_exception_resume_breakpoint (struct thread_info *tp,
 					       handler,
 					       bp_exception_resume).release ();
 
-	  /* set_momentary_breakpoint_at_pc invalidates FRAME.  */
-	  frame = nullptr;
-
 	  tp->control.exception_resume_breakpoint = bp;
 	}
     }
@@ -8834,7 +8886,7 @@ insert_exception_resume_breakpoint (struct thread_info *tp,
 static void
 insert_exception_resume_from_probe (struct thread_info *tp,
 				    const struct bound_probe *probe,
-				    frame_info_ptr frame)
+				    const frame_info_ptr &frame)
 {
   struct value *arg_value;
   CORE_ADDR handler;
@@ -8863,7 +8915,7 @@ insert_exception_resume_from_probe (struct thread_info *tp,
 
 static void
 check_exception_resume (struct execution_control_state *ecs,
-			frame_info_ptr frame)
+			const frame_info_ptr &frame)
 {
   struct bound_probe probe;
   struct symbol *func;
@@ -9277,10 +9329,10 @@ print_stop_location (const target_waitstatus &ws)
     print_stack_frame (get_selected_frame (nullptr), 0, source_flag, 1);
 }
 
-/* See infrun.h.  */
+/* See `print_stop_event` in infrun.h.  */
 
-void
-print_stop_event (struct ui_out *uiout, bool displays)
+static void
+do_print_stop_event (struct ui_out *uiout, bool displays)
 {
   struct target_waitstatus last;
   struct thread_info *tp;
@@ -9307,6 +9359,16 @@ print_stop_event (struct ui_out *uiout, bool displays)
       if (rv != nullptr)
 	print_return_value (uiout, rv);
     }
+}
+
+/* See infrun.h.  This function itself sets up buffered output for the
+   duration of do_print_stop_event, which performs the actual event
+   printing.  */
+
+void
+print_stop_event (struct ui_out *uiout, bool displays)
+{
+  do_with_buffered_output (do_print_stop_event, uiout, displays);
 }
 
 /* See infrun.h.  */

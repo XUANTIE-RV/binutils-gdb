@@ -17,7 +17,7 @@
    You should have received a copy of the GNU General Public License
    along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
 
-#include "defs.h"
+#include "event-top.h"
 #include "value.h"
 #include <ctype.h>
 
@@ -30,7 +30,6 @@
 #include "cli/cli-decode.h"
 #include "cli/cli-script.h"
 #include "cli/cli-style.h"
-#include "gdbcmd.h"
 
 #include "extension.h"
 #include "interps.h"
@@ -1521,6 +1520,8 @@ do_document_command (const char *comname, int from_tty,
   lookup_cmd_composition (comfull, &alias, &prefix_cmd, &c);
   if (c == nullptr)
     error (_("Undefined command: \"%s\"."), comfull);
+  else if (c == CMD_LIST_AMBIGUOUS)
+    error (_("Ambiguous command: \"%s\"."), comfull);
 
   if (c->theclass != class_user
       && (alias == nullptr || alias->theclass != class_alias))

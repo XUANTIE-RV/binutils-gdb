@@ -17,12 +17,13 @@
    You should have received a copy of the GNU General Public License
    along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
 
-#include "defs.h"
+#include "event-top.h"
+#include "extract-store-integer.h"
 #include "symtab.h"
 #include "gdbtypes.h"
 #include "value.h"
 #include "gdbcore.h"
-#include "gdbcmd.h"
+#include "cli/cli-cmds.h"
 #include "target.h"
 #include "language.h"
 #include "annotate.h"
@@ -1153,12 +1154,6 @@ value_check_printable (struct value *val, struct ui_file *stream,
       fprintf_styled (stream, metadata_style.style (),
 		      _("<internal function %s>"),
 		      value_internal_function_name (val));
-      return 0;
-    }
-
-  if (type_not_associated (val->type ()))
-    {
-      val_print_not_associated (stream);
       return 0;
     }
 

@@ -21,7 +21,6 @@
 
    Contributed by Raoul M. Gough (RaoulGough@yahoo.co.uk).  */
 
-#include "defs.h"
 
 #include "coff-pe-read.h"
 
@@ -29,7 +28,7 @@
 #include "gdbtypes.h"
 
 #include "command.h"
-#include "gdbcmd.h"
+#include "cli/cli-cmds.h"
 #include "symtab.h"
 #include "symfile.h"
 #include "objfiles.h"

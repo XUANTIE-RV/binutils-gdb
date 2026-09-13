@@ -17,7 +17,7 @@
    You should have received a copy of the GNU General Public License
    along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
 
-#include "defs.h"
+#include "extract-store-integer.h"
 #include "value.h"
 #include "symtab.h"
 #include "gdbtypes.h"
@@ -1086,7 +1086,7 @@ type_length_bits (type *type)
 static bool
 check_valid_shift_count (enum exp_opcode op, type *result_type,
 			 type *shift_count_type, const gdb_mpz &shift_count,
-			 unsigned long &nbits)
+			 ULONGEST &nbits)
 {
   if (!shift_count_type->is_unsigned ())
     {
@@ -1112,7 +1112,7 @@ check_valid_shift_count (enum exp_opcode op, type *result_type,
 	}
     }
 
-  nbits = shift_count.as_integer<unsigned long> ();
+  nbits = shift_count.as_integer<ULONGEST> ();
   if (nbits >= type_length_bits (result_type))
     {
       /* In Go, shifting by large amounts is defined.  Be silent and
@@ -1291,7 +1291,7 @@ scalar_binop (struct value *arg1, struct value *arg2, enum exp_opcode op)
 
 	case BINOP_LSH:
 	  {
-	    unsigned long nbits;
+	    ULONGEST nbits;
 	    if (!check_valid_shift_count (op, result_type, type2, v2, nbits))
 	      v = 0;
 	    else
@@ -1301,9 +1301,23 @@ scalar_binop (struct value *arg1, struct value *arg2, enum exp_opcode op)
 
 	case BINOP_RSH:
 	  {
-	    unsigned long nbits;
+	    ULONGEST nbits;
 	    if (!check_valid_shift_count (op, result_type, type2, v2, nbits))
-	      v = 0;
+	      {
+		/* Pretend the too-large shift was decomposed in a
+		   number of smaller shifts.  An arithmetic signed
+		   right shift of a negative number always yields -1
+		   with such semantics.  This is the right thing to
+		   do for Go, and we might as well do it for
+		   languages where it is undefined.  Also, pretend a
+		   shift by a negative number was a shift by the
+		   negative number cast to unsigned, which is the
+		   same as shifting by a too-large number.  */
+		if (v1 < 0 && !result_type->is_unsigned ())
+		  v = -1;
+		else
+		  v = 0;
+	      }
 	    else
 	      v = v1 >> nbits;
 	  }

@@ -95,11 +95,14 @@ _start:
 	kmovw	0x123(%r31,%rax,4),%k5
 	ldtilecfg	0x123(%r31,%rax,4)
 	movbe	%r18w,%ax
+	movbe	%r15w,%ax
 	movbe	%r18w,0x123(%r16,%rax,4)
 	movbe	%r18w,0x123(%r31,%rax,4)
 	movbe	%r25d,%edx
+	movbe	%r15d,%edx
 	movbe	%r25d,0x123(%r16,%rax,4)
 	movbe	%r31,%r15
+	movbe	%r8,%r15
 	movbe	%r31,0x123(%r16,%rax,4)
 	movbe	%r31,0x123(%r31,%rax,4)
 	movbe	0x123(%r16,%rax,4),%r31
@@ -129,6 +132,12 @@ _start:
 	tileloadd	0x123(%r31,%rax,4),%tmm6
 	tileloaddt1	0x123(%r31,%rax,4),%tmm6
 	tilestored	%tmm6,0x123(%r31,%rax,4)
+	vbroadcastf128	(%r16),%ymm3
+	vbroadcasti128	(%r16),%ymm3
+	vextractf128	$1,%ymm3,(%r16)
+	vextracti128	$1,%ymm3,(%r16)
+	vinsertf128	$1,(%r16),%ymm3,%ymm8
+	vinserti128	$1,(%r16),%ymm3,%ymm8
 	vroundpd $1,(%r24),%xmm6
 	vroundps $2,(%r24),%xmm6
 	vroundsd $3,(%r24),%xmm6,%xmm3

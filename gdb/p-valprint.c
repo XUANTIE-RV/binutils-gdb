@@ -19,14 +19,14 @@
 
 /* This file is derived from c-valprint.c */
 
-#include "defs.h"
+#include "extract-store-integer.h"
 #include "gdbsupport/gdb_obstack.h"
 #include "symtab.h"
 #include "gdbtypes.h"
 #include "expression.h"
 #include "value.h"
 #include "command.h"
-#include "gdbcmd.h"
+#include "cli/cli-cmds.h"
 #include "gdbcore.h"
 #include "demangle.h"
 #include "valprint.h"
@@ -253,7 +253,7 @@ pascal_language::value_print_inner (struct value *val,
 		{
 		  const char *search_name = msymbol.minsym->search_name ();
 		  wsym = lookup_symbol_search_name (search_name, NULL,
-						    VAR_DOMAIN).symbol;
+						    SEARCH_VFT).symbol;
 		}
 
 	      if (wsym)

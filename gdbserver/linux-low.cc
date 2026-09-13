@@ -16,7 +16,6 @@
    You should have received a copy of the GNU General Public License
    along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
 
-#include "server.h"
 #include "linux-low.h"
 #include "nat/linux-osdata.h"
 #include "gdbsupport/agent.h"
@@ -135,7 +134,7 @@ typedef struct
 #endif
 
 /* Does the current host support PTRACE_GETREGSET?  */
-int have_ptrace_getregset = -1;
+enum tribool have_ptrace_getregset = TRIBOOL_UNKNOWN;
 
 /* Return TRUE if THREAD is the leader thread of the process.  */
 
@@ -555,6 +554,16 @@ linux_process_target::handle_extended_wait (lwp_info **orig_event_lwp,
 			   ? ptid_t (new_pid, new_pid)
 			   : ptid_t (ptid_of (event_thr).pid (), new_pid));
 
+      process_info *child_proc = nullptr;
+
+      if (event != PTRACE_EVENT_CLONE)
+	{
+	  /* Add the new process to the tables before we add the LWP.
+	     We need to do this even if the new process will be
+	     detached.  See breakpoint cloning code further below.  */
+	  child_proc = add_linux_process (new_pid, 0);
+	}
+
       lwp_info *child_lwp = add_lwp (child_ptid);
       gdb_assert (child_lwp != NULL);
       child_lwp->stopped = 1;
@@ -588,12 +597,11 @@ linux_process_target::handle_extended_wait (lwp_info **orig_event_lwp,
 
       if (event != PTRACE_EVENT_CLONE)
 	{
-	  /* Add the new process to the tables and clone the breakpoint
-	     lists of the parent.  We need to do this even if the new process
-	     will be detached, since we will need the process object and the
-	     breakpoints to remove any breakpoints from memory when we
-	     detach, and the client side will access registers.  */
-	  process_info *child_proc = add_linux_process (new_pid, 0);
+	  /* Clone the breakpoint lists of the parent.  We need to do
+	     this even if the new process will be detached, since we
+	     will need the process object and the breakpoints to
+	     remove any breakpoints from memory when we detach, and
+	     the client side will access registers.  */
 	  gdb_assert (child_proc != NULL);
 
 	  process_info *parent_proc = get_thread_process (event_thr);
@@ -816,9 +824,7 @@ linux_process_target::save_stop_reason (lwp_info *lwp)
 {
   CORE_ADDR pc;
   CORE_ADDR sw_breakpoint_pc;
-#if USE_SIGTRAP_SIGINFO
   siginfo_t siginfo;
-#endif
 
   if (!low_supports_breakpoints ())
     return false;
@@ -838,7 +844,6 @@ linux_process_target::save_stop_reason (lwp_info *lwp)
   scoped_restore_current_thread restore_thread;
   switch_to_thread (get_lwp_thread (lwp));
 
-#if USE_SIGTRAP_SIGINFO
   if (ptrace (PTRACE_GETSIGINFO, lwpid_of (current_thread),
 	      (PTRACE_TYPE_ARG3) 0, &siginfo) == 0)
     {
@@ -880,21 +885,6 @@ linux_process_target::save_stop_reason (lwp_info *lwp)
 	    }
 	}
     }
-#else
-  /* We may have just stepped a breakpoint instruction.  E.g., in
-     non-stop mode, GDB first tells the thread A to step a range, and
-     then the user inserts a breakpoint inside the range.  In that
-     case we need to report the breakpoint PC.  */
-  if ((!lwp->stepping || lwp->stop_pc == sw_breakpoint_pc)
-      && low_breakpoint_at (sw_breakpoint_pc))
-    lwp->stop_reason = TARGET_STOPPED_BY_SW_BREAKPOINT;
-
-  if (hardware_breakpoint_inserted_here (pc))
-    lwp->stop_reason = TARGET_STOPPED_BY_HW_BREAKPOINT;
-
-  if (lwp->stop_reason == TARGET_STOPPED_BY_NO_REASON)
-    check_stopped_by_watchpoint (lwp);
-#endif
 
   if (lwp->stop_reason == TARGET_STOPPED_BY_SW_BREAKPOINT)
     {
@@ -1695,23 +1685,6 @@ linux_process_target::thread_still_has_status_pending (thread_info *thread)
 				lwpid_of (thread));
 	  discard = 1;
 	}
-
-#if !USE_SIGTRAP_SIGINFO
-      else if (lp->stop_reason == TARGET_STOPPED_BY_SW_BREAKPOINT
-	       && !low_breakpoint_at (pc))
-	{
-	  threads_debug_printf ("previous SW breakpoint of %ld gone",
-				lwpid_of (thread));
-	  discard = 1;
-	}
-      else if (lp->stop_reason == TARGET_STOPPED_BY_HW_BREAKPOINT
-	       && !hardware_breakpoint_inserted_here (pc))
-	{
-	  threads_debug_printf ("previous HW breakpoint of %ld gone",
-				lwpid_of (thread));
-	  discard = 1;
-	}
-#endif
 
       if (discard)
 	{
@@ -5644,7 +5617,7 @@ linux_process_target::stopped_by_sw_breakpoint ()
 bool
 linux_process_target::supports_stopped_by_sw_breakpoint ()
 {
-  return USE_SIGTRAP_SIGINFO;
+  return true;
 }
 
 /* Implement the stopped_by_hw_breakpoint target_ops
@@ -5664,7 +5637,7 @@ linux_process_target::stopped_by_hw_breakpoint ()
 bool
 linux_process_target::supports_stopped_by_hw_breakpoint ()
 {
-  return USE_SIGTRAP_SIGINFO;
+  return true;
 }
 
 /* Implement the supports_hardware_single_step target_ops method.  */

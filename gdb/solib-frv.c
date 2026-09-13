@@ -17,7 +17,7 @@
    along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
 
 
-#include "defs.h"
+#include "extract-store-integer.h"
 #include "gdbcore.h"
 #include "solib.h"
 #include "solist.h"
@@ -237,7 +237,7 @@ static void frv_relocate_main_executable (void);
 static CORE_ADDR main_got (void);
 static int enable_break2 (void);
 
-/* Implement the "open_symbol_file_object" target_so_ops method.  */
+/* Implement the "open_symbol_file_object" solib_ops method.  */
 
 static int
 open_symbol_file_object (int from_tty)
@@ -304,14 +304,14 @@ lm_base (void)
 }
 
 
-/* Implement the "current_sos" target_so_ops method.  */
+/* Implement the "current_sos" solib_ops method.  */
 
-static intrusive_list<shobj>
+static intrusive_list<solib>
 frv_current_sos ()
 {
   bfd_endian byte_order = gdbarch_byte_order (current_inferior ()->arch ());
   CORE_ADDR lm_addr, mgot;
-  intrusive_list<shobj> sos;
+  intrusive_list<solib> sos;
 
   /* Make sure that the main executable has been relocated.  This is
      required in order to find the address of the global offset table,
@@ -325,7 +325,8 @@ frv_current_sos ()
      frv_current_sos, and also precedes the call to
      solib_create_inferior_hook().   (See post_create_inferior() in
      infcmd.c.)  */
-  if (main_executable_lm_info == 0 && core_bfd != NULL)
+  if (main_executable_lm_info == 0
+      && current_program_space->core_bfd () != nullptr)
     frv_relocate_main_executable ();
 
   /* Fetch the GOT corresponding to the main executable.  */
@@ -376,11 +377,13 @@ frv_current_sos ()
 	      break;
 	    }
 
-	  shobj *sop = new shobj;
+	  solib *sop = new solib;
 	  auto li = std::make_unique<lm_info_frv> ();
 	  li->map = loadmap;
 	  li->got_value = got_addr;
 	  li->lm_addr = lm_addr;
+	  sop->lm_info = std::move (li);
+
 	  /* Fetch the name.  */
 	  addr = extract_unsigned_integer (lm_buf.l_name,
 					   sizeof (lm_buf.l_name),
@@ -811,7 +814,7 @@ frv_clear_solib (program_space *pspace)
 }
 
 static void
-frv_relocate_section_addresses (shobj &so, target_section *sec)
+frv_relocate_section_addresses (solib &so, target_section *sec)
 {
   int seg;
   auto *li = gdb::checked_static_cast<lm_info_frv *> (so.lm_info.get ());
@@ -852,7 +855,7 @@ main_got (void)
 CORE_ADDR
 frv_fdpic_find_global_pointer (CORE_ADDR addr)
 {
-  for (const shobj &so : current_program_space->solibs ())
+  for (const solib &so : current_program_space->solibs ())
     {
       int seg;
       auto *li = gdb::checked_static_cast<lm_info_frv *> (so.lm_info.get ());
@@ -909,7 +912,7 @@ frv_fdpic_find_canonical_descriptor (CORE_ADDR entry_point)
      in list of shared objects.  */
   if (addr == 0)
     {
-      for (const shobj &so : current_program_space->solibs ())
+      for (const solib &so : current_program_space->solibs ())
 	{
 	  auto *li = gdb::checked_static_cast<lm_info_frv *> (so.lm_info.get ());
 
@@ -1061,7 +1064,7 @@ frv_fetch_objfile_link_map (struct objfile *objfile)
 
   /* The other link map addresses may be found by examining the list
      of shared libraries.  */
-  for (const shobj &so : current_program_space->solibs ())
+  for (const solib &so : current_program_space->solibs ())
     {
       auto *li = gdb::checked_static_cast<lm_info_frv *> (so.lm_info.get ());
 
@@ -1073,7 +1076,7 @@ frv_fetch_objfile_link_map (struct objfile *objfile)
   return 0;
 }
 
-const struct target_so_ops frv_so_ops =
+const solib_ops frv_so_ops =
 {
   frv_relocate_section_addresses,
   nullptr,

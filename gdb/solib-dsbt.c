@@ -17,7 +17,7 @@
    along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
 
 
-#include "defs.h"
+#include "extract-store-integer.h"
 #include "inferior.h"
 #include "gdbcore.h"
 #include "solib.h"
@@ -503,22 +503,22 @@ lm_base (void)
 }
 
 
-/* Build a list of `struct shobj' objects describing the shared
+/* Build a list of `struct solib' objects describing the shared
    objects currently loaded in the inferior.  This list does not
    include an entry for the main executable file.
 
    Note that we only gather information directly available from the
    inferior --- we don't examine any of the shared library files
-   themselves.  The declaration of `struct shobj' says which fields
+   themselves.  The declaration of `struct solib' says which fields
    we provide values for.  */
 
-static intrusive_list<shobj>
+static intrusive_list<solib>
 dsbt_current_sos (void)
 {
   bfd_endian byte_order = gdbarch_byte_order (current_inferior ()->arch ());
   CORE_ADDR lm_addr;
   dsbt_info *info = get_dsbt_info (current_program_space);
-  intrusive_list<shobj> sos;
+  intrusive_list<solib> sos;
 
   /* Make sure that the main executable has been relocated.  This is
      required in order to find the address of the global offset table,
@@ -532,7 +532,8 @@ dsbt_current_sos (void)
      dsbt_current_sos, and also precedes the call to
      solib_create_inferior_hook.   (See post_create_inferior in
      infcmd.c.)  */
-  if (info->main_executable_lm_info == 0 && core_bfd != NULL)
+  if (info->main_executable_lm_info == 0
+      && current_program_space->core_bfd () != nullptr)
     dsbt_relocate_main_executable ();
 
   /* Locate the address of the first link map struct.  */
@@ -593,7 +594,7 @@ dsbt_current_sos (void)
 	      break;
 	    }
 
-	  shobj *sop = new shobj;
+	  solib *sop = new solib;
 	  auto li = std::make_unique<lm_info_dsbt> ();
 	  li->map = loadmap;
 	  /* Fetch the name.  */
@@ -615,6 +616,7 @@ dsbt_current_sos (void)
 	      sop->so_original_name = sop->so_name;
 	    }
 
+	  sop->lm_info = std::move (li);
 	  sos.push_back (*sop);
 	}
       else
@@ -876,7 +878,7 @@ dsbt_clear_solib (program_space *pspace)
 }
 
 static void
-dsbt_relocate_section_addresses (shobj &so, target_section *sec)
+dsbt_relocate_section_addresses (solib &so, target_section *sec)
 {
   int seg;
   auto *li = gdb::checked_static_cast<lm_info_dsbt *> (so.lm_info.get ());
@@ -902,7 +904,7 @@ show_dsbt_debug (struct ui_file *file, int from_tty,
   gdb_printf (file, _("solib-dsbt debugging is %s.\n"), value);
 }
 
-const struct target_so_ops dsbt_so_ops =
+const solib_ops dsbt_so_ops =
 {
   dsbt_relocate_section_addresses,
   nullptr,

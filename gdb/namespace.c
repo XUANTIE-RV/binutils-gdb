@@ -16,7 +16,6 @@
    You should have received a copy of the GNU General Public License
    along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
 
-#include "defs.h"
 #include "namespace.h"
 #include "frame.h"
 #include "symtab.h"
@@ -28,12 +27,11 @@
    into the scope DEST.  ALIAS is the name of the imported namespace
    in the current scope.  If ALIAS is NULL then the namespace is known
    by its original name.  DECLARATION is the name if the imported
-   variable if this is a declaration import (Eg. using A::x), otherwise
-   it is NULL.  EXCLUDES is a list of names not to import from an
-   imported module or NULL.  If COPY_NAMES is non-zero, then the
-   arguments are copied into newly allocated memory so they can be
-   temporaries.  For EXCLUDES the contents of the vector are copied,
-   but the pointed to characters are not copied.  */
+   variable if this is a declaration import (Eg. using A::x),
+   otherwise it is NULL.  EXCLUDES is a list of names not to import
+   from an imported module or NULL.  For EXCLUDES the contents of the
+   vector are copied, but the pointed to characters are not
+   copied.  */
 
 void
 add_using_directive (struct using_direct **using_directives,
@@ -43,7 +41,6 @@ add_using_directive (struct using_direct **using_directives,
 		     const char *declaration,
 		     const std::vector<const char *> &excludes,
 		     unsigned int decl_line,
-		     int copy_names,
 		     struct obstack *obstack)
 {
   struct using_direct *current;
@@ -91,26 +88,10 @@ add_using_directive (struct using_direct **using_directives,
   newobj = (struct using_direct *) obstack_alloc (obstack, alloc_len);
   memset (newobj, 0, sizeof (*newobj));
 
-  if (copy_names)
-    {
-      newobj->import_src = obstack_strdup (obstack, src);
-      newobj->import_dest = obstack_strdup (obstack, dest);
-    }
-  else
-    {
-      newobj->import_src = src;
-      newobj->import_dest = dest;
-    }
-
-  if (alias != NULL && copy_names)
-    newobj->alias = obstack_strdup (obstack, alias);
-  else
-    newobj->alias = alias;
-
-  if (declaration != NULL && copy_names)
-    newobj->declaration = obstack_strdup (obstack, declaration);
-  else
-    newobj->declaration = declaration;
+  newobj->import_src = src;
+  newobj->import_dest = dest;
+  newobj->alias = alias;
+  newobj->declaration = declaration;
 
   if (!excludes.empty ())
     memcpy (newobj->excludes, excludes.data (),

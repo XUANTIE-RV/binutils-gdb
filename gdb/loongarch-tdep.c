@@ -17,10 +17,10 @@
    You should have received a copy of the GNU General Public License
    along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
 
-#include "defs.h"
 #include "arch-utils.h"
 #include "dwarf2/frame.h"
 #include "elf-bfd.h"
+#include "extract-store-integer.h"
 #include "frame-unwind.h"
 #include "gdbcore.h"
 #include "loongarch-tdep.h"
@@ -113,7 +113,7 @@ loongarch_insn_is_sc (insn_t insn)
 
 static CORE_ADDR
 loongarch_scan_prologue (struct gdbarch *gdbarch, CORE_ADDR start_pc,
-			 CORE_ADDR limit_pc, frame_info_ptr this_frame,
+			 CORE_ADDR limit_pc, const frame_info_ptr &this_frame,
 			 struct trad_frame_cache *this_cache)
 {
   CORE_ADDR cur_pc = start_pc, prologue_end = 0;
@@ -390,7 +390,7 @@ loongarch_software_single_step (struct regcache *regcache)
 /* Callback function for user_reg_add.  */
 
 static struct value *
-value_of_loongarch_user_reg (frame_info_ptr frame, const void *baton)
+value_of_loongarch_user_reg (const frame_info_ptr &frame, const void *baton)
 {
   return value_of_register ((long long) baton,
 			    get_next_frame_sentinel_okay (frame));
@@ -407,7 +407,7 @@ loongarch_frame_align (struct gdbarch *gdbarch, CORE_ADDR addr)
 /* Generate, or return the cached frame cache for frame unwinder.  */
 
 static struct trad_frame_cache *
-loongarch_frame_cache (frame_info_ptr this_frame, void **this_cache)
+loongarch_frame_cache (const frame_info_ptr &this_frame, void **this_cache)
 {
   struct trad_frame_cache *cache;
   CORE_ADDR pc;
@@ -429,7 +429,7 @@ loongarch_frame_cache (frame_info_ptr this_frame, void **this_cache)
 /* Implement the this_id callback for frame unwinder.  */
 
 static void
-loongarch_frame_this_id (frame_info_ptr this_frame, void **prologue_cache,
+loongarch_frame_this_id (const frame_info_ptr &this_frame, void **prologue_cache,
 			 struct frame_id *this_id)
 {
   struct trad_frame_cache *info;
@@ -441,7 +441,7 @@ loongarch_frame_this_id (frame_info_ptr this_frame, void **prologue_cache,
 /* Implement the prev_register callback for frame unwinder.  */
 
 static struct value *
-loongarch_frame_prev_register (frame_info_ptr this_frame,
+loongarch_frame_prev_register (const frame_info_ptr &this_frame,
 			       void **prologue_cache, int regnum)
 {
   struct trad_frame_cache *info;
@@ -1650,6 +1650,14 @@ loongarch_register_reggroup_p (struct gdbarch *gdbarch, int regnum,
   if (group == float_reggroup)
     return 0;
 
+  if (LOONGARCH_FIRST_LSX_REGNUM <= regnum
+     && regnum < LOONGARCH_FIRST_LASX_REGNUM + LOONGARCH_LINUX_NUM_LASXREGSET)
+    return group == vector_reggroup;
+
+  /* Only $vrx / $xrx in vector_reggroup */
+  if (group == vector_reggroup)
+    return 0;
+
   int ret = tdesc_register_in_reggroup_p (gdbarch, regnum, group);
   if (ret != -1)
     return ret;
@@ -1704,6 +1712,52 @@ loongarch_gdbarch_init (struct gdbarch_info info, struct gdbarch_list *arches)
     valid_p &= tdesc_numbered_register (feature_fpu, tdesc_data.get (), regnum++,
 					loongarch_c_normal_name[i] + 1);
   valid_p &= tdesc_numbered_register (feature_fpu, tdesc_data.get (), regnum++, "fcsr");
+  if (!valid_p)
+    return nullptr;
+
+  const struct tdesc_feature *feature_lsx
+    = tdesc_find_feature (tdesc, "org.gnu.gdb.loongarch.lsx");
+  if (feature_lsx == nullptr)
+    return nullptr;
+
+  /* Validate the description provides the lsx registers and
+     allocate their numbers.  */
+  regnum = LOONGARCH_FIRST_LSX_REGNUM;
+  for (int i = 0; i < LOONGARCH_LINUX_NUM_LSXREGSET; i++)
+    valid_p &= tdesc_numbered_register (feature_lsx, tdesc_data.get (), regnum++,
+					loongarch_v_normal_name[i] + 1);
+  if (!valid_p)
+    return nullptr;
+
+  const struct tdesc_feature *feature_lasx
+    = tdesc_find_feature (tdesc, "org.gnu.gdb.loongarch.lasx");
+  if (feature_lasx == nullptr)
+    return nullptr;
+
+  /* Validate the description provides the lasx registers and
+     allocate their numbers.  */
+  regnum = LOONGARCH_FIRST_LASX_REGNUM;
+  for (int i = 0; i < LOONGARCH_LINUX_NUM_LASXREGSET; i++)
+    valid_p &= tdesc_numbered_register (feature_lasx, tdesc_data.get (), regnum++,
+					loongarch_x_normal_name[i] + 1);
+  if (!valid_p)
+    return nullptr;
+
+  const struct tdesc_feature *feature_lbt
+    = tdesc_find_feature (tdesc, "org.gnu.gdb.loongarch.lbt");
+  if (feature_lbt == nullptr)
+    return nullptr;
+
+  /* Validate the description provides the lbt registers and
+     allocate their numbers.  */
+  regnum = LOONGARCH_FIRST_SCR_REGNUM;
+  for (int i = 0; i < LOONGARCH_LINUX_NUM_SCR; i++)
+    valid_p &= tdesc_numbered_register (feature_lbt, tdesc_data.get (), regnum++,
+					loongarch_cr_normal_name[i] + 1);
+  valid_p &= tdesc_numbered_register (feature_lbt, tdesc_data.get (), regnum++,
+				      "eflags");
+  valid_p &= tdesc_numbered_register (feature_lbt, tdesc_data.get (), regnum++,
+				      "ftop");
   if (!valid_p)
     return nullptr;
 

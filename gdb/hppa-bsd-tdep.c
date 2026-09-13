@@ -17,7 +17,7 @@
    You should have received a copy of the GNU General Public License
    along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
 
-#include "defs.h"
+#include "extract-store-integer.h"
 #include "objfiles.h"
 #include "target.h"
 #include "value.h"
@@ -104,7 +104,7 @@ hppabsd_find_global_pointer (struct gdbarch *gdbarch, struct value *function)
 static void
 hppabsd_dwarf2_frame_init_reg (struct gdbarch *gdbarch, int regnum,
 			       struct dwarf2_frame_state_reg *reg,
-			       frame_info_ptr this_frame)
+			       const frame_info_ptr &this_frame)
 {
   if (regnum == HPPA_PCOQ_HEAD_REGNUM)
     reg->how = DWARF2_FRAME_REG_RA;

@@ -18,7 +18,7 @@
 
 /* This file is derived from p-typeprint.c */
 
-#include "defs.h"
+#include "event-top.h"
 #include "gdbsupport/gdb_obstack.h"
 #include "bfd.h"
 #include "symtab.h"
@@ -55,7 +55,8 @@ pascal_language::print_type (struct type *type, const char *varstring,
       type_print_varspec_prefix (type, stream, show, 0, flags);
     }
   /* first the name */
-  gdb_puts (varstring, stream);
+  if (varstring != nullptr)
+    gdb_puts (varstring, stream);
 
   if ((varstring != NULL && *varstring != '\0')
       && !(code == TYPE_CODE_FUNC

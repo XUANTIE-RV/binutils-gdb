@@ -207,7 +207,7 @@ extern int stepping_past_nonsteppable_watchpoint (void);
 
 /* Record in TP the frame and location we're currently stepping through.  */
 extern void set_step_info (thread_info *tp,
-			   frame_info_ptr frame,
+			   const frame_info_ptr &frame,
 			   struct symtab_and_line sal);
 
 /* Notify interpreters and observers that the current inferior has stopped with
@@ -406,7 +406,8 @@ extern void maybe_call_commit_resumed_all_targets ();
 
 struct scoped_enable_commit_resumed
 {
-  explicit scoped_enable_commit_resumed (const char *reason);
+  explicit scoped_enable_commit_resumed (const char *reason,
+					 bool force_p = false);
   ~scoped_enable_commit_resumed ();
 
   DISABLE_COPY_AND_ASSIGN (scoped_enable_commit_resumed);

@@ -25,8 +25,15 @@ if {[build_executable ${testfile}.exp $testfile] == -1} {
     return
 }
 
-if {[dap_launch $testfile] == ""} {
-    return
+save_vars { env(ASAN_OPTIONS) } {
+    # The request readMemory with count 18446744073709551615 triggers address
+    # sanitizer.  Suppress the error, leaving us with just this warning:
+    #   WARNING: AddressSanitizer failed to allocate 0xffffffffffffffff bytes
+    set_sanitizer ASAN_OPTIONS allocator_may_return_null 1
+
+    if {[dap_initialize] == ""} {
+	return
+    }
 }
 
 set line [gdb_get_line_number "BREAK"]
@@ -36,7 +43,11 @@ set obj [dap_check_request_and_response "set breakpoint by line number" \
 		  [list s $srcfile] $line]]
 set line_bpno [dap_get_breakpoint_number $obj]
 
-dap_check_request_and_response "start inferior" configurationDone
+dap_check_request_and_response "configurationDone" configurationDone
+
+if {[dap_launch $testfile] == ""} {
+    return
+}
 dap_wait_for_event_and_check "inferior started" thread "body reason" started
 
 dap_wait_for_event_and_check "stopped at line breakpoint" stopped \
@@ -50,6 +61,11 @@ dap_match_values "global value" [lindex $obj 0] "body result" 7
 set obj [dap_check_request_and_response "evaluate global pointer" \
 	     evaluate {o expression [s thirty_two_p]}]
 set addr [dict get [lindex $obj 0] body memoryReference]
+
+set obj [dap_request_and_response \
+	     readMemory [format {o memoryReference [s %s] count [i 18446744073709551615]} $addr]]
+set response [lindex $obj 0]
+gdb_assert { [dict get $response success] == "false" } "read memory, count to big"
 
 set obj [dap_check_request_and_response "read memory" \
 	     readMemory [format {o memoryReference [s %s] count [i 4]} $addr]]

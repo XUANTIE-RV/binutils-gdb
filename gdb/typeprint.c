@@ -17,7 +17,6 @@
    You should have received a copy of the GNU General Public License
    along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
 
-#include "defs.h"
 #include "gdbsupport/gdb_obstack.h"
 #include "bfd.h"
 #include "symtab.h"
@@ -26,7 +25,7 @@
 #include "value.h"
 #include "gdbcore.h"
 #include "command.h"
-#include "gdbcmd.h"
+#include "cli/cli-cmds.h"
 #include "target.h"
 #include "language.h"
 #include "cp-abi.h"
@@ -844,7 +843,7 @@ Available FLAGS are:\n\
   /x    use hexadecimal notation when displaying sizes and offsets\n\
 	of struct members\n\
   /d    use decimal notation when displaying sizes and offsets\n\
-	of struct members "));
+	of struct members"));
   set_cmd_completer (c, expression_completer);
 
   c = add_com ("whatis", class_vars, whatis_command,

@@ -549,6 +549,9 @@ namespace eval Dwarf {
     # The current CU's offset size.
     variable _cu_offset_size
 
+    # The current macro unit's offset size.
+    variable _mu_offset_size
+
     # Label generation number.
     variable _label_num
 
@@ -2229,6 +2232,8 @@ namespace eval Dwarf {
 	if { ${is-64} } {
 	    set flags [expr $flags | 0x1]
 	}
+	variable _mu_offset_size
+	set _mu_offset_size [expr ${is-64} ? 8 : 4]
 
 	if { ${debug-line-offset-label} != "" } {
 	    set flags [expr $flags | 0x2]
@@ -2241,11 +2246,14 @@ namespace eval Dwarf {
 		"debug_line offset"
 	}
 
+	with_override Dwarf::define_strp Dwarf::_macro_unit_define_strp {
 	with_override Dwarf::define Dwarf::_macro_unit_define {
 	with_override Dwarf::start_file Dwarf::_macro_unit_start_file {
 	with_override Dwarf::end_file Dwarf::_macro_unit_end_file {
 	    uplevel $body
-	}}}
+	}}}}
+
+	_op .byte 0x0 "# End macro unit"
     }
 
     # Emit a DW_MACRO_define entry.
@@ -2254,6 +2262,26 @@ namespace eval Dwarf {
 	_op .byte 0x1 "DW_MACRO_define"
 	_op .uleb128 $lineno "Line number"
 	_op .asciz "\"$text\"" "Macro definition"
+    }
+
+    # Emit a DW_MACRO_define_strp entry.
+
+    proc _macro_unit_define_strp { lineno text } {
+	_op .byte 0x5 "DW_MACRO_define_strp"
+	_op .uleb128 $lineno "Line number"
+
+	variable _strings
+	variable _mu_offset_size
+
+	if {![info exists _strings($text)]} {
+	    set _strings($text) [new_label strp]
+	    _defer_output .debug_str {
+		define_label $_strings($text)
+		_op .ascii [_quote $text]
+	    }
+	}
+
+	_op_offset $_mu_offset_size "$_strings($text)" "strp: $text"
     }
 
     # Emit a DW_MACRO_start_file entry.
@@ -2427,10 +2455,11 @@ namespace eval Dwarf {
 	    variable _line_file_names
 	    lappend _line_file_names $filename $diridx
 
+	    set nr_filenames [expr [llength $_line_file_names] / 2]
 	    if { $Dwarf::_line_unit_version >= 5 } {
-		return [expr [llength $_line_file_names] - 1]
+		return [expr $nr_filenames - 1]
 	    } else {
-		return [llength $_line_file_names]
+		return $nr_filenames
 	    }
 	}
 
@@ -2545,13 +2574,21 @@ namespace eval Dwarf {
 	proc program { body } {
 	    variable _line_header_end_label
 	    variable _line
+	    variable _line_address_update
+	    variable _line_program_terminated
 
 
 	    set _line 1
+	    set _line_address_update 0
+	    set _line_program_terminated 0
 
 	    _line_finalize_header
 
 	    proc DW_LNE_set_address {addr} {
+		variable _line_address_update
+		set _line_address_update 1
+		variable _line_program_terminated
+		set _line_program_terminated 0
 		_op .byte 0
 		set start [new_label "set_address_start"]
 		set end [new_label "set_address_end"]
@@ -2567,6 +2604,13 @@ namespace eval Dwarf {
 	    }
 
 	    proc DW_LNE_end_sequence {} {
+		variable _line_address_update
+		if { $_line_address_update == 0 } {
+		    error "Missing address update for end_sequence"
+		}
+		set _line_address_update 0
+		variable _line_program_terminated
+		set _line_program_terminated 1
 		variable _line
 		_op .byte 0
 		_op .uleb128 1
@@ -2575,6 +2619,8 @@ namespace eval Dwarf {
 	    }
 
 	    proc DW_LNE_user { len opcode } {
+		variable _line_program_terminated
+		set _line_program_terminated 0
 		set DW_LNE_lo_usr 0x80
 		set DW_LNE_hi_usr 0xff
 		if { $DW_LNE_lo_usr <= $opcode
@@ -2591,27 +2637,46 @@ namespace eval Dwarf {
 	    }
 
 	    proc DW_LNS_copy {} {
+		variable _line_address_update
+		if { $_line_address_update == 0 } {
+		    error "Missing address update for copy"
+		}
+		set _line_address_update 0
+		variable _line_program_terminated
+		set _line_program_terminated 0
 		_op .byte 1
 	    }
 
 	    proc DW_LNS_negate_stmt {} {
+		variable _line_program_terminated
+		set _line_program_terminated 0
 		_op .byte 6
 	    }
 
 	    proc DW_LNS_set_prologue_end {} {
+		variable _line_program_terminated
+		set _line_program_terminated 0
 		_op .byte 0x0a
 	    }
 
 	    proc DW_LNS_set_epilogue_begin {} {
+		variable _line_program_terminated
+		set _line_program_terminated 0
 		_op .byte 0x0b
 	    }
 
 	    proc DW_LNS_advance_pc {offset} {
+		variable _line_program_terminated
+		set _line_program_terminated 0
+		variable _line_address_update
+		set _line_address_update 1
 		_op .byte 2
 		_op .uleb128 ${offset}
 	    }
 
 	    proc DW_LNS_advance_line {offset} {
+		variable _line_program_terminated
+		set _line_program_terminated 0
 		variable _line
 		_op .byte 3
 		_op .sleb128 ${offset}
@@ -2634,11 +2699,17 @@ namespace eval Dwarf {
 	    }
 
 	    proc DW_LNS_set_file {num} {
+		variable _line_program_terminated
+		set _line_program_terminated 0
 		_op .byte 4
 		_op .sleb128 ${num}
 	    }
 
 	    uplevel $body
+
+	    if { $_line_program_terminated == 0 } {
+		error "Missing end_seq"
+	    }
 	}
 
 	uplevel $body
@@ -2957,6 +3028,7 @@ namespace eval Dwarf {
     proc dummy_cu {} {
 	# Generate a CU with default options and empty body.
 	cu {label dummy_cu} {
+	  compile_unit {}
 	}
 
 	# Generate an .debug_aranges entry for the dummy CU.
@@ -3066,8 +3138,11 @@ namespace eval Dwarf {
 	_op .4byte $abbrev_table_size "Abbrev_table_size"
 
 	# Header - augmentation string.
-	_op .4byte 4 "Augmentation_string_size"
-	_op .ascii [_quote GDB] "Augmentation_string"
+	_op .4byte 8 "Augmentation_string_size"
+	_op .ascii [_quote GDB2] "Augmentation_string"
+	_op .byte 0
+	_op .byte 0
+	_op .byte 0
 
 	# List of CUs.
 	set comment "CU offset"

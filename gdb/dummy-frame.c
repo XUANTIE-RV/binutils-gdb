@@ -18,14 +18,13 @@
    along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
 
 
-#include "defs.h"
 #include "dummy-frame.h"
 #include "regcache.h"
 #include "frame.h"
 #include "inferior.h"
 #include "frame-unwind.h"
 #include "command.h"
-#include "gdbcmd.h"
+#include "cli/cli-cmds.h"
 #include "observable.h"
 #include "gdbthread.h"
 #include "infcall.h"
@@ -288,7 +287,7 @@ struct dummy_frame_cache
 
 static int
 dummy_frame_sniffer (const struct frame_unwind *self,
-		     frame_info_ptr this_frame,
+		     const frame_info_ptr &this_frame,
 		     void **this_prologue_cache)
 {
   /* When unwinding a normal frame, the stack structure is determined
@@ -334,7 +333,7 @@ dummy_frame_sniffer (const struct frame_unwind *self,
    register value is taken from the local copy of the register buffer.  */
 
 static struct value *
-dummy_frame_prev_register (frame_info_ptr this_frame,
+dummy_frame_prev_register (const frame_info_ptr &this_frame,
 			   void **this_prologue_cache,
 			   int regnum)
 {
@@ -364,7 +363,7 @@ dummy_frame_prev_register (frame_info_ptr this_frame,
    dummy cache is located and saved in THIS_PROLOGUE_CACHE.  */
 
 static void
-dummy_frame_this_id (frame_info_ptr this_frame,
+dummy_frame_this_id (const frame_info_ptr &this_frame,
 		     void **this_prologue_cache,
 		     struct frame_id *this_id)
 {
@@ -390,7 +389,7 @@ const struct frame_unwind dummy_frame_unwind =
 /* See dummy-frame.h.  */
 
 struct frame_id
-default_dummy_id (struct gdbarch *gdbarch, frame_info_ptr this_frame)
+default_dummy_id (struct gdbarch *gdbarch, const frame_info_ptr &this_frame)
 {
   CORE_ADDR sp, pc;
 

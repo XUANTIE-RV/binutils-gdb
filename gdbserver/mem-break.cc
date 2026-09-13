@@ -18,7 +18,6 @@
    You should have received a copy of the GNU General Public License
    along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
 
-#include "server.h"
 #include "regcache.h"
 #include "ax.h"
 
@@ -1999,7 +1998,8 @@ check_mem_write (CORE_ADDR mem_addr, unsigned char *buf,
     delete_disabled_breakpoints ();
 }
 
-/* Delete all breakpoints, and un-insert them from the inferior.  */
+/* Delete all breakpoints, watchpoints, tracepoints, and catchpoints,
+   and un-insert them from the inferior.  */
 
 void
 delete_all_breakpoints (void)
@@ -2021,8 +2021,8 @@ mark_breakpoints_out (struct process_info *proc)
     raw_bp->inserted = 0;
 }
 
-/* Release all breakpoints, but do not try to un-insert them from the
-   inferior.  */
+/* Release all breakpoints, watchpoints, tracepoints, and catchpoints,
+   but do not try to un-insert them from the inferior.  */
 
 void
 free_all_breakpoints (struct process_info *proc)

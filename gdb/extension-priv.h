@@ -119,6 +119,10 @@ struct extension_language_ops
      This method is required.  */
   int (*initialized) (const struct extension_language_defn *);
 
+  /* Called just before GDB exits.  This shuts down the extension
+     language.  This can be NULL.  */
+  void (*shutdown) (const struct extension_language_defn *);
+
   /* Process a sequence of commands embedded in GDB's own scripting language.
      E.g.,
      python
@@ -180,7 +184,7 @@ struct extension_language_ops
      or SCR_BT_COMPLETED on success.  */
   enum ext_lang_bt_status (*apply_frame_filter)
     (const struct extension_language_defn *,
-     frame_info_ptr frame, frame_filter_flags flags,
+     const frame_info_ptr &frame, frame_filter_flags flags,
      enum ext_lang_frame_args args_type,
      struct ui_out *out, int frame_low, int frame_high);
 
@@ -225,9 +229,9 @@ struct extension_language_ops
      This is called by GDB's SIGINT handler and must be async-safe.  */
   void (*set_quit_flag) (const struct extension_language_defn *);
 
-  /* Return non-zero if a SIGINT has occurred.
+  /* Return true if a SIGINT has occurred.
      This is expected to also clear the indicator.  */
-  int (*check_quit_flag) (const struct extension_language_defn *);
+  bool (*check_quit_flag) (const struct extension_language_defn *);
 
   /* Called before gdb prints its prompt, giving extension languages an
      opportunity to change it with set_prompt.

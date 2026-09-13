@@ -19,7 +19,6 @@
    You should have received a copy of the GNU General Public License
    along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
 
-#include "defs.h"
 #include "symtab.h"
 #include "tui/tui.h"
 #include "tui/tui-data.h"
@@ -169,13 +168,23 @@ tui_win_info::set_title (std::string &&new_title)
 /* See tui-data.h.  */
 
 void
-tui_win_info::display_string (int y, int x, const char *str) const
+tui_win_info::center_string (const char *str)
 {
-  int n = width - box_width () - x;
-  if (n <= 0)
-    return;
+  werase (handle.get ());
+  check_and_display_highlight_if_needed ();
 
-  mvwaddnstr (handle.get (), y, x, str, n);
+  int avail_width = width - box_size ();
+  int len = strlen (str);
+
+  int x_pos = box_width ();
+  if (len < avail_width)
+    x_pos += (avail_width - len) / 2;
+
+  int n = avail_width - x_pos;
+  gdb_assert (n > 0);
+
+  mvwaddnstr (handle.get (), height / 2, x_pos, str, n);
+  refresh_window ();
 }
 
 /* See tui-data.h.  */

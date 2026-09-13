@@ -17,12 +17,11 @@
    You should have received a copy of the GNU General Public License
    along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
 
-#include "defs.h"
 #include "arch-utils.h"
 #include "command.h"
 #include "ui-out.h"
 #include "cli/cli-script.h"
-#include "gdbcmd.h"
+#include "cli/cli-cmds.h"
 #include "progspace.h"
 #include "objfiles.h"
 #include "value.h"
@@ -110,6 +109,7 @@ static objfile_script_sourcer_func gdbpy_source_objfile_script;
 static objfile_script_executor_func gdbpy_execute_objfile_script;
 static void gdbpy_initialize (const struct extension_language_defn *);
 static int gdbpy_initialized (const struct extension_language_defn *);
+static void finalize_python (const struct extension_language_defn *);
 static void gdbpy_eval_from_control_command
   (const struct extension_language_defn *, struct command_line *cmd);
 static void gdbpy_start_type_printers (const struct extension_language_defn *,
@@ -121,7 +121,7 @@ static enum ext_lang_rc gdbpy_apply_type_printers
 static void gdbpy_free_type_printers (const struct extension_language_defn *,
 				      struct ext_lang_type_printers *);
 static void gdbpy_set_quit_flag (const struct extension_language_defn *);
-static int gdbpy_check_quit_flag (const struct extension_language_defn *);
+static bool gdbpy_check_quit_flag (const struct extension_language_defn *);
 static enum ext_lang_rc gdbpy_before_prompt_hook
   (const struct extension_language_defn *, const char *current_gdb_prompt);
 static std::optional<std::string> gdbpy_colorize
@@ -147,6 +147,7 @@ static const struct extension_language_ops python_extension_ops =
 {
   gdbpy_initialize,
   gdbpy_initialized,
+  finalize_python,
 
   gdbpy_eval_from_control_command,
 
@@ -274,22 +275,25 @@ gdbpy_set_quit_flag (const struct extension_language_defn *extlang)
 
 /* Return true if the quit flag has been set, false otherwise.  */
 
-static int
+static bool
 gdbpy_check_quit_flag (const struct extension_language_defn *extlang)
 {
   if (!gdb_python_initialized)
-    return 0;
+    return false;
 
   gdbpy_gil gil;
   return PyOS_InterruptOccurred ();
 }
 
-/* Evaluate a Python command like PyRun_SimpleString, but uses
-   Py_single_input which prints the result of expressions, and does
-   not automatically print the stack on errors.  */
+/* Evaluate a Python command like PyRun_SimpleString, but takes a
+   Python start symbol, and does not automatically print the stack on
+   errors.  FILENAME is used to set the file name in error messages;
+   NULL means that this is evaluating a string, not the contents of a
+   file.  */
 
 static int
-eval_python_command (const char *command)
+eval_python_command (const char *command, int start_symbol,
+		     const char *filename = nullptr)
 {
   PyObject *m, *d;
 
@@ -300,11 +304,70 @@ eval_python_command (const char *command)
   d = PyModule_GetDict (m);
   if (d == NULL)
     return -1;
-  gdbpy_ref<> v (PyRun_StringFlags (command, Py_single_input, d, d, NULL));
-  if (v == NULL)
-    return -1;
 
-  return 0;
+  bool file_set = false;
+  if (filename != nullptr)
+    {
+      gdbpy_ref<> file = host_string_to_python_string ("__file__");
+      if (file == nullptr)
+	return -1;
+
+      /* PyDict_GetItemWithError returns a borrowed reference.  */
+      PyObject *found = PyDict_GetItemWithError (d, file.get ());
+      if (found == nullptr)
+	{
+	  if (PyErr_Occurred ())
+	    return -1;
+
+	  gdbpy_ref<> filename_obj = host_string_to_python_string (filename);
+	  if (filename_obj == nullptr)
+	    return -1;
+
+	  if (PyDict_SetItem (d, file.get (), filename_obj.get ()) < 0)
+	    return -1;
+	  if (PyDict_SetItemString (d, "__cached__", Py_None) < 0)
+	    return -1;
+
+	  file_set = true;
+	}
+    }
+
+  /* Use this API because it is in Python 3.2.  */
+  gdbpy_ref<> code (Py_CompileStringExFlags (command,
+					     filename == nullptr
+					     ? "<string>"
+					     : filename,
+					     start_symbol,
+					     nullptr, -1));
+
+  int result = -1;
+  if (code != nullptr)
+    {
+      gdbpy_ref<> eval_result (PyEval_EvalCode (code.get (), d, d));
+      if (eval_result != nullptr)
+	result = 0;
+    }
+
+  if (file_set)
+    {
+      /* If there's already an exception occurring, preserve it and
+	 restore it before returning from this function.  */
+      std::optional<gdbpy_err_fetch> save_error;
+      if (result < 0)
+	save_error.emplace ();
+
+      /* CPython also just ignores errors here.  These should be
+	 expected to be exceedingly rare anyway.  */
+      if (PyDict_DelItemString (d, "__file__") < 0)
+	PyErr_Clear ();
+      if (PyDict_DelItemString (d, "__cached__") < 0)
+	PyErr_Clear ();
+
+      if (save_error.has_value ())
+	save_error->restore ();
+    }
+
+  return result;
 }
 
 /* Implementation of the gdb "python-interactive" command.  */
@@ -324,7 +387,8 @@ python_interactive_command (const char *arg, int from_tty)
   if (arg && *arg)
     {
       std::string script = std::string (arg) + "\n";
-      err = eval_python_command (script.c_str ());
+      /* Py_single_input causes the result to be displayed.  */
+      err = eval_python_command (script.c_str (), Py_single_input);
     }
   else
     {
@@ -333,14 +397,12 @@ python_interactive_command (const char *arg, int from_tty)
     }
 
   if (err)
-    {
-      gdbpy_print_stack ();
-      error (_("Error while executing Python code."));
-    }
+    gdbpy_handle_exception ();
 }
 
-/* A wrapper around PyRun_SimpleFile.  FILE is the Python script to run
-   named FILENAME.
+/* Like PyRun_SimpleFile, but if there is an exception, it is not
+   automatically displayed.  FILE is the Python script to run named
+   FILENAME.
 
    On Windows hosts few users would build Python themselves (this is no
    trivial task on this platform), and thus use binaries built by
@@ -349,39 +411,13 @@ python_interactive_command (const char *arg, int from_tty)
    library.  Python, being built with VC, would use one version of the
    msvcr DLL (Eg. msvcr100.dll), while MinGW uses msvcrt.dll.
    A FILE * from one runtime does not necessarily operate correctly in
-   the other runtime.
+   the other runtime.  */
 
-   To work around this potential issue, we run code in Python to load
-   the script.  */
-
-static void
+static int
 python_run_simple_file (FILE *file, const char *filename)
 {
-#ifndef _WIN32
-
-  PyRun_SimpleFile (file, filename);
-
-#else /* _WIN32 */
-
-  /* Because we have a string for a filename, and are using Python to
-     open the file, we need to expand any tilde in the path first.  */
-  gdb::unique_xmalloc_ptr<char> full_path (tilde_expand (filename));
-
-  if (gdb_python_module == nullptr
-      || ! PyObject_HasAttrString (gdb_python_module, "_execute_file"))
-    error (_("Installation error: gdb._execute_file function is missing"));
-
-  gdbpy_ref<> return_value
-    (PyObject_CallMethod (gdb_python_module, "_execute_file", "s",
-			  full_path.get ()));
-  if (return_value == nullptr)
-    {
-      /* Use PyErr_PrintEx instead of gdbpy_print_stack to better match the
-	 behavior of the non-Windows codepath.  */
-      PyErr_PrintEx(0);
-    }
-
-#endif /* _WIN32 */
+  std::string contents = read_remainder_of_file (file);
+  return eval_python_command (contents.c_str (), Py_file_input, filename);
 }
 
 /* Given a command_line, return a command string suitable for passing
@@ -408,17 +444,15 @@ static void
 gdbpy_eval_from_control_command (const struct extension_language_defn *extlang,
 				 struct command_line *cmd)
 {
-  int ret;
-
   if (cmd->body_list_1 != nullptr)
     error (_("Invalid \"python\" block structure."));
 
   gdbpy_enter enter_py;
 
   std::string script = compute_python_string (cmd->body_list_0.get ());
-  ret = PyRun_SimpleString (script.c_str ());
-  if (ret)
-    error (_("Error while executing Python code."));
+  int ret = eval_python_command (script.c_str (), Py_file_input);
+  if (ret != 0)
+    gdbpy_handle_exception ();
 }
 
 /* Implementation of the gdb "python" command.  */
@@ -433,8 +467,9 @@ python_command (const char *arg, int from_tty)
   arg = skip_spaces (arg);
   if (arg && *arg)
     {
-      if (PyRun_SimpleString (arg))
-	error (_("Error while executing Python code."));
+      int ret = eval_python_command (arg, Py_file_input);
+      if (ret != 0)
+	gdbpy_handle_exception ();
     }
   else
     {
@@ -559,7 +594,10 @@ gdbpy_parameter (PyObject *self, PyObject *args)
       GDB_PY_HANDLE_EXCEPTION (ex);
     }
 
-  if (!found)
+  if (cmd == CMD_LIST_AMBIGUOUS)
+    return PyErr_Format (PyExc_RuntimeError,
+			 _("Parameter `%s' is ambiguous."), arg);
+  else if (!found)
     return PyErr_Format (PyExc_RuntimeError,
 			 _("Could not find parameter `%s'."), arg);
 
@@ -637,6 +675,35 @@ execute_gdb_command (PyObject *self, PyObject *args, PyObject *kw)
   std::string to_string_res;
 
   scoped_restore preventer = prevent_dont_repeat ();
+
+  /* If the executed command raises an exception, we may have to
+     enable stdin and recover the GDB prompt.
+
+     Stdin should not be re-enabled if it is already blocked because,
+     for example, we are running a command in the context of a
+     synchronous execution command ("run", "continue", etc.).  Like
+     this:
+
+     User runs "continue"
+     --> command blocks the prompt
+     --> Python API is invoked, e.g.  via events
+     --> gdb.execute(C) invoked inside Python
+     --> command C raises an exception
+
+     In this case case, GDB would go back to the top "continue" command
+     and move on with its normal course of execution.  That is, it
+     would enable stdin in the way it normally does.
+
+     Similarly, if the command we are about to execute enables the
+     stdin while we are still in the context of a synchronous
+     execution command, we would be displaying the prompt too early,
+     before the surrounding command completes.
+
+     For these reasons, we keep the prompt blocked, if it already is.  */
+  bool prompt_was_blocked = (current_ui->prompt_state == PROMPT_BLOCKED);
+  scoped_restore save_prompt_state
+    = make_scoped_restore (&current_ui->keep_prompt_blocked,
+			   prompt_was_blocked);
 
   try
     {
@@ -736,7 +803,7 @@ gdbpy_rbreak (PyObject *self, PyObject *args, PyObject *kw)
       minsyms_p = cmp;
     }
 
-  global_symbol_searcher spec (FUNCTIONS_DOMAIN, regex);
+  global_symbol_searcher spec (SEARCH_FUNCTION_DOMAIN, regex);
   SCOPE_EXIT {
     for (const char *elem : spec.filenames)
       xfree ((void *) elem);
@@ -1018,7 +1085,9 @@ gdbpy_source_script (const struct extension_language_defn *extlang,
 		     FILE *file, const char *filename)
 {
   gdbpy_enter enter_py;
-  python_run_simple_file (file, filename);
+  int result = python_run_simple_file (file, filename);
+  if (result != 0)
+    gdbpy_handle_exception ();
 }
 
 
@@ -1569,7 +1638,7 @@ gdbpy_print_stack (void)
 	      /* An error occurred computing the string representation of the
 		 error message.  */
 	      gdb_printf (gdb_stderr,
-			  _("Error occurred computing Python error" \
+			  _("Error occurred computing Python error "
 			    "message.\n"));
 	      PyErr_Clear ();
 	    }
@@ -1650,7 +1719,9 @@ gdbpy_source_objfile_script (const struct extension_language_defn *extlang,
   scoped_restore restire_current_objfile
     = make_scoped_restore (&gdbpy_current_objfile, objfile);
 
-  python_run_simple_file (file, filename);
+  int result = python_run_simple_file (file, filename);
+  if (result != 0)
+    gdbpy_print_stack ();
 }
 
 /* Set the current objfile to OBJFILE and then execute SCRIPT
@@ -1671,7 +1742,9 @@ gdbpy_execute_objfile_script (const struct extension_language_defn *extlang,
   scoped_restore restire_current_objfile
     = make_scoped_restore (&gdbpy_current_objfile, objfile);
 
-  PyRun_SimpleString (script);
+  int ret = eval_python_command (script, Py_file_input);
+  if (ret != 0)
+    gdbpy_print_stack ();
 }
 
 /* Return the current Objfile, or None if there isn't one.  */
@@ -2038,7 +2111,7 @@ static struct cmd_list_element *user_show_python_list;
    interpreter.  This lets Python's 'atexit' work.  */
 
 static void
-finalize_python (void *ignore)
+finalize_python (const struct extension_language_defn *ignore)
 {
   struct active_ext_lang_state *previous_active;
 
@@ -2278,8 +2351,6 @@ init_done:
   /* Release the GIL while gdb runs.  */
   PyEval_SaveThread ();
 
-  make_final_cleanup (finalize_python, NULL);
-
   /* Only set this when initialization has succeeded.  */
   gdb_python_initialized = 1;
   return true;
@@ -2329,21 +2400,15 @@ test_python ()
       {
 	CMD (output);
       }
-    catch (const gdb_exception &e)
+    catch (const gdb_exception_quit &e)
       {
 	saw_exception = true;
-	SELF_CHECK (e.reason == RETURN_ERROR);
-	SELF_CHECK (e.error == GENERIC_ERROR);
-	SELF_CHECK (*e.message == "Error while executing Python code.");
+	SELF_CHECK (e.reason == RETURN_QUIT);
+	SELF_CHECK (e.error == GDB_NO_ERROR);
+	SELF_CHECK (*e.message == "Quit");
       }
     SELF_CHECK (saw_exception);
-    std::string ref_output_0 ("Traceback (most recent call last):\n"
-			      "  File \"<string>\", line 0, in <module>\n"
-			      "KeyboardInterrupt\n");
-    std::string ref_output_1 ("Traceback (most recent call last):\n"
-			      "  File \"<string>\", line 1, in <module>\n"
-			      "KeyboardInterrupt\n");
-    SELF_CHECK (output == ref_output_0 || output == ref_output_1);
+    SELF_CHECK (output.empty ());
   }
 
 #undef CMD
@@ -2431,10 +2496,10 @@ message == an error message without a stack will be printed."),
 
   add_setshow_boolean_cmd ("ignore-environment", no_class,
 			   &python_ignore_environment, _("\
-Set whether the Python interpreter should ignore environment variables."), _(" \
-Show whether the Python interpreter showlist ignore environment variables."), _(" \
-When enabled GDB's Python interpreter will ignore any Python related\n	\
-flags in the environment.  This is equivalent to passing `-E' to a\n	\
+Set whether the Python interpreter should ignore environment variables."), _("\
+Show whether the Python interpreter showlist ignore environment variables."), _("\
+When enabled GDB's Python interpreter will ignore any Python related\n\
+flags in the environment.  This is equivalent to passing `-E' to a\n\
 python executable."),
 			   set_python_ignore_environment,
 			   show_python_ignore_environment,

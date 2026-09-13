@@ -19,7 +19,6 @@
    You should have received a copy of the GNU General Public License
    along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
 
-#include "defs.h"
 #include "arch-utils.h"
 #include "symtab.h"
 #include "breakpoint.h"
@@ -490,7 +489,7 @@ tui_disasm_window::addr_is_displayed (CORE_ADDR addr) const
 }
 
 void
-tui_disasm_window::maybe_update (frame_info_ptr fi, symtab_and_line sal)
+tui_disasm_window::maybe_update (const frame_info_ptr &fi, symtab_and_line sal)
 {
   CORE_ADDR low;
 

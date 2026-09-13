@@ -1,10 +1,11 @@
 -*- text -*-
 
-Changes in 2.42.1:
-
-* Add support for RISC-V Zcmop extension with version 1.0.
-
-* Add support for RISC-V Zimop extension with version 1.0.
+* Assembler macros as well as the bodies of .irp / .irpc can now use the
+  syntax \+ to access the number of times a given macro has been executed.
+  This is similar to the already existing \@ syntax, except that the count is
+  maintained on a per-macro basis.
+  
+* Support the NF feature in Intel APX.
 
 * Remove KEYLOCKER and SHA promotions from EVEX MAP4.
 
@@ -16,12 +17,6 @@ Changes in 2.42.1:
   recognize it in case of linking old objects.
 
 * Add support for RISC-V Zcmp extension with version 1.0.
-
-* Add support for RISC-V Zfbfmin extension with version 1.0.
-
-* Add support for RISC-V Zvfbfmin extension with version 1.0.
-
-* Add support for RISC-V Zvfbfwma extension with version 1.0.
 
 * The base register operand in D(X,B) and D(L,B) may be explicitly omitted
   in assembly on s390. It can now be coded as D(X,) or D(L,) instead of D(X,0)
@@ -35,11 +30,9 @@ Changes in 2.42.1:
 
 * Add support for 'armv9.5-a' for -march in Arm GAS.
 
-* Add support for the AArch64 Lookup Table Extension (LUT).
-
 Changes in 2.42:
 
-* Added support for AMD znver5 processor (available from GNU Binutils 2.42 release).
+* Add support for AMD znver5 processor.
 
 * Add support for the AArch64 Reliability, Availability and Serviceability
   extension v2 (RASv2).

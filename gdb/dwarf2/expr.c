@@ -19,8 +19,8 @@
    You should have received a copy of the GNU General Public License
    along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
 
-#include "defs.h"
 #include "block.h"
+#include "event-top.h"
 #include "symtab.h"
 #include "gdbtypes.h"
 #include "value.h"
@@ -49,7 +49,7 @@ static const registry<gdbarch>::key<dwarf_gdbarch_types> dwarf_arch_cookie;
 /* Ensure that a FRAME is defined, throw an exception otherwise.  */
 
 static void
-ensure_have_frame (frame_info_ptr frame, const char *op_name)
+ensure_have_frame (const frame_info_ptr &frame, const char *op_name)
 {
   if (frame == nullptr)
     throw_error (GENERIC_ERROR,
@@ -78,7 +78,7 @@ bits_to_bytes (ULONGEST start, ULONGEST n_bits)
 /* See expr.h.  */
 
 CORE_ADDR
-read_addr_from_reg (frame_info_ptr frame, int reg)
+read_addr_from_reg (const frame_info_ptr &frame, int reg)
 {
   struct gdbarch *gdbarch = get_frame_arch (frame);
   int regnum = dwarf_reg_to_regnum_or_error (gdbarch, reg);
@@ -112,7 +112,7 @@ static piece_closure *
 allocate_piece_closure (dwarf2_per_cu_data *per_cu,
 			dwarf2_per_objfile *per_objfile,
 			std::vector<dwarf_expr_piece> &&pieces,
-			frame_info_ptr frame)
+			const frame_info_ptr &frame)
 {
   piece_closure *c = new piece_closure;
 
@@ -1076,7 +1076,7 @@ dwarf_expr_context::fetch_result (struct type *type, struct type *subobj_type,
 
 value *
 dwarf_expr_context::evaluate (const gdb_byte *addr, size_t len, bool as_lval,
-			      dwarf2_per_cu_data *per_cu, frame_info_ptr frame,
+			      dwarf2_per_cu_data *per_cu, const frame_info_ptr &frame,
 			      const struct property_addr_info *addr_info,
 			      struct type *type, struct type *subobj_type,
 			      LONGEST subobj_offset)
@@ -1200,8 +1200,7 @@ dwarf_expr_context::stack_empty_p () const
 void
 dwarf_expr_context::add_piece (ULONGEST size, ULONGEST offset)
 {
-  this->m_pieces.emplace_back ();
-  dwarf_expr_piece &p = this->m_pieces.back ();
+  dwarf_expr_piece &p = this->m_pieces.emplace_back ();
 
   p.location = this->m_location;
   p.size = size;

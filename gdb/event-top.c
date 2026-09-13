@@ -19,7 +19,8 @@
    You should have received a copy of the GNU General Public License
    along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
 
-#include "defs.h"
+#include "gdbsupport/job-control.h"
+#include "run-on-main-thread.h"
 #include "top.h"
 #include "ui.h"
 #include "inferior.h"
@@ -34,7 +35,7 @@
 #include "main.h"
 #include "gdbthread.h"
 #include "observable.h"
-#include "gdbcmd.h"
+#include "cli/cli-cmds.h"
 #include "annotate.h"
 #include "maint.h"
 #include "ser-event.h"
@@ -251,6 +252,17 @@ gdb_rl_callback_handler (char *rl) noexcept
      -- gdb_exception has a destructor with side effects.  */
   static struct gdb_exception gdb_rl_expt;
   struct ui *ui = current_ui;
+
+  /* In bracketed paste mode, pasting a complete line can result in a
+     literal newline appearing at the end of LINE.  However, we never
+     want this in gdb.  */
+  if (rl != nullptr)
+    {
+      size_t len = strlen (rl);
+      while (len > 0 && (rl[len - 1] == '\r' || rl[len - 1] == '\n'))
+	--len;
+      rl[len] = '\0';
+    }
 
   try
     {
@@ -522,7 +534,8 @@ async_enable_stdin (void)
 {
   struct ui *ui = current_ui;
 
-  if (ui->prompt_state == PROMPT_BLOCKED)
+  if (ui->prompt_state == PROMPT_BLOCKED
+      && !ui->keep_prompt_blocked)
     {
       target_terminal::ours ();
       ui->register_file_handler ();
@@ -1051,15 +1064,55 @@ gdb_init_signals (void)
   install_handle_sigsegv ();
 }
 
-/* See defs.h.  */
+/* See event-top.h.  */
 
 void
-quit_serial_event_set (void)
+quit (void)
+{
+  if (sync_quit_force_run)
+    {
+      sync_quit_force_run = false;
+      throw_forced_quit ("SIGTERM");
+    }
+
+#ifdef __MSDOS__
+  /* No steenking SIGINT will ever be coming our way when the
+     program is resumed.  Don't lie.  */
+  throw_quit ("Quit");
+#else
+  if (job_control
+      /* If there is no terminal switching for this target, then we can't
+	 possibly get screwed by the lack of job control.  */
+      || !target_supports_terminal_ours ())
+    throw_quit ("Quit");
+  else
+    throw_quit ("Quit (expect signal SIGINT when the program is resumed)");
+#endif
+}
+
+/* See event-top.h.  */
+
+void
+maybe_quit ()
+{
+  if (!is_main_thread ())
+    return;
+
+  if (sync_quit_force_run)
+    quit ();
+
+  quit_handler ();
+}
+
+/* See event-top.h.  */
+
+void
+quit_serial_event_set ()
 {
   serial_event_set (quit_serial_event);
 }
 
-/* See defs.h.  */
+/* See event-top.h.  */
 
 void
 quit_serial_event_clear (void)
@@ -1102,7 +1155,7 @@ handle_sigint (int sig)
 
   /* We could be running in a loop reading in symfiles or something so
      it may be quite a while before we get back to the event loop.  So
-     set quit_flag to 1 here.  Then if QUIT is called before we get to
+     set quit_flag to true here.  Then if QUIT is called before we get to
      the event loop, we will unwind as expected.  */
   set_quit_flag ();
 
@@ -1182,7 +1235,7 @@ handle_sigterm (int sig)
 void
 async_request_quit (gdb_client_data arg)
 {
-  /* If the quit_flag has gotten reset back to 0 by the time we get
+  /* If the quit_flag has gotten reset back to false by the time we get
      back here, that means that an exception was thrown to unwind the
      current command before we got back to the event loop.  So there
      is no reason to call quit again here.  */

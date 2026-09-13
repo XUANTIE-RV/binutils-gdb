@@ -17,7 +17,6 @@
    You should have received a copy of the GNU General Public License
    along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
 
-#include "common-defs.h"
 #include "errors.h"
 #if defined (USE_WIN32API) || defined(__CYGWIN__)
 #include <windows.h>
@@ -149,7 +148,7 @@ strwinerror (ULONGEST error)
 void
 throw_winerror_with_name (const char *string, ULONGEST err)
 {
-  error (_("%s (error %d): %s"), string, err, strwinerror (err));
+  error (_("%s (error %u): %s"), string, (unsigned) err, strwinerror (err));
 }
 
 #endif /* USE_WIN32API */

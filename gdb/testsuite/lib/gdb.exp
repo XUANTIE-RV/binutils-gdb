@@ -45,9 +45,9 @@ proc cond_wrap { cond wrap body } {
     }
 }
 
-# Add VAR_ID=VAL to ENV_VAR, unless ENV_VAR already contains a VAR_ID setting.
+# Helper function for set_sanitizer/set_sanitizer_default.
 
-proc set_sanitizer_default { env_var var_id val } {
+proc set_sanitizer_1 { env_var var_id val default} {
     global env
 
     if { ![info exists env($env_var) ]
@@ -57,7 +57,7 @@ proc set_sanitizer_default { env_var var_id val } {
 	return
     }
 
-    if { [regexp $var_id= $env($env_var)] } {
+    if { $default && [regexp $var_id= $env($env_var)] } {
 	# Don't set var_id.  It's already set by the user, leave as is.
 	# Note that we could probably get the same result by unconditionally
 	# prepending it, but this way is less likely to cause confusion.
@@ -66,6 +66,18 @@ proc set_sanitizer_default { env_var var_id val } {
 
     # Set var_id (env_var not empty case).
     append env($env_var) : $var_id=$val
+}
+
+# Add VAR_ID=VAL to ENV_VAR.
+
+proc set_sanitizer { env_var var_id val } {
+    set_sanitizer_1 $env_var $var_id $val 0
+}
+
+# Add VAR_ID=VAL to ENV_VAR, unless ENV_VAR already contains a VAR_ID setting.
+
+proc set_sanitizer_default { env_var var_id val } {
+    set_sanitizer_1 $env_var $var_id $val 1
 }
 
 set_sanitizer_default TSAN_OPTIONS suppressions \
@@ -289,6 +301,10 @@ set octal "\[0-7\]+"
 
 set inferior_exited_re "(?:\\\[Inferior \[0-9\]+ \\(\[^\n\r\]*\\) exited)"
 
+# A regular expression that matches the first word of a thread
+# description after the thread number info 'info threads'
+set tdlabel_re "(process|Thread|LWP)"
+
 # A regular expression that matches a value history number.
 # E.g., $1, $2, etc.
 set valnum_re "\\\$$decimal"
@@ -373,10 +389,10 @@ proc delete_breakpoints {} {
     #
     set timeout 100
 
-    set msg "delete all breakpoints in delete_breakpoints"
+    set msg "delete all breakpoints, watchpoints, tracepoints, and catchpoints in delete_breakpoints"
     set deleted 0
     gdb_test_multiple "delete breakpoints" "$msg" {
-	-re "Delete all breakpoints.*y or n.*$" {
+	-re "Delete all breakpoints, watchpoints, tracepoints, and catchpoints.*y or n.*$" {
 	    send_gdb "y\n" answer
 	    exp_continue
 	}
@@ -390,7 +406,7 @@ proc delete_breakpoints {} {
 	set deleted 0
 	set msg "info breakpoints"
 	gdb_test_multiple $msg $msg {
-	    -re "No breakpoints or watchpoints..*$gdb_prompt $" {
+	    -re "No breakpoints, watchpoints, tracepoints, or catchpoints..*$gdb_prompt $" {
 		set deleted 1
 	    }
 	    -re "$gdb_prompt $" {
@@ -752,7 +768,7 @@ proc runto { linespec args } {
     
     # the "at foo.c:36" output we get with -g.
     # the "in func" output we get without -g.
-    gdb_expect 30 {
+    gdb_expect {
 	-re "(?:Break|Temporary break).* at .*:$decimal.*$gdb_prompt $" {
 	    if { $print_pass } {
 		pass $test_name
@@ -832,6 +848,44 @@ proc gdb_continue_to_breakpoint {name {location_pattern .*}} {
     }]
 }
 
+# Check whether GDB is stopped at the given instruction.
+# INSTRUCTION should be just its mnemonic, without any arguments.
+
+proc is_at_instruction { instruction } {
+    global gdb_prompt hex
+
+    set test "pc points to $instruction"
+    gdb_test_multiple {x/i $pc} $test {
+	-re -wrap "=> $hex \[^\r\n\]+:\t$instruction\t\[^\r\n\]+" {
+	    return 1
+	}
+	-re "\r\n$gdb_prompt $" {
+	    return 0
+	}
+    }
+
+    return 0
+}
+
+# Single-steps GDB until it arrives at the given instruction.
+# INSTRUCTION should be just its mnemonic, without any arguments.
+
+proc arrive_at_instruction { instruction } {
+    set count 0
+
+    while { [is_at_instruction $instruction] != 1 } {
+	gdb_test -nopass "stepi" "\[^\r\n\]+" \
+	    "stepi #$count to reach $instruction"
+	incr count
+
+	if { $count > 50 } {
+	    fail "didn't reach $instruction"
+	    return 0
+	}
+    }
+
+    return 1
+}
 
 # gdb_internal_error_resync:
 #
@@ -3310,6 +3364,20 @@ proc with_spawn_id { spawn_id body } {
     }
 }
 
+# DejaGNU records spawn ids in a global array and tries to wait for
+# them when exiting.  Sometimes this caused problems if gdb's test
+# suite has already waited for the particular spawn id.  And, dejagnu
+# only seems to allow a single spawn id per "machine".  This proc can
+# be used to clean up after a spawn id has been closed.
+proc clean_up_spawn_id {host id} {
+    global board_info
+    set name [board_info $host name]
+    if {[info exists board_info($name,fileid)]
+	&& $board_info($name,fileid) == $id} {
+	unset -nocomplain board_info($name,fileid)
+    }
+}
+
 # Select the largest timeout from all the timeouts:
 # - the local "timeout" variable of the scope two levels above,
 # - the global "timeout" variable,
@@ -3667,6 +3735,61 @@ proc support_displaced_stepping {} {
     }
 
     return 0
+}
+
+# Return 0 and a reason string if GDB can determine that libc doesn't have
+# debug info, and 1 otherwise.  This procedure is meant to be called by the
+# require procedure.
+gdb_caching_proc libc_has_debug_info {} {
+    global srcdir subdir gdb_prompt inferior_exited_re
+
+    set me "libc_has_debug_info"
+
+    # Compile a test program.
+    set src {
+	#include <stdio.h>
+
+	int main (void) {
+	    printf ("Hello, world!\n");
+	    return 0;
+	}
+    }
+    if {![gdb_simple_compile $me $src executable {debug}]} {
+	return [list 0 "failed to compile test program"]
+    }
+
+    # No error message, compilation succeeded so now run it via gdb.
+
+    gdb_exit
+    gdb_start
+    gdb_reinitialize_dir $srcdir/$subdir
+    gdb_load "$obj"
+    runto_main
+    set libc_has_debug_info 1
+    set message "unable to get information on libc.so"
+    set test "info sharedlibrary"
+    gdb_test_multiple $test $test {
+	-re ".*\(\\*\)\[^\r\n\]*/libc\.so.*$gdb_prompt $" {
+	    # Matched the "(*)" in the "Syms Read" columns which means:
+	    # "(*): Shared library is missing debugging information."
+	    set libc_has_debug_info 0
+	    set message "libc doesn't have debug info"
+	}
+	-re ".*$gdb_prompt $" {
+	    # The default pattern for the GDB prompt in gdb_test_multiple
+	    # causes a FAIL if it matches, but in our case we should just
+	    # assume that there is libc debug info.
+	}
+    }
+    gdb_exit
+    remote_file build delete $obj
+
+    verbose "$me: returning $libc_has_debug_info" 2
+    if { $libc_has_debug_info } {
+	return $libc_has_debug_info
+    } else {
+	return [list $libc_has_debug_info $message]
+    }
 }
 
 # Run a test on the target to see if it supports vmx hardware.  Return 1 if so, 
@@ -4411,6 +4534,67 @@ proc aarch64_supports_sme_svl { length } {
     return 1
 }
 
+# Run a test on the target to see if it supports AArch64 MOPS (Memory
+# Operations) extensions.  Return 1 if so, 0 if it does not.  Note this
+# causes a restart of GDB.
+
+gdb_caching_proc allow_aarch64_mops_tests {} {
+    global srcdir subdir gdb_prompt inferior_exited_re
+
+    set me "allow_aarch64_mops_tests"
+
+    if { ![is_aarch64_target]} {
+	return 0
+    }
+
+    # ARMv9.3-A contains the MOPS extension.  The test program doesn't use it,
+    # but take the opportunity to check whether the toolchain knows about MOPS.
+    set compile_flags "{additional_flags=-march=armv9.3-a}"
+
+    # Compile a program that tests the MOPS feature.
+    set src {
+	#include <stdbool.h>
+	#include <sys/auxv.h>
+
+	#ifndef HWCAP2_MOPS
+	#define HWCAP2_MOPS (1UL << 43)
+	#endif
+
+	int main() {
+	    bool mops_supported = getauxval (AT_HWCAP2) & HWCAP2_MOPS;
+
+	    return !mops_supported;
+	}
+    }
+
+    if {![gdb_simple_compile $me $src executable $compile_flags]} {
+	return 0
+    }
+
+    # Compilation succeeded so now run it via gdb.
+    clean_restart $obj
+    gdb_run_cmd
+    gdb_expect {
+	-re ".*$inferior_exited_re with code 01.*${gdb_prompt} $" {
+	    verbose -log "\n$me mops support not detected"
+	    set allow_mops_tests 0
+	}
+	-re ".*$inferior_exited_re normally.*${gdb_prompt} $" {
+	    verbose -log "\n$me: mops support detected"
+	    set allow_mops_tests 1
+	}
+	default {
+	  warning "\n$me: default case taken"
+	    set allow_mops_tests 0
+	}
+    }
+    gdb_exit
+    remote_file build delete $obj
+
+    verbose "$me:  returning $allow_mops_tests" 2
+    return $allow_mops_tests
+}
+
 # A helper that compiles a test case to see if __int128 is supported.
 proc gdb_int128_helper {lang} {
     return [gdb_can_simple_compile "i128-for-$lang" {
@@ -4608,63 +4792,38 @@ proc skip_libstdcxx_probe_tests {} {
     return [skip_libstdcxx_probe_tests_prompt "$gdb_prompt $"]
 }
 
-# Helper for gdb_is_target_* procs.  TARGET_NAME is the name of the target
-# we're looking for (used to build the test name).  TARGET_STACK_REGEXP
-# is a regexp that will match the output of "maint print target-stack" if
-# the target in question is currently pushed.  PROMPT_REGEXP is a regexp
-# matching the expected prompt after the command output.
-#
-# NOTE: GDB must be running BEFORE this procedure is called!
+# Return 1 if libc supports the longjmp probe.  Note that we're not using
+# gdb_caching_proc because the probe may have been disabled.
 
-proc gdb_is_target_1 { target_name target_stack_regexp prompt_regexp } {
-    global gdb_spawn_id
-
-    # Throw a Tcl error if gdb isn't already started.
-    if {![info exists gdb_spawn_id]} {
-	error "gdb_is_target_1 called with no running gdb instance"
-    }
-
-    set test "probe for target ${target_name}"
-    gdb_test_multiple "maint print target-stack" $test \
-	-prompt "$prompt_regexp" {
-	    -re "${target_stack_regexp}${prompt_regexp}" {
-		pass $test
-		return 1
-	    }
-	    -re "$prompt_regexp" {
-		pass $test
-	    }
+proc have_longjmp_probe {} {
+    set have_probe -1
+    gdb_test_multiple "info probes stap libc ^longjmp$" "" {
+	-re -wrap "No probes matched\\." {
+	    set have_probe 0
 	}
-    return 0
+	-re -wrap "\r\nstap\[ \t\]+libc\[ \t\]+longjmp\[ \t\]+.*" {
+	    set have_probe 1
+	}
+    }
+    if { $have_probe == -1 } {
+	error "failed to get libc longjmp probe status"
+    }
+    return $have_probe
 }
 
-# Helper for gdb_is_target_remote where the expected prompt is variable.
-#
-# NOTE: GDB must be running BEFORE this procedure is called!
+# Returns true if gdb_protocol is empty, indicating use of the native
+# target.
 
-proc gdb_is_target_remote_prompt { prompt_regexp } {
-    return [gdb_is_target_1 "remote" ".*emote target using gdb-specific protocol.*" $prompt_regexp]
+proc gdb_protocol_is_native { } {
+    return [expr {[target_info gdb_protocol] == ""}]
 }
 
-# Check whether we're testing with the remote or extended-remote
-# targets.
-#
-# NOTE: GDB must be running BEFORE this procedure is called!
+# Returns true if gdb_protocol is either "remote" or
+# "extended-remote".
 
-proc gdb_is_target_remote { } {
-    global gdb_prompt
-
-    return [gdb_is_target_remote_prompt "$gdb_prompt $"]
-}
-
-# Check whether we're testing with the native target.
-#
-# NOTE: GDB must be running BEFORE this procedure is called!
-
-proc gdb_is_target_native { } {
-    global gdb_prompt
-
-    return [gdb_is_target_1 "native" ".*native \\(Native process\\).*" "$gdb_prompt $"]
+proc gdb_protocol_is_remote { } {
+    return [expr {[target_info gdb_protocol] == "remote"
+		  || [target_info gdb_protocol] == "extended-remote"}]
 }
 
 # Like istarget, but checks a list of targets.
@@ -4821,7 +4980,7 @@ proc get_compiler_info {{language "c"}} {
     if [is_remote host] {
 	# We have to use -E and -o together, despite the comments
 	# above, because of how DejaGnu handles remote host testing.
-	set ppout "$outdir/compiler.i"
+	set ppout [standard_temp_file compiler.i]
 	gdb_compile "${ifile}" "$ppout" preprocess [list "$language" quiet getting_compiler_info]
 	set file [open $ppout r]
 	set cppout [read $file]
@@ -4985,16 +5144,8 @@ proc gdb_wrapper_init { args } {
 }
 
 # Determine options that we always want to pass to the compiler.
-gdb_caching_proc universal_compile_options {} {
-    set me "universal_compile_options"
+proc universal_compile_options {src obj} {
     set options {}
-
-    set src [standard_temp_file ccopts.c]
-    set obj [standard_temp_file ccopts.o]
-
-    gdb_produce_source $src {
-	int foo(void) { return 0; }
-    }
 
     # Try an option for disabling colored diagnostics.  Some compilers
     # yield colored diagnostics by default (when run from a tty) unless
@@ -5005,7 +5156,43 @@ gdb_caching_proc universal_compile_options {} {
 	# Seems to have worked; use the option.
 	lappend options $opt
     }
+
+    return $options
+}
+
+# Determine options that we always want to pass to the C compiler.
+gdb_caching_proc universal_compile_options_c {} {
+    set me "universal_compile_options_c"
+
+    set src [standard_temp_file ccopts.c]
+    set obj [standard_temp_file ccopts.o]
+
+    gdb_produce_source $src {
+	int foo(void) { return 0; }
+    }
+
+    set options [universal_compile_options $src $obj]
+
     file delete $src
+    file delete $obj
+
+    verbose "$me:  returning $options" 2
+    return $options
+}
+
+# Determine options that we always want to pass to the compiler for
+# assembly source files with the extension ".s".
+gdb_caching_proc universal_compile_options_assembly {} {
+    set me "universal_compile_options_assembly"
+
+    set src [standard_temp_file ccopts.s]
+    set obj [standard_temp_file csymbol.o]
+
+    gdb_produce_source $src {
+	main:
+    }
+
+    set options [universal_compile_options $src $obj]
     file delete $obj
 
     verbose "$me:  returning $options" 2
@@ -5191,7 +5378,13 @@ proc gdb_compile {source dest type options} {
     if {[lsearch -exact $options rust] != -1} {
 	# -fdiagnostics-color is not a rustcc option.
     } else {
-	set new_options [universal_compile_options]
+	# icx/clang compilers support the -fdiagnostics-color option for
+	# ".S" files and only it is not supported for ".s" files.
+	if {[string match *.s $source] != 0} {
+	    set new_options [universal_compile_options_assembly]
+	} else {
+	    set new_options [universal_compile_options_c]
+	}
     }
 
     # C/C++ specific settings.
@@ -5532,10 +5725,20 @@ proc gdb_compile {source dest type options} {
 	    #  which is time consuming, especially if we're remote
 	    #  host testing.
 	    #
+	    # Note the special care for GDB_PARALLEL.  In that
+	    # scenario, multiple expect instances will potentially try
+	    # to compile the object file at the same time.  The result
+	    # should be identical for every one of them, so we just
+	    # need to make sure that the final objfile is written to
+	    # atomically.
+
 	    if { $gdb_saved_set_unbuffered_mode_obj == "" } {
 		verbose "compiling gdb_saved_set_unbuffered_obj"
 		set unbuf_src ${srcdir}/lib/set_unbuffered_mode.c
-		set unbuf_obj ${objdir}/set_unbuffered_mode.o
+		# This gives us a per-expect-instance unique filename,
+		# which is important for GDB_PARALLEL.  See comments
+		# above.
+		set unbuf_obj [standard_temp_file set_unbuffered_mode.o]
 
 		set result [gdb_compile "${unbuf_src}" "${unbuf_obj}" object {nowarnings}]
 		if { $result != "" } {
@@ -5548,7 +5751,14 @@ proc gdb_compile {source dest type options} {
 		}
 		# Link a copy of the output object, because the
 		# original may be automatically deleted.
-		remote_download host $unbuf_obj $gdb_saved_set_unbuffered_mode_obj
+		if {[info exists ::GDB_PARALLEL]} {
+		    # Make sure to write the .o file atomically.
+		    # (Note GDB_PARALLEL mode does not support remote
+		    # host testing.)
+		    file rename -force -- $unbuf_obj $gdb_saved_set_unbuffered_mode_obj
+		} else {
+		    remote_download host $unbuf_obj $gdb_saved_set_unbuffered_mode_obj
+		}
 	    } else {
 		verbose "gdb_saved_set_unbuffered_obj already compiled"
 	    }
@@ -6050,16 +6260,14 @@ proc gdb_spawn { } {
 proc gdb_spawn_with_cmdline_opts { cmdline_flags } {
     global GDBFLAGS
 
-    set saved_gdbflags $GDBFLAGS
+    save_vars { GDBFLAGS } {
+	if {$GDBFLAGS != ""} {
+	    append GDBFLAGS " "
+	}
+	append GDBFLAGS $cmdline_flags
 
-    if {$GDBFLAGS != ""} {
-	append GDBFLAGS " "
+	set res [gdb_spawn]
     }
-    append GDBFLAGS $cmdline_flags
-
-    set res [gdb_spawn]
-
-    set GDBFLAGS $saved_gdbflags
 
     return $res
 }
@@ -6077,8 +6285,61 @@ proc gdb_exit { } {
     catch default_gdb_exit
 }
 
+# Helper function for can_spawn_for_attach.  Try to spawn and attach, and
+# return 0 only if we cannot attach because it's unsupported.
+
+gdb_caching_proc can_spawn_for_attach_1 {} {
+    # For the benefit of gdb-caching-proc-consistency.exp, which
+    # calls can_spawn_for_attach_1 directly.  Keep in sync with
+    # can_spawn_for_attach.
+    if { [is_remote target] || [target_info exists use_gdb_stub] } {
+	return 0
+    }
+
+    # Assume yes.
+    set res 1
+
+    set me "can_spawn_for_attach"
+    set src {
+	#include <unistd.h>
+
+	int
+	main (void)
+	{
+	    sleep (600);
+	    return 0;
+	}
+    }
+    if {![gdb_simple_compile $me $src executable]} {
+	return $res
+    }
+
+    set test_spawn_id [spawn_wait_for_attach_1 $obj]
+    remote_file build delete $obj
+
+    gdb_start
+
+    set test_pid [spawn_id_get_pid $test_spawn_id]
+    set attaching_re "Attaching to process $test_pid"
+    gdb_test_multiple "attach $test_pid" "can spawn for attach" {
+	-re -wrap "$attaching_re\r\n.*ptrace: Operation not permitted\\." {
+	    # Not permitted.
+	    set res 0
+	}
+	-re -wrap "" {
+	    # Don't know, keep assuming yes.
+	}
+    }
+
+    gdb_exit
+
+    kill_wait_spawned_process $test_spawn_id
+
+    return $res
+}
+
 # Return true if we can spawn a program on the target and attach to
-# it.
+# it.  Calls gdb_exit for the first call in a test-case.
 
 proc can_spawn_for_attach { } {
     # We use exp_pid to get the inferior's pid, assuming that gives
@@ -6097,8 +6358,39 @@ proc can_spawn_for_attach { } {
 	return 0
     }
 
-    # Assume yes.
-    return 1
+    # The normal sequence to use for a runtime test like
+    # can_spawn_for_attach_1 is:
+    # - gdb_exit (don't use a running gdb, we don't know what state it is in),
+    # - gdb_start (start a new gdb), and
+    # - gdb_exit (cleanup).
+    #
+    # By making can_spawn_for_attach_1 a gdb_caching_proc, we make it
+    # unpredictable which test-case will call it first, and consequently a
+    # test-case may pass in say a full test run, but fail when run
+    # individually, due to a can_spawn_for_attach call in a location where a
+    # gdb_exit (as can_spawn_for_attach_1 does) breaks things.
+    # To avoid this, we move the initial gdb_exit out of
+    # can_spawn_for_attach_1, guaranteeing that we end up in the same state
+    # regardless of whether can_spawn_for_attach_1 is called.  However, that
+    # is only necessary for the first call in a test-case, so cache the result
+    # in a global (which should be reset after each test-case) to keep track
+    # of that.
+    #
+    # In summary, we distinguish between three cases:
+    # - first call in first test-case.  Executes can_spawn_for_attach_1.
+    #   Calls gdb_exit, gdb_start, gdb_exit.
+    # - first call in following test-cases.  Uses cached result of
+    #   can_spawn_for_attach_1.  Calls gdb_exit.
+    # - rest.  Use cached result in cache_can_spawn_for_attach_1. Calls no
+    #   gdb_start or gdb_exit.
+    global cache_can_spawn_for_attach_1
+    if { [info exists cache_can_spawn_for_attach_1] } {
+	return $cache_can_spawn_for_attach_1
+    }
+    gdb_exit
+
+    set cache_can_spawn_for_attach_1 [can_spawn_for_attach_1]
+    return $cache_can_spawn_for_attach_1
 }
 
 # Centralize the failure checking of "attach" command.
@@ -6194,6 +6486,7 @@ proc kill_wait_spawned_process { proc_spawn_id } {
     # wait for the PID in the background.  That's fine because we
     # don't care about the exit status.  */
     wait -nowait -i $proc_spawn_id
+    clean_up_spawn_id target $proc_spawn_id
 }
 
 # Returns the process id corresponding to the given spawn id.
@@ -6210,19 +6503,11 @@ proc spawn_id_get_pid { spawn_id } {
     return $testpid
 }
 
-# Start a set of programs running and then wait for a bit, to be sure
-# that they can be attached to.  Return a list of processes spawn IDs,
-# one element for each process spawned.  It's a test error to call
-# this when [can_spawn_for_attach] is false.
+# Helper function for spawn_wait_for_attach and can_spawn_for_attach_1.  As
+# spawn_wait_for_attach, but doesn't check for can_spawn_for_attach.
 
-proc spawn_wait_for_attach { executable_list } {
+proc spawn_wait_for_attach_1 { executable_list } {
     set spawn_id_list {}
-
-    if ![can_spawn_for_attach] {
-	# The caller should have checked can_spawn_for_attach itself
-	# before getting here.
-	error "can't spawn for attach with this target/board"
-    }
 
     foreach {executable} $executable_list {
 	# Note we use Expect's spawn, not Tcl's exec, because with
@@ -6235,6 +6520,21 @@ proc spawn_wait_for_attach { executable_list } {
     sleep 2
 
     return $spawn_id_list
+}
+
+# Start a set of programs running and then wait for a bit, to be sure
+# that they can be attached to.  Return a list of processes spawn IDs,
+# one element for each process spawned.  It's a test error to call
+# this when [can_spawn_for_attach] is false.
+
+proc spawn_wait_for_attach { executable_list } {
+    if ![can_spawn_for_attach] {
+	# The caller should have checked can_spawn_for_attach itself
+	# before getting here.
+	error "can't spawn for attach with this target/board"
+    }
+
+    return [spawn_wait_for_attach_1 $executable_list]
 }
 
 #
@@ -6859,6 +7159,15 @@ proc default_gdb_init { test_file_name } {
 	    return [uplevel 1 ::gdb_tcl_unknown $args]
 	}
     }
+
+    # Dejagnu version 1.6.3 and later produce an unresolved at the end of a
+    # testcase if an error triggered, resetting errcnt and warncnt to 0, in
+    # order to avoid errors in one test-case influencing the following
+    # test-case.  Do this manually here, to support older versions.
+    global errcnt
+    global warncnt
+    set errcnt 0
+    set warncnt 0
 }
 
 # Return a path using GDB_PARALLEL.
@@ -7385,8 +7694,23 @@ proc gdb_continue_to_end {{mssg ""} {command continue} {allow_extra 0}} {
   } else {
       set text "continue until exit at $mssg"
   }
+
   if {$allow_extra} {
       set extra ".*"
+  } elseif {[istarget *-*-cygwin*] || [istarget *-*-mingw*]} {
+      # On Windows, even on supposedly single-threaded programs, we
+      # may see thread exit output when running to end, for threads
+      # spawned by the runtime.  E.g.:
+      #
+      #  (gdb) continue
+      #  Continuing.
+      #  [Thread 14364.0x21d4 exited with code 0]
+      #  [Thread 14364.0x4374 exited with code 0]
+      #  [Thread 14364.0x3aec exited with code 0]
+      #  [Thread 14364.0x3368 exited with code 0]
+      #  [Inferior 1 (process 14364) exited normally]
+      #
+      set extra "(\\\[Thread \[^\r\n\]+ exited with code $::decimal\\\]\r\n)*"
   } else {
       set extra ""
   }

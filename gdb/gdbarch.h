@@ -58,6 +58,7 @@ struct thread_info;
 struct ui_out;
 struct inferior;
 struct x86_xsave_layout;
+struct solib_ops;
 
 #include "regcache.h"
 
@@ -367,6 +368,14 @@ static inline int
 gdbarch_num_cooked_regs (gdbarch *arch)
 {
   return gdbarch_num_regs (arch) + gdbarch_num_pseudo_regs (arch);
+}
+
+/* Return true if stacks for ARCH grow down, otherwise return true.  */
+
+static inline bool
+gdbarch_stack_grows_down (gdbarch *arch)
+{
+  return gdbarch_inner_than (arch, 1, 2);
 }
 
 #endif

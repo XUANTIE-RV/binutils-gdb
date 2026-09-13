@@ -196,8 +196,8 @@ extern void set_gdbarch_pseudo_register_read (struct gdbarch *gdbarch, gdbarch_p
 
 extern bool gdbarch_pseudo_register_read_value_p (struct gdbarch *gdbarch);
 
-typedef struct value * (gdbarch_pseudo_register_read_value_ftype) (struct gdbarch *gdbarch, frame_info_ptr next_frame, int cookednum);
-extern struct value * gdbarch_pseudo_register_read_value (struct gdbarch *gdbarch, frame_info_ptr next_frame, int cookednum);
+typedef struct value * (gdbarch_pseudo_register_read_value_ftype) (struct gdbarch *gdbarch, const frame_info_ptr &next_frame, int cookednum);
+extern struct value * gdbarch_pseudo_register_read_value (struct gdbarch *gdbarch, const frame_info_ptr &next_frame, int cookednum);
 extern void set_gdbarch_pseudo_register_read_value (struct gdbarch *gdbarch, gdbarch_pseudo_register_read_value_ftype *pseudo_register_read_value);
 
 /* Write bytes in BUF to pseudo register with number PSEUDO_REG_NUM.
@@ -207,8 +207,8 @@ extern void set_gdbarch_pseudo_register_read_value (struct gdbarch *gdbarch, gdb
 
 extern bool gdbarch_pseudo_register_write_p (struct gdbarch *gdbarch);
 
-typedef void (gdbarch_pseudo_register_write_ftype) (struct gdbarch *gdbarch, frame_info_ptr next_frame, int pseudo_reg_num, gdb::array_view<const gdb_byte> buf);
-extern void gdbarch_pseudo_register_write (struct gdbarch *gdbarch, frame_info_ptr next_frame, int pseudo_reg_num, gdb::array_view<const gdb_byte> buf);
+typedef void (gdbarch_pseudo_register_write_ftype) (struct gdbarch *gdbarch, const frame_info_ptr &next_frame, int pseudo_reg_num, gdb::array_view<const gdb_byte> buf);
+extern void gdbarch_pseudo_register_write (struct gdbarch *gdbarch, const frame_info_ptr &next_frame, int pseudo_reg_num, gdb::array_view<const gdb_byte> buf);
 extern void set_gdbarch_pseudo_register_write (struct gdbarch *gdbarch, gdbarch_pseudo_register_write_ftype *pseudo_register_write);
 
 /* Write bytes to a pseudo register.
@@ -335,8 +335,8 @@ extern void set_gdbarch_register_type (struct gdbarch *gdbarch, gdbarch_register
    should match the address at which the breakpoint was set in the dummy
    frame. */
 
-typedef struct frame_id (gdbarch_dummy_id_ftype) (struct gdbarch *gdbarch, frame_info_ptr this_frame);
-extern struct frame_id gdbarch_dummy_id (struct gdbarch *gdbarch, frame_info_ptr this_frame);
+typedef struct frame_id (gdbarch_dummy_id_ftype) (struct gdbarch *gdbarch, const frame_info_ptr &this_frame);
+extern struct frame_id gdbarch_dummy_id (struct gdbarch *gdbarch, const frame_info_ptr &this_frame);
 extern void set_gdbarch_dummy_id (struct gdbarch *gdbarch, gdbarch_dummy_id_ftype *dummy_id);
 
 /* Implement DUMMY_ID and PUSH_DUMMY_CALL, then delete
@@ -362,22 +362,22 @@ extern void set_gdbarch_push_dummy_code (struct gdbarch *gdbarch, gdbarch_push_d
 
 /* Return true if the code of FRAME is writable. */
 
-typedef int (gdbarch_code_of_frame_writable_ftype) (struct gdbarch *gdbarch, frame_info_ptr frame);
-extern int gdbarch_code_of_frame_writable (struct gdbarch *gdbarch, frame_info_ptr frame);
+typedef int (gdbarch_code_of_frame_writable_ftype) (struct gdbarch *gdbarch, const frame_info_ptr &frame);
+extern int gdbarch_code_of_frame_writable (struct gdbarch *gdbarch, const frame_info_ptr &frame);
 extern void set_gdbarch_code_of_frame_writable (struct gdbarch *gdbarch, gdbarch_code_of_frame_writable_ftype *code_of_frame_writable);
 
-typedef void (gdbarch_print_registers_info_ftype) (struct gdbarch *gdbarch, struct ui_file *file, frame_info_ptr frame, int regnum, int all);
-extern void gdbarch_print_registers_info (struct gdbarch *gdbarch, struct ui_file *file, frame_info_ptr frame, int regnum, int all);
+typedef void (gdbarch_print_registers_info_ftype) (struct gdbarch *gdbarch, struct ui_file *file, const frame_info_ptr &frame, int regnum, int all);
+extern void gdbarch_print_registers_info (struct gdbarch *gdbarch, struct ui_file *file, const frame_info_ptr &frame, int regnum, int all);
 extern void set_gdbarch_print_registers_info (struct gdbarch *gdbarch, gdbarch_print_registers_info_ftype *print_registers_info);
 
-typedef void (gdbarch_print_float_info_ftype) (struct gdbarch *gdbarch, struct ui_file *file, frame_info_ptr frame, const char *args);
-extern void gdbarch_print_float_info (struct gdbarch *gdbarch, struct ui_file *file, frame_info_ptr frame, const char *args);
+typedef void (gdbarch_print_float_info_ftype) (struct gdbarch *gdbarch, struct ui_file *file, const frame_info_ptr &frame, const char *args);
+extern void gdbarch_print_float_info (struct gdbarch *gdbarch, struct ui_file *file, const frame_info_ptr &frame, const char *args);
 extern void set_gdbarch_print_float_info (struct gdbarch *gdbarch, gdbarch_print_float_info_ftype *print_float_info);
 
 extern bool gdbarch_print_vector_info_p (struct gdbarch *gdbarch);
 
-typedef void (gdbarch_print_vector_info_ftype) (struct gdbarch *gdbarch, struct ui_file *file, frame_info_ptr frame, const char *args);
-extern void gdbarch_print_vector_info (struct gdbarch *gdbarch, struct ui_file *file, frame_info_ptr frame, const char *args);
+typedef void (gdbarch_print_vector_info_ftype) (struct gdbarch *gdbarch, struct ui_file *file, const frame_info_ptr &frame, const char *args);
+extern void gdbarch_print_vector_info (struct gdbarch *gdbarch, struct ui_file *file, const frame_info_ptr &frame, const char *args);
 extern void set_gdbarch_print_vector_info (struct gdbarch *gdbarch, gdbarch_print_vector_info_ftype *print_vector_info);
 
 /* MAP a GDB RAW register number onto a simulator register number.  See
@@ -402,8 +402,8 @@ extern void set_gdbarch_cannot_store_register (struct gdbarch *gdbarch, gdbarch_
 
 extern bool gdbarch_get_longjmp_target_p (struct gdbarch *gdbarch);
 
-typedef int (gdbarch_get_longjmp_target_ftype) (frame_info_ptr frame, CORE_ADDR *pc);
-extern int gdbarch_get_longjmp_target (struct gdbarch *gdbarch, frame_info_ptr frame, CORE_ADDR *pc);
+typedef int (gdbarch_get_longjmp_target_ftype) (const frame_info_ptr &frame, CORE_ADDR *pc);
+extern int gdbarch_get_longjmp_target (struct gdbarch *gdbarch, const frame_info_ptr &frame, CORE_ADDR *pc);
 extern void set_gdbarch_get_longjmp_target (struct gdbarch *gdbarch, gdbarch_get_longjmp_target_ftype *get_longjmp_target);
 
 extern int gdbarch_believe_pcc_promotion (struct gdbarch *gdbarch);
@@ -413,12 +413,12 @@ typedef int (gdbarch_convert_register_p_ftype) (struct gdbarch *gdbarch, int reg
 extern int gdbarch_convert_register_p (struct gdbarch *gdbarch, int regnum, struct type *type);
 extern void set_gdbarch_convert_register_p (struct gdbarch *gdbarch, gdbarch_convert_register_p_ftype *convert_register_p);
 
-typedef int (gdbarch_register_to_value_ftype) (frame_info_ptr frame, int regnum, struct type *type, gdb_byte *buf, int *optimizedp, int *unavailablep);
-extern int gdbarch_register_to_value (struct gdbarch *gdbarch, frame_info_ptr frame, int regnum, struct type *type, gdb_byte *buf, int *optimizedp, int *unavailablep);
+typedef int (gdbarch_register_to_value_ftype) (const frame_info_ptr &frame, int regnum, struct type *type, gdb_byte *buf, int *optimizedp, int *unavailablep);
+extern int gdbarch_register_to_value (struct gdbarch *gdbarch, const frame_info_ptr &frame, int regnum, struct type *type, gdb_byte *buf, int *optimizedp, int *unavailablep);
 extern void set_gdbarch_register_to_value (struct gdbarch *gdbarch, gdbarch_register_to_value_ftype *register_to_value);
 
-typedef void (gdbarch_value_to_register_ftype) (frame_info_ptr frame, int regnum, struct type *type, const gdb_byte *buf);
-extern void gdbarch_value_to_register (struct gdbarch *gdbarch, frame_info_ptr frame, int regnum, struct type *type, const gdb_byte *buf);
+typedef void (gdbarch_value_to_register_ftype) (const frame_info_ptr &frame, int regnum, struct type *type, const gdb_byte *buf);
+extern void gdbarch_value_to_register (struct gdbarch *gdbarch, const frame_info_ptr &frame, int regnum, struct type *type, const gdb_byte *buf);
 extern void set_gdbarch_value_to_register (struct gdbarch *gdbarch, gdbarch_value_to_register_ftype *value_to_register);
 
 /* Construct a value representing the contents of register REGNUM in
@@ -484,8 +484,8 @@ extern void set_gdbarch_return_value_as_value (struct gdbarch *gdbarch, gdbarch_
 
    May return 0 when unable to determine that address. */
 
-typedef CORE_ADDR (gdbarch_get_return_buf_addr_ftype) (struct type *val_type, frame_info_ptr cur_frame);
-extern CORE_ADDR gdbarch_get_return_buf_addr (struct gdbarch *gdbarch, struct type *val_type, frame_info_ptr cur_frame);
+typedef CORE_ADDR (gdbarch_get_return_buf_addr_ftype) (struct type *val_type, const frame_info_ptr &cur_frame);
+extern CORE_ADDR gdbarch_get_return_buf_addr (struct gdbarch *gdbarch, struct type *val_type, const frame_info_ptr &cur_frame);
 extern void set_gdbarch_get_return_buf_addr (struct gdbarch *gdbarch, gdbarch_get_return_buf_addr_ftype *get_return_buf_addr);
 
 /* Return true if the typedef record needs to be replaced.".
@@ -547,8 +547,8 @@ typedef CORE_ADDR (gdbarch_skip_entrypoint_ftype) (struct gdbarch *gdbarch, CORE
 extern CORE_ADDR gdbarch_skip_entrypoint (struct gdbarch *gdbarch, CORE_ADDR ip);
 extern void set_gdbarch_skip_entrypoint (struct gdbarch *gdbarch, gdbarch_skip_entrypoint_ftype *skip_entrypoint);
 
-typedef int (gdbarch_inner_than_ftype) (CORE_ADDR lhs, CORE_ADDR rhs);
-extern int gdbarch_inner_than (struct gdbarch *gdbarch, CORE_ADDR lhs, CORE_ADDR rhs);
+typedef bool (gdbarch_inner_than_ftype) (CORE_ADDR lhs, CORE_ADDR rhs);
+extern bool gdbarch_inner_than (struct gdbarch *gdbarch, CORE_ADDR lhs, CORE_ADDR rhs);
 extern void set_gdbarch_inner_than (struct gdbarch *gdbarch, gdbarch_inner_than_ftype *inner_than);
 
 typedef const gdb_byte * (gdbarch_breakpoint_from_pc_ftype) (struct gdbarch *gdbarch, CORE_ADDR *pcptr, int *lenptr);
@@ -635,12 +635,12 @@ extern void set_gdbarch_get_thread_local_address (struct gdbarch *gdbarch, gdbar
 extern CORE_ADDR gdbarch_frame_args_skip (struct gdbarch *gdbarch);
 extern void set_gdbarch_frame_args_skip (struct gdbarch *gdbarch, CORE_ADDR frame_args_skip);
 
-typedef CORE_ADDR (gdbarch_unwind_pc_ftype) (struct gdbarch *gdbarch, frame_info_ptr next_frame);
-extern CORE_ADDR gdbarch_unwind_pc (struct gdbarch *gdbarch, frame_info_ptr next_frame);
+typedef CORE_ADDR (gdbarch_unwind_pc_ftype) (struct gdbarch *gdbarch, const frame_info_ptr &next_frame);
+extern CORE_ADDR gdbarch_unwind_pc (struct gdbarch *gdbarch, const frame_info_ptr &next_frame);
 extern void set_gdbarch_unwind_pc (struct gdbarch *gdbarch, gdbarch_unwind_pc_ftype *unwind_pc);
 
-typedef CORE_ADDR (gdbarch_unwind_sp_ftype) (struct gdbarch *gdbarch, frame_info_ptr next_frame);
-extern CORE_ADDR gdbarch_unwind_sp (struct gdbarch *gdbarch, frame_info_ptr next_frame);
+typedef CORE_ADDR (gdbarch_unwind_sp_ftype) (struct gdbarch *gdbarch, const frame_info_ptr &next_frame);
+extern CORE_ADDR gdbarch_unwind_sp (struct gdbarch *gdbarch, const frame_info_ptr &next_frame);
 extern void set_gdbarch_unwind_sp (struct gdbarch *gdbarch, gdbarch_unwind_sp_ftype *unwind_sp);
 
 /* DEPRECATED_FRAME_LOCALS_ADDRESS as been replaced by the per-frame
@@ -648,8 +648,8 @@ extern void set_gdbarch_unwind_sp (struct gdbarch *gdbarch, gdbarch_unwind_sp_ft
 
 extern bool gdbarch_frame_num_args_p (struct gdbarch *gdbarch);
 
-typedef int (gdbarch_frame_num_args_ftype) (frame_info_ptr frame);
-extern int gdbarch_frame_num_args (struct gdbarch *gdbarch, frame_info_ptr frame);
+typedef int (gdbarch_frame_num_args_ftype) (const frame_info_ptr &frame);
+extern int gdbarch_frame_num_args (struct gdbarch *gdbarch, const frame_info_ptr &frame);
 extern void set_gdbarch_frame_num_args (struct gdbarch *gdbarch, gdbarch_frame_num_args_ftype *frame_num_args);
 
 extern bool gdbarch_frame_align_p (struct gdbarch *gdbarch);
@@ -707,8 +707,8 @@ extern void set_gdbarch_memtag_to_string (struct gdbarch *gdbarch, gdbarch_memta
 /* Return true if ADDRESS contains a tag and false otherwise.  ADDRESS
    must be either a pointer or a reference type. */
 
-typedef bool (gdbarch_tagged_address_p_ftype) (struct gdbarch *gdbarch, struct value *address);
-extern bool gdbarch_tagged_address_p (struct gdbarch *gdbarch, struct value *address);
+typedef bool (gdbarch_tagged_address_p_ftype) (struct gdbarch *gdbarch, CORE_ADDR address);
+extern bool gdbarch_tagged_address_p (struct gdbarch *gdbarch, CORE_ADDR address);
 extern void set_gdbarch_tagged_address_p (struct gdbarch *gdbarch, gdbarch_tagged_address_p_ftype *tagged_address_p);
 
 /* Return true if the tag from ADDRESS matches the memory tag for that
@@ -768,8 +768,8 @@ extern void set_gdbarch_software_single_step (struct gdbarch *gdbarch, gdbarch_s
 
 extern bool gdbarch_single_step_through_delay_p (struct gdbarch *gdbarch);
 
-typedef int (gdbarch_single_step_through_delay_ftype) (struct gdbarch *gdbarch, frame_info_ptr frame);
-extern int gdbarch_single_step_through_delay (struct gdbarch *gdbarch, frame_info_ptr frame);
+typedef int (gdbarch_single_step_through_delay_ftype) (struct gdbarch *gdbarch, const frame_info_ptr &frame);
+extern int gdbarch_single_step_through_delay (struct gdbarch *gdbarch, const frame_info_ptr &frame);
 extern void set_gdbarch_single_step_through_delay (struct gdbarch *gdbarch, gdbarch_single_step_through_delay_ftype *single_step_through_delay);
 
 /* FIXME: cagney/2003-08-28: Need to find a better way of selecting the
@@ -779,14 +779,14 @@ typedef int (gdbarch_print_insn_ftype) (bfd_vma vma, struct disassemble_info *in
 extern int gdbarch_print_insn (struct gdbarch *gdbarch, bfd_vma vma, struct disassemble_info *info);
 extern void set_gdbarch_print_insn (struct gdbarch *gdbarch, gdbarch_print_insn_ftype *print_insn);
 
-typedef CORE_ADDR (gdbarch_skip_trampoline_code_ftype) (frame_info_ptr frame, CORE_ADDR pc);
-extern CORE_ADDR gdbarch_skip_trampoline_code (struct gdbarch *gdbarch, frame_info_ptr frame, CORE_ADDR pc);
+typedef CORE_ADDR (gdbarch_skip_trampoline_code_ftype) (const frame_info_ptr &frame, CORE_ADDR pc);
+extern CORE_ADDR gdbarch_skip_trampoline_code (struct gdbarch *gdbarch, const frame_info_ptr &frame, CORE_ADDR pc);
 extern void set_gdbarch_skip_trampoline_code (struct gdbarch *gdbarch, gdbarch_skip_trampoline_code_ftype *skip_trampoline_code);
 
 /* Vtable of solib operations functions. */
 
-extern const struct target_so_ops * gdbarch_so_ops (struct gdbarch *gdbarch);
-extern void set_gdbarch_so_ops (struct gdbarch *gdbarch, const struct target_so_ops * so_ops);
+extern const solib_ops * gdbarch_so_ops (struct gdbarch *gdbarch);
+extern void set_gdbarch_so_ops (struct gdbarch *gdbarch, const solib_ops * so_ops);
 
 /* If in_solib_dynsym_resolve_code() returns true, and SKIP_SOLIB_RESOLVER
    evaluates non-zero, this is the address where the debugger will place
@@ -927,8 +927,8 @@ extern void set_gdbarch_register_reggroup_p (struct gdbarch *gdbarch, gdbarch_re
 
 extern bool gdbarch_fetch_pointer_argument_p (struct gdbarch *gdbarch);
 
-typedef CORE_ADDR (gdbarch_fetch_pointer_argument_ftype) (frame_info_ptr frame, int argi, struct type *type);
-extern CORE_ADDR gdbarch_fetch_pointer_argument (struct gdbarch *gdbarch, frame_info_ptr frame, int argi, struct type *type);
+typedef CORE_ADDR (gdbarch_fetch_pointer_argument_ftype) (const frame_info_ptr &frame, int argi, struct type *type);
+extern CORE_ADDR gdbarch_fetch_pointer_argument (struct gdbarch *gdbarch, const frame_info_ptr &frame, int argi, struct type *type);
 extern void set_gdbarch_fetch_pointer_argument (struct gdbarch *gdbarch, gdbarch_fetch_pointer_argument_ftype *fetch_pointer_argument);
 
 /* Iterate over all supported register notes in a core file.  For each
@@ -1715,8 +1715,8 @@ extern void set_gdbarch_addressable_memory_unit_size (struct gdbarch *gdbarch, g
 extern const char * gdbarch_disassembler_options_implicit (struct gdbarch *gdbarch);
 extern void set_gdbarch_disassembler_options_implicit (struct gdbarch *gdbarch, const char * disassembler_options_implicit);
 
-extern char ** gdbarch_disassembler_options (struct gdbarch *gdbarch);
-extern void set_gdbarch_disassembler_options (struct gdbarch *gdbarch, char ** disassembler_options);
+extern std::string * gdbarch_disassembler_options (struct gdbarch *gdbarch);
+extern void set_gdbarch_disassembler_options (struct gdbarch *gdbarch, std::string * disassembler_options);
 
 extern const disasm_options_and_args_t * gdbarch_valid_disassembler_options (struct gdbarch *gdbarch);
 extern void set_gdbarch_valid_disassembler_options (struct gdbarch *gdbarch, const disasm_options_and_args_t * valid_disassembler_options);
@@ -1732,8 +1732,8 @@ extern void set_gdbarch_type_align (struct gdbarch *gdbarch, gdbarch_type_align_
 
 /* Return a string containing any flags for the given PC in the given FRAME. */
 
-typedef std::string (gdbarch_get_pc_address_flags_ftype) (frame_info_ptr frame, CORE_ADDR pc);
-extern std::string gdbarch_get_pc_address_flags (struct gdbarch *gdbarch, frame_info_ptr frame, CORE_ADDR pc);
+typedef std::string (gdbarch_get_pc_address_flags_ftype) (const frame_info_ptr &frame, CORE_ADDR pc);
+extern std::string gdbarch_get_pc_address_flags (struct gdbarch *gdbarch, const frame_info_ptr &frame, CORE_ADDR pc);
 extern void set_gdbarch_get_pc_address_flags (struct gdbarch *gdbarch, gdbarch_get_pc_address_flags_ftype *get_pc_address_flags);
 
 /* Read core file mappings */

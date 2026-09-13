@@ -17,7 +17,6 @@
    You should have received a copy of the GNU General Public License
    along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
 
-#include "defs.h"
 #include "bfd.h"
 #include "gdb_bfd.h"
 #include "build-id.h"
@@ -61,12 +60,13 @@ build_id_verify (bfd *abfd, size_t check_len, const bfd_byte *check)
   found = build_id_bfd_get (abfd);
 
   if (found == NULL)
-    warning (_("File \"%s\" has no build-id, file skipped"),
-	     bfd_get_filename (abfd));
-  else if (found->size != check_len
-	   || memcmp (found->data, check, found->size) != 0)
-    warning (_("File \"%s\" has a different build-id, file skipped"),
-	     bfd_get_filename (abfd));
+    warning (_("File \"%ps\" has no build-id, file skipped"),
+	     styled_string (file_name_style.style (),
+			    bfd_get_filename (abfd)));
+  else if (!build_id_equal (found, check_len, check))
+    warning (_("File \"%ps\" has a different build-id, file skipped"),
+	     styled_string (file_name_style.style (),
+			    bfd_get_filename (abfd)));
   else
     retval = 1;
 

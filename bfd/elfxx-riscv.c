@@ -218,7 +218,20 @@ static reloc_howto_type howto_table[] =
 	 MINUS_ONE,			/* dst_mask */
 	 false),			/* pcrel_offset */
 
-  EMPTY_HOWTO (12),
+  HOWTO (R_RISCV_TLSDESC,		/* type */
+	 0,				/* rightshift */
+	 0,				/* size is handled by dynamic linker */
+	 0,				/* bitsize */
+	 false,				/* pc_relative */
+	 0,				/* bitpos */
+	 complain_overflow_dont,	/* complain_on_overflow */
+	 bfd_elf_generic_reloc,		/* special_function */
+	 "R_RISCV_TLSDESC",		/* name */
+	 false,				/* partial_inplace */
+	 0,				/* src_mask */
+	 MINUS_ONE,			/* dst_mask */
+	 false),			/* pcrel_offset */
+
   EMPTY_HOWTO (13),
   EMPTY_HOWTO (14),
   EMPTY_HOWTO (15),
@@ -808,6 +821,62 @@ static reloc_howto_type howto_table[] =
 	 0,				/* src_mask */
 	 0,				/* dst_mask */
 	 false),			/* pcrel_offset */
+
+  HOWTO (R_RISCV_TLSDESC_HI20,		/* type */
+	 0,				/* rightshift */
+	 4,				/* size */
+	 32,				/* bitsize */
+	 true,				/* pc_relative */
+	 0,				/* bitpos */
+	 complain_overflow_dont,	/* complain_on_overflow */
+	 bfd_elf_generic_reloc,		/* special_function */
+	 "R_RISCV_TLSDESC_HI20",	/* name */
+	 true,				/* partial_inplace */
+	 0,				/* src_mask */
+	 ENCODE_UTYPE_IMM (-1U),	/* dst_mask */
+	 false),			/* pcrel_offset */
+
+  HOWTO (R_RISCV_TLSDESC_LOAD_LO12,	/* type */
+	 0,				/* rightshift */
+	 4,				/* size */
+	 32,				/* bitsize */
+	 false,				/* pc_relative */
+	 0,				/* bitpos */
+	 complain_overflow_dont,	/* complain_on_overflow */
+	 bfd_elf_generic_reloc,		/* special_function */
+	 "R_RISCV_TLSDESC_LOAD_LO12",	/* name */
+	 false,				/* partial_inplace */
+	 0,				/* src_mask */
+	 ENCODE_ITYPE_IMM (-1U),	/* dst_mask */
+	 false),			/* pcrel_offset */
+
+  HOWTO (R_RISCV_TLSDESC_ADD_LO12,	/* type */
+	 0,				/* rightshift */
+	 4,				/* size */
+	 32,				/* bitsize */
+	 false,				/* pc_relative */
+	 0,				/* bitpos */
+	 complain_overflow_dont,	/* complain_on_overflow */
+	 bfd_elf_generic_reloc,		/* special_function */
+	 "R_RISCV_TLSDESC_ADD_LO12",	/* name */
+	 false,				/* partial_inplace */
+	 0,				/* src_mask */
+	 ENCODE_ITYPE_IMM (-1U),	/* dst_mask */
+	 false), 			/* pcrel_offset */
+
+  HOWTO (R_RISCV_TLSDESC_CALL,		/* type */
+	 0,				/* rightshift */
+	 0,				/* size */
+	 0,				/* bitsize */
+	 false,				/* pc_relative */
+	 0,				/* bitpos */
+	 complain_overflow_dont,	/* complain_on_overflow */
+	 bfd_elf_generic_reloc,		/* special_function */
+	 "R_RISCV_TLSDESC_CALL",	/* name */
+	 false,				/* partial_inplace */
+	 0,				/* src_mask */
+	 ENCODE_ITYPE_IMM (-1U),	/* dst_mask */
+	 false) 			/* pcrel_offset */
 };
 
 static reloc_howto_type howto_table_internal[] =
@@ -935,6 +1004,10 @@ static const struct elf_reloc_map riscv_reloc_map[] =
   { BFD_RELOC_RISCV_TPREL_LO12_I, R_RISCV_TPREL_LO12_I },
   { BFD_RELOC_RISCV_TLS_GOT_HI20, R_RISCV_TLS_GOT_HI20 },
   { BFD_RELOC_RISCV_TLS_GD_HI20, R_RISCV_TLS_GD_HI20 },
+  { BFD_RELOC_RISCV_TLSDESC_HI20, R_RISCV_TLSDESC_HI20 },
+  { BFD_RELOC_RISCV_TLSDESC_LOAD_LO12, R_RISCV_TLSDESC_LOAD_LO12 },
+  { BFD_RELOC_RISCV_TLSDESC_ADD_LO12, R_RISCV_TLSDESC_ADD_LO12 },
+  { BFD_RELOC_RISCV_TLSDESC_CALL, R_RISCV_TLSDESC_CALL },
   { BFD_RELOC_RISCV_ALIGN, R_RISCV_ALIGN },
   { BFD_RELOC_RISCV_RVC_BRANCH, R_RISCV_RVC_BRANCH },
   { BFD_RELOC_RISCV_RVC_JUMP, R_RISCV_RVC_JUMP },
@@ -1118,9 +1191,7 @@ static struct riscv_implicit_subset riscv_implicit_subsets[] =
   {"v", "d",		check_implicit_always},
   {"v", "zve64d",	check_implicit_always},
   {"v", "zvl128b",	check_implicit_always},
-  {"zvfbfmin", "zve32f",	check_implicit_always},
-  {"zvfbfwma", "zve32f",	check_implicit_always},
-  {"zvfbfwma", "zfbfmin",	check_implicit_always},
+  {"zabha", "a",	check_implicit_always},
   {"zvfh", "zvfhmin",	check_implicit_always},
   {"zvfh", "zfhmin",	check_implicit_always},
   {"zvfhmin", "zve32f",	check_implicit_always},
@@ -1226,7 +1297,7 @@ static struct riscv_implicit_subset riscv_implicit_subsets[] =
   {"zcf", "zca",	check_implicit_always},
   {"zcd", "zca",	check_implicit_always},
   {"zcb", "zca",	check_implicit_always},
-  {"zcmop", "zca",	check_implicit_always},
+  {"zcmp", "zca",	check_implicit_always},
   {"smaia", "ssaia",		check_implicit_always},
   {"smcntrpmf", "zicsr",	check_implicit_always},
   {"smstateen", "ssstateen",	check_implicit_always},
@@ -1236,6 +1307,11 @@ static struct riscv_implicit_subset riscv_implicit_subsets[] =
   {"ssstateen", "zicsr",	check_implicit_always},
   {"sstc", "zicsr",		check_implicit_always},
   {"svadu", "zicsr",		check_implicit_always},
+  {"b", "zba",		check_implicit_always},
+  {"b", "zbb",		check_implicit_always},
+  {"b", "zbs",		check_implicit_always},
+  {"a", "zaamo",	check_implicit_always},
+  {"a", "zalrsc",	check_implicit_always},
 
   {"xsfvcp", "zve32x",  check_implicit_always},
   {NULL, NULL, NULL}
@@ -1288,7 +1364,7 @@ static struct riscv_supported_ext riscv_supported_std_ext[] =
   {"c",		ISA_SPEC_CLASS_20191213,	2, 0, 0 },
   {"c",		ISA_SPEC_CLASS_20190608,	2, 0, 0 },
   {"c",		ISA_SPEC_CLASS_2P2,		2, 0, 0 },
-  {"p",		ISA_SPEC_CLASS_DRAFT,		0, 9, 0 },
+  {"b",		ISA_SPEC_CLASS_DRAFT,		1, 0, 0 },
   {"v",		ISA_SPEC_CLASS_DRAFT,		1, 0, 0 },
   {"h",		ISA_SPEC_CLASS_DRAFT,		1, 0, 0 },
   {NULL, 0, 0, 0, 0}
@@ -1310,6 +1386,9 @@ static struct riscv_supported_ext riscv_supported_std_z_ext[] =
   {"zihintpause",	ISA_SPEC_CLASS_DRAFT,		2, 0,  0 },
   {"zihpm",		ISA_SPEC_CLASS_DRAFT,		2, 0,  0 },
   {"zmmul",		ISA_SPEC_CLASS_DRAFT,		1, 0,  0 },
+  {"zaamo",		ISA_SPEC_CLASS_DRAFT,		1, 0,  0 },
+  {"zabha",		ISA_SPEC_CLASS_DRAFT,		1, 0,  0 },
+  {"zalrsc",		ISA_SPEC_CLASS_DRAFT,		1, 0,  0 },
   {"zawrs",		ISA_SPEC_CLASS_DRAFT,		1, 0,  0 },
   {"zfbfmin",		ISA_SPEC_CLASS_DRAFT,		1, 0,  0 },
   {"zfa",		ISA_SPEC_CLASS_DRAFT,		1, 0,  0 },
@@ -1384,7 +1463,7 @@ static struct riscv_supported_ext riscv_supported_std_z_ext[] =
   {"zcb",		ISA_SPEC_CLASS_DRAFT,		1, 0,  0 },
   {"zcf",		ISA_SPEC_CLASS_DRAFT,		1, 0,  0 },
   {"zcd",		ISA_SPEC_CLASS_DRAFT,		1, 0,  0 },
-  {"zcmop",		ISA_SPEC_CLASS_DRAFT,		1, 0,  0 },
+  {"zcmp",		ISA_SPEC_CLASS_DRAFT,		1, 0,  0 },
   {NULL, 0, 0, 0, 0}
 };
 
@@ -2042,6 +2121,13 @@ riscv_parse_check_conflicts (riscv_parse_subset_t *rps)
       rps->error_handler (_("rv%d does not support the `q' extension"), xlen);
       no_conflict = false;
     }
+  if (riscv_subset_supports (rps, "zcmp")
+      && riscv_subset_supports (rps, "zcd"))
+    {
+      rps->error_handler
+	(_("zcmp' is incompatible with `d/zcd' extension"));
+      no_conflict = false;
+    }
   if (riscv_lookup_subset (rps->subset_list, "zcf", &subset)
       && xlen > 32)
     {
@@ -2498,8 +2584,12 @@ riscv_multi_subset_supports (riscv_parse_subset_t *rps,
       return riscv_subset_supports (rps, "m");
     case INSN_CLASS_ZMMUL:
       return riscv_subset_supports (rps, "zmmul");
-    case INSN_CLASS_A:
-      return riscv_subset_supports (rps, "a");
+    case INSN_CLASS_ZAAMO:
+      return riscv_subset_supports (rps, "zaamo");
+    case INSN_CLASS_ZABHA:
+      return riscv_subset_supports (rps, "zabha");
+    case INSN_CLASS_ZALRSC:
+      return riscv_subset_supports (rps, "zalrsc");
     case INSN_CLASS_ZAWRS:
       return riscv_subset_supports (rps, "zawrs");
     case INSN_CLASS_F:
@@ -2651,8 +2741,8 @@ riscv_multi_subset_supports (riscv_parse_subset_t *rps,
     case INSN_CLASS_ZCB_AND_ZMMUL:
       return (riscv_subset_supports (rps, "zcb")
 	      && riscv_subset_supports (rps, "zmmul"));
-    case INSN_CLASS_ZCMOP:
-      return riscv_subset_supports (rps, "zcmop");
+    case INSN_CLASS_ZCMP:
+      return riscv_subset_supports (rps, "zcmp");
     case INSN_CLASS_SVINVAL:
       return riscv_subset_supports (rps, "svinval");
     case INSN_CLASS_H:
@@ -2762,8 +2852,12 @@ riscv_multi_subset_supports_ext (riscv_parse_subset_t *rps,
       return "m";
     case INSN_CLASS_ZMMUL:
       return _ ("m' or `zmmul");
-    case INSN_CLASS_A:
-      return "a";
+    case INSN_CLASS_ZAAMO:
+      return "zaamo";
+    case INSN_CLASS_ZABHA:
+      return "zabha";
+    case INSN_CLASS_ZALRSC:
+      return "zalrsc";
     case INSN_CLASS_ZAWRS:
       return "zawrs";
     case INSN_CLASS_F:
@@ -2931,8 +3025,8 @@ riscv_multi_subset_supports_ext (riscv_parse_subset_t *rps,
       return _("zcb' and `zbb");
     case INSN_CLASS_ZCB_AND_ZMMUL:
       return _("zcb' and `zmmul', or `zcb' and `m");
-    case INSN_CLASS_ZCMOP:
-      return "zcmop";
+    case INSN_CLASS_ZCMP:
+      return "zcmp";
     case INSN_CLASS_SVINVAL:
       return "svinval";
     case INSN_CLASS_H:
@@ -2994,5 +3088,50 @@ riscv_multi_subset_supports_ext (riscv_parse_subset_t *rps,
     }
 }
 
-#include "elfxx-riscv-xt.inc"
+/* Print supported extensions with versions if -march=help.  */
 
+void
+riscv_print_extensions (void)
+{
+  /* Record the previous printed extension.
+     Print the current one if they are not the same.  */
+  const struct riscv_supported_ext *cur = NULL, *prev = NULL;
+  int i, j;
+
+  printf ("All available -march extensions for RISC-V:");
+
+  for (i = 0; riscv_all_supported_ext[i] != NULL; i++)
+    {
+      const struct riscv_supported_ext *exts = riscv_all_supported_ext[i];
+      prev = NULL;
+      for (j = 0; exts[j].name != NULL; j++)
+	{
+	  cur = &exts[j];
+	  /* Unclear version information, skip.  */
+	  if (cur->isa_spec_class == ISA_SPEC_CLASS_NONE
+	      || cur->major_version == RISCV_UNKNOWN_VERSION
+	      || cur->minor_version == RISCV_UNKNOWN_VERSION)
+	    continue;
+
+	  /* Same extension.  */
+	  if (prev && strcmp (prev->name, cur->name) == 0)
+	    {
+	      /* Same version, skip.  */
+	      if (prev->major_version == cur->major_version
+		  && prev->minor_version == cur->minor_version)
+		continue;
+	      /* Different version, print version with comma.  */
+	      else
+		printf (", %d.%d", cur->major_version, cur->minor_version);
+	    }
+	  /* Different extension, print extension and version with newline.  */
+	  else
+	    printf ("\n\t%-40s%d.%d", cur->name, cur->major_version,
+		    cur->minor_version);
+	  prev = &exts[j];
+	}
+    }
+  printf ("\n");
+}
+
+#include "elfxx-riscv-xt.inc"

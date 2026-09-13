@@ -23,10 +23,9 @@
 /*  This file contains support code for C++ demangling that is common
    to a styles of demangling, and GDB specific.  */
 
-#include "defs.h"
 #include "cli/cli-utils.h"
 #include "command.h"
-#include "gdbcmd.h"
+#include "cli/cli-cmds.h"
 #include "demangle.h"
 #include "gdb-demangle.h"
 #include "language.h"

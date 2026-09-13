@@ -422,6 +422,9 @@ CODE_FRAGMENT
 .  {* Nonzero if this section uses RELA relocations, rather than REL.  *}
 .  unsigned int use_rela_p:1;
 .
+.  {* Nonzero if this section contents are mmapped, rather than malloced.  *}
+.  unsigned int mmapped_p:1;
+.
 .  {* Bits used by various backends.  The generic code doesn't touch
 .     these fields.  *}
 .
@@ -711,8 +714,8 @@ EXTERNAL
 .  {* linker_mark, linker_has_input, gc_mark, decompress_status,     *}	\
 .     0,           0,                1,       0,			\
 .									\
-.  {* segment_mark, sec_info_type, use_rela_p,                       *}	\
-.     0,            0,             0,					\
+.  {* segment_mark, sec_info_type, use_rela_p, mmapped_p,           *}	\
+.     0,            0,             0,	       0,			\
 .									\
 .  {* sec_flg0, sec_flg1, sec_flg2, sec_flg3, sec_flg4, sec_flg5,    *}	\
 .     0,        0,        0,        0,        0,        0,		\
@@ -1625,6 +1628,8 @@ DESCRIPTION
 bool
 bfd_malloc_and_get_section (bfd *abfd, sec_ptr sec, bfd_byte **buf)
 {
+  if (sec->mmapped_p)
+    abort ();
   *buf = NULL;
   return bfd_get_full_section_contents (abfd, sec, buf);
 }
@@ -1715,11 +1720,11 @@ _bfd_nowrite_set_section_contents (bfd *abfd,
 }
 
 /*
-INTERNAL_FUNCTION
-	_bfd_section_size_insane
+FUNCTION
+	bfd_section_size_insane
 
 SYNOPSIS
-	bool _bfd_section_size_insane (bfd *abfd, asection *sec);
+	bool bfd_section_size_insane (bfd *abfd, asection *sec);
 
 DESCRIPTION
 	Returns true if the given section has a size that indicates
@@ -1729,7 +1734,7 @@ DESCRIPTION
 */
 
 bool
-_bfd_section_size_insane (bfd *abfd, asection *sec)
+bfd_section_size_insane (bfd *abfd, asection *sec)
 {
   bfd_size_type size = bfd_get_section_limit_octets (abfd, sec);
   if (size == 0)

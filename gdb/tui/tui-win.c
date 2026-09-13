@@ -24,7 +24,6 @@
 
    Author: Susan B. Macchia  */
 
-#include "defs.h"
 #include "command.h"
 #include "symtab.h"
 #include "breakpoint.h"
@@ -34,7 +33,6 @@
 #include "top.h"
 #include "source.h"
 #include "gdbsupport/event-loop.h"
-#include "gdbcmd.h"
 #include "async-event.h"
 #include "utils.h"
 
@@ -481,7 +479,11 @@ void
 tui_refresh_all_win (void)
 {
   clearok (curscr, TRUE);
-  tui_refresh_all ();
+  for (tui_win_info *win_info : all_tui_windows ())
+    {
+      if (win_info->is_visible ())
+	win_info->refresh_window ();
+    }
 }
 
 void

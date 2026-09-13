@@ -17,7 +17,6 @@
    You should have received a copy of the GNU General Public License
    along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
 
-#include "defs.h"
 
 #include "frame.h"
 #include "gdbsupport/selftest.h"
@@ -36,7 +35,7 @@ validate_user_created_frame (frame_id id)
 }
 
 static frame_info_ptr
-user_created_frame_callee (frame_info_ptr frame)
+user_created_frame_callee (const frame_info_ptr &frame)
 {
   validate_user_created_frame (get_frame_id (frame));
 

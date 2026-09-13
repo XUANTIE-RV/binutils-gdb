@@ -34,7 +34,15 @@ typedef struct
   char *cpu_modelstr;
 } cpu_info_t;
 
+#ifdef __cplusplus
+extern "C"
+{
+#endif
 extern cpu_info_t *read_cpuinfo();
+
+#ifdef __cplusplus
+}
+#endif
 
 #define MAX_PICS    20 /* Max # of HW ctrs that can be enabled simultaneously */
 
@@ -105,6 +113,8 @@ extern cpu_info_t *read_cpuinfo();
 #define CPC_AMD_FAM_11H         2502 /* Griffin... */
 #define CPC_AMD_FAM_15H         2503
 #define CPC_AMD_Authentic       2504
+#define CPC_AMD_FAM_19H_ZEN3    2505
+#define CPC_AMD_FAM_19H_ZEN4    2506
   
 #define CPC_KPROF               3003 // OBSOLETE (To support 12.3 and earlier)
 #define CPC_FOX                 3004 /* pseudo-chip */
@@ -117,13 +127,44 @@ extern cpu_info_t *read_cpuinfo();
 #define CPC_SPARC64_X       4006 /* Athena */
 #define CPC_SPARC64_XII     4010 /* Athena++ */
 
-// aarch64. Constants from arch/arm64/include/asm/cputype.h
+#define	AMD_FAM_19H_ZEN3_NAME	"AMD Family 19h (Zen3)"
+#define	AMD_FAM_19H_ZEN4_NAME	"AMD Family 19h (Zen4)"
+
+enum Amd_famaly
+{
+  AMD_ZEN_FAMILY = 0x17,
+  AMD_ZEN3_FAMILY = 0x19
+};
+
+enum Amd_model
+{
+  AMD_ZEN_RYZEN = 0x1,
+  AMD_ZENPLUS_RYZEN = 0x8,
+  AMD_ZENPLUS_RYZEN2 = 0x18,
+  AMD_ZEN2_RYZEN = 0x31,
+  AMD_ZEN2_RYZEN2 = 0x71,
+  AMD_ZEN2_RYZEN3 = 0x60,
+  AMD_ZEN3_RYZEN = 0x1,
+  AMD_ZEN3_RYZEN2 = 0x21,
+  AMD_ZEN3_RYZEN3 = 0x50,
+  AMD_ZEN3_EPYC_TRENTO = 0x30,
+  AMD_ZEN4_RYZEN = 0x61,
+  AMD_ZEN4_EPYC = 0x11
+};
+
+    // aarch64. Constants from tools/arch/arm64/include/asm/cputype.h
+// in https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git
 enum {
     ARM_CPU_IMP_ARM     = 0x41,
     ARM_CPU_IMP_BRCM    = 0x42,
     ARM_CPU_IMP_CAVIUM  = 0x43,
+    ARM_CPU_IMP_FUJITSU = 0x46,
+    ARM_CPU_IMP_NVIDIA  = 0x4E,
+    ARM_CPU_IMP_HISI    = 0x48,
     ARM_CPU_IMP_APM     = 0x50,
-    ARM_CPU_IMP_QCOM    = 0x51
+    ARM_CPU_IMP_QCOM    = 0x51,
+    ARM_CPU_IMP_APPLE   = 0x61,
+    ARM_CPU_IMP_AMPERE  = 0xC0
 };
 
 #define	AARCH64_VENDORSTR_ARM	"ARM"
@@ -141,6 +182,8 @@ enum {
   {CPC_AMD_FAM_15H           , "AMD Family 15h Model 01h"}, \
   {CPC_AMD_FAM_15H           , "AMD Family 15h Model 02h"},/*future*/ \
   {CPC_AMD_FAM_15H           , "AMD Family 15h Model 03h"},/*future*/ \
+  {CPC_AMD_FAM_19H_ZEN3      , AMD_FAM_19H_ZEN3_NAME}, \
+  {CPC_AMD_FAM_19H_ZEN4      , AMD_FAM_19H_ZEN4_NAME}, \
   {CPC_PENTIUM_4_HT          , "Pentium 4 with HyperThreading"}, \
   {CPC_PENTIUM_4             , "Pentium 4"}, \
   {CPC_PENTIUM_PRO_MMX       , "Pentium Pro with MMX, Pentium II"}, \

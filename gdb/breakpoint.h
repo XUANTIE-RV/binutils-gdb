@@ -1515,7 +1515,17 @@ extern struct breakpoint *clone_momentary_breakpoint (struct breakpoint *bpkt);
 
 extern void set_ignore_count (int, int, int);
 
-extern void breakpoint_init_inferior (enum inf_context);
+/* Clear the "inserted" flag in all breakpoint locations of INF's program space
+   and delete any breakpoints which should go away between runs of the program.
+
+   Plus other such housekeeping that has to be done for breakpoints
+   between runs.
+
+   Note: this function gets called at the end of a run (by
+   generic_mourn_inferior) and when a run begins (by
+   init_wait_for_inferior).  */
+
+extern void breakpoint_init_inferior (inferior *inf, inf_context context);
 
 extern void breakpoint_auto_delete (bpstat *);
 
@@ -1585,20 +1595,46 @@ enum breakpoint_create_flags
    functions for setting a breakpoint at LOCSPEC.
 
    This function has two major modes of operations, selected by the
-   PARSE_EXTRA parameter.
+   PARSE_EXTRA and WANTED_TYPE parameters.
 
-   If PARSE_EXTRA is zero, LOCSPEC is just the breakpoint's location
-   spec, with condition, thread, and extra string specified by the
-   COND_STRING, THREAD, and EXTRA_STRING parameters.
+   When WANTED_TYPE is not bp_dprintf the following rules apply:
 
-   If PARSE_EXTRA is non-zero, this function will attempt to extract
-   the condition, thread, and extra string from EXTRA_STRING, ignoring
-   the similarly named parameters.
+     If PARSE_EXTRA is zero, LOCSPEC is just the breakpoint's location
+     spec, with condition, thread, and extra string specified by the
+     COND_STRING, THREAD, and EXTRA_STRING parameters.
 
-   If FORCE_CONDITION is true, the condition is accepted even when it is
-   invalid at all of the locations.  However, if PARSE_EXTRA is non-zero,
-   the FORCE_CONDITION parameter is ignored and the corresponding argument
-   is parsed from EXTRA_STRING.
+     If PARSE_EXTRA is non-zero, this function will attempt to extract the
+     condition, thread, and extra string from EXTRA_STRING, ignoring the
+     similarly named parameters.
+
+   When WANTED_TYPE is bp_dprintf the following rules apply:
+
+     PARSE_EXTRA must always be zero, LOCSPEC is just the breakpoint's
+     location spec, with condition, thread, and extra string (which
+     contains the dprintf format and arguments) specified by the
+     COND_STRING, THREAD, and EXTRA_STRING parameters.
+
+   If FORCE_CONDITION is true, the condition (in COND_STRING) is accepted
+   even when it is invalid at all of the locations.  However, if
+   PARSE_EXTRA is non-zero and WANTED_TYPE is not bp_dprintf, the
+   FORCE_CONDITION parameter is ignored and the corresponding argument is
+   parsed from EXTRA_STRING.
+
+   The THREAD should be a global thread number, the created breakpoint will
+   only apply for that thread.  If the breakpoint should apply for all
+   threads then pass -1.  However, if PARSE_EXTRA is non-zero and
+   WANTED_TYPE is not bp_dprintf, then the THREAD parameter is ignored and
+   an optional thread number will be parsed from EXTRA_STRING.
+
+   The INFERIOR should be a global inferior number, the created breakpoint
+   will only apply for that inferior.  If the breakpoint should apply for
+   all inferiors then pass -1.  However, if PARSE_EXTRA is non-zero and
+   WANTED_TYPE is not bp_dprintf, then the INFERIOR parameter is ignored
+   and an optional inferior number will be parsed from EXTRA_STRING.
+
+   At most one of THREAD and INFERIOR should be set to a value other than
+   -1; breakpoints can be thread specific, or inferior specific, but not
+   both.
 
    If INTERNAL is non-zero, the breakpoint number will be allocated
    from the internal breakpoint count.
@@ -1764,8 +1800,9 @@ extern void breakpoint_set_inferior (struct breakpoint *b, int inferior);
 
 extern void breakpoint_set_task (struct breakpoint *b, int task);
 
-/* Clear the "inserted" flag in all breakpoints.  */
-extern void mark_breakpoints_out (void);
+/* Clear the "inserted" flag in all breakpoints locations in PSPACE.  */
+
+extern void mark_breakpoints_out (program_space *pspace);
 
 extern struct breakpoint *create_jit_event_breakpoint (struct gdbarch *,
 						       CORE_ADDR);
@@ -1791,7 +1828,10 @@ extern void remove_solib_event_breakpoints (void);
    delete at next stop disposition.  */
 extern void remove_solib_event_breakpoints_at_next_stop (void);
 
-extern void disable_breakpoints_in_shlibs (void);
+/* Disable any breakpoints that are on code in shared libraries in PSPACE.
+   Only apply to enabled breakpoints, disabled ones can just stay disabled.  */
+
+extern void disable_breakpoints_in_shlibs (program_space *pspace);
 
 /* This function returns true if B is a catchpoint.  */
 

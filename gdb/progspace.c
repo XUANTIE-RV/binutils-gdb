@@ -17,10 +17,8 @@
    You should have received a copy of the GNU General Public License
    along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
 
-#include "defs.h"
-#include "gdbcmd.h"
+#include "cli/cli-cmds.h"
 #include "objfiles.h"
-#include "arch-utils.h"
 #include "gdbcore.h"
 #include "solib.h"
 #include "solist.h"
@@ -130,7 +128,7 @@ void
 program_space::free_all_objfiles ()
 {
   /* Any objfile reference would become stale.  */
-  for (const shobj &so : current_program_space->solibs ())
+  for (const solib &so : current_program_space->solibs ())
     gdb_assert (so.objfile == NULL);
 
   while (!objfiles_list.empty ())
@@ -436,10 +434,10 @@ program_space::clear_solib_cache ()
   deleted_solibs.clear ();
 }
 
-
+/* See progspace.h.  */
 
 void
-initialize_progspace (void)
+initialize_progspace ()
 {
   add_cmd ("program-spaces", class_maintenance,
 	   maintenance_info_program_spaces_command,

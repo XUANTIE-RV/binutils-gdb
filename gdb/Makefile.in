@@ -260,7 +260,9 @@ LIBBACKTRACE_LIB=@LIBBACKTRACE_LIB@
 
 SUPPORT = ../gdbsupport
 LIBSUPPORT = $(SUPPORT)/libgdbsupport.a
-INCSUPPORT = -I$(srcdir)/.. -I..
+INCSUPPORT = \
+	-I$(srcdir)/.. \
+	-I..
 
 #
 # CLI sub directory definitons
@@ -318,7 +320,6 @@ SUBDIR_TUI_SRCS = \
 	tui/tui-io.c \
 	tui/tui-layout.c \
 	tui/tui-location.c \
-	tui/tui-out.c \
 	tui/tui-regs.c \
 	tui/tui-source.c \
 	tui/tui-status.c \
@@ -602,8 +603,13 @@ CONFIG_DEP_SUBDIR = $(addsuffix /$(DEPDIR),$(CONFIG_SRC_SUBDIR))
 # your system doesn't have fcntl.h in /usr/include (which is where it
 # should be according to Posix).
 DEFS = @DEFS@
-GDB_CFLAGS = -I. -I$(srcdir) -I$(srcdir)/config \
-	-DLOCALEDIR="\"$(localedir)\"" $(DEFS)
+GDB_CFLAGS = \
+	-I. \
+	-I$(srcdir) \
+	-I$(srcdir)/config \
+	-include $(srcdir)/defs.h \
+	-DLOCALEDIR="\"$(localedir)\"" \
+	$(DEFS)
 
 # MH_CFLAGS, if defined, has host-dependent CFLAGS from the config directory.
 GLOBAL_CFLAGS = $(MH_CFLAGS)
@@ -626,16 +632,31 @@ INTERNAL_CPPFLAGS = $(CPPFLAGS) @GUILE_CPPFLAGS@ @PYTHON_CPPFLAGS@ \
 	@LARGEFILE_CPPFLAGS@
 
 # INTERNAL_CFLAGS is the aggregate of all other *CFLAGS macros.
-INTERNAL_CFLAGS_BASE = \
-	$(GLOBAL_CFLAGS) $(PROFILE_CFLAGS) \
-	$(GDB_CFLAGS) $(OPCODES_CFLAGS) $(BFD_CFLAGS) $(INCLUDE_CFLAGS) \
-	$(READLINE_CFLAGS) $(ZLIBINC) $(ZSTD_CFLAGS) $(LIBDECNUMBER_CFLAGS) \
-	$(INTL_CFLAGS) $(INCGNU) $(INCSUPPORT) $(LIBBACKTRACE_INC) \
-	$(ENABLE_CFLAGS) $(INTERNAL_CPPFLAGS) $(SRCHIGH_CFLAGS) \
-	$(TOP_CFLAGS) $(PTHREAD_CFLAGS) $(DEBUGINFOD_CFLAGS) $(GMPINC) \
-	$(AMD_DBGAPI_CFLAGS)
-INTERNAL_WARN_CFLAGS = $(INTERNAL_CFLAGS_BASE) $(GDB_WARN_CFLAGS)
-INTERNAL_CFLAGS = $(INTERNAL_WARN_CFLAGS) $(GDB_WERROR_CFLAGS)
+INTERNAL_CFLAGS = \
+	$(GLOBAL_CFLAGS) \
+	$(PROFILE_CFLAGS) \
+	$(GDB_CFLAGS) \
+	$(OPCODES_CFLAGS) \
+	$(BFD_CFLAGS) \
+	$(INCLUDE_CFLAGS) \
+	$(READLINE_CFLAGS) \
+	$(ZLIBINC) \
+	$(ZSTD_CFLAGS) \
+	$(LIBDECNUMBER_CFLAGS) \
+	$(INTL_CFLAGS) \
+	$(INCGNU) \
+	$(INCSUPPORT) \
+	$(LIBBACKTRACE_INC) \
+	$(ENABLE_CFLAGS) \
+	$(INTERNAL_CPPFLAGS) \
+	$(SRCHIGH_CFLAGS) \
+	$(TOP_CFLAGS) \
+	$(PTHREAD_CFLAGS) \
+	$(DEBUGINFOD_CFLAGS) \
+	$(GMPINC) \
+	$(AMD_DBGAPI_CFLAGS) \
+	$(GDB_WARN_CFLAGS) \
+	$(GDB_WERROR_CFLAGS)
 
 # LDFLAGS is specifically reserved for setting from the command line
 # when running make.
@@ -1088,6 +1109,7 @@ COMMON_SFILES = \
 	dwarf2/read-gdb-index.c \
 	dwarf2/section.c \
 	dwarf2/stringify.c \
+	extract-store-integer.c \
 	eval.c \
 	event-top.c \
 	exceptions.c \
@@ -1341,6 +1363,7 @@ HFILES_NO_SRCDIR = \
 	expression.h \
 	extension.h \
 	extension-priv.h \
+	extract-store-integer.h \
 	f-array-walker.h \
 	f-lang.h \
 	fbsd-nat.h \
@@ -1361,7 +1384,6 @@ HFILES_NO_SRCDIR = \
 	gdb_vfork.h \
 	gdb_wchar.h \
 	gdbarch.h \
-	gdbcmd.h \
 	gdbcore.h \
 	gdbthread.h \
 	gdbtypes.h \
@@ -1605,7 +1627,6 @@ HFILES_NO_SRCDIR = \
 	tui/tui-io.h \
 	tui/tui-layout.h \
 	tui/tui-location.h \
-	tui/tui-out.h \
 	tui/tui-regs.h \
 	tui/tui-source.h \
 	tui/tui-status.h \
@@ -1918,7 +1939,7 @@ generated_files = \
 # Flags needed to compile Python code
 PYTHON_CFLAGS = @PYTHON_CFLAGS@
 
-all: gdb$(EXEEXT) $(CONFIG_ALL) gdb-gdb.py gdb-gdb.gdb
+all: gdb$(EXEEXT) $(CONFIG_ALL) gdb-gdb.py gdb-gdb.gdb gcore
 	@$(MAKE) $(FLAGS_TO_PASS) DO=all "DODIRS=$(SUBDIRS)" subdir_do
 
 # Rule for compiling .c files in the top-level gdb directory.
@@ -1982,6 +2003,10 @@ check-all-boards: force
 	  $(MAKE) $(TARGET_FLAGS_TO_PASS) check-all-boards; \
 	else true; fi
 
+testsuite.lockdir: force
+	rm -rf $@
+	mkdir -p $@
+
 # The idea is to parallelize testing of multilibs, for example:
 #   make -j3 check//sh-hms-sim/{-m1,-m2,-m3,-m3e,-m4}/{,-nofpu}
 # will run 3 concurrent sessions of check, eventually testing all 10
@@ -1990,7 +2015,7 @@ check-all-boards: force
 # used, this rule will harmlessly fail to match.  Used FORCE_PARALLEL to
 # prevent serialized checking due to the passed RUNTESTFLAGS.
 # FIXME: use config.status --config not --version, when available.
-check//%: force
+check//%: force testsuite.lockdir
 	@if [ -f testsuite/config.status ]; then \
 	  rootme=`pwd`; export rootme; \
 	  rootsrc=`cd $(srcdir); pwd`; export rootsrc; \
@@ -2008,7 +2033,7 @@ check//%: force
 	     ); \
 	  else :; fi && cd $$testdir && \
 	  $(MAKE) $(TARGET_FLAGS_TO_PASS) \
-	    RUNTESTFLAGS="--target_board=$$variant $(RUNTESTFLAGS)" \
+	    RUNTESTFLAGS="GDB_LOCK_DIR=$$rootme/testsuite.lockdir --target_board=$$variant $(RUNTESTFLAGS)" \
 	    FORCE_PARALLEL=$(if $(FORCE_PARALLEL),1,$(if $(RUNTESTFLAGS),,1)) \
 	    "$$target"; \
 	else true; fi
@@ -2031,11 +2056,11 @@ check-headers:
 	@echo Checking headers.
 	for i in $(CHECK_HEADERS) ; do \
 		$(CXX) $(CXX_DIALECT) -x c++-header -c -fsyntax-only \
-		$(INTERNAL_CFLAGS) $(CXXFLAGS) -include defs.h $(srcdir)/$$i ; \
+		$(INTERNAL_CFLAGS) $(CXXFLAGS) $(srcdir)/$$i ; \
 	done
 .PHONY: check-headers
 
-info install-info clean-info dvi pdf install-pdf html install-html: force
+info install-info clean-info dvi install-dvi pdf install-pdf html install-html: force
 	@$(MAKE) $(FLAGS_TO_PASS) DO=$@ "DODIRS=$(SUBDIRS)" subdir_do
 
 # Traditionally "install" depends on "all".  But it may be useful
@@ -2127,16 +2152,6 @@ uninstall: force $(CONFIG_UNINSTALL)
 	rm -f $(DESTDIR)$(bindir)/$$transformed_name
 	@$(MAKE) DO=uninstall "DODIRS=$(SUBDIRS)" $(FLAGS_TO_PASS) subdir_do
 
-# The C++ name parser can be built standalone for testing.
-test-cp-name-parser.o: cp-name-parser.c
-	$(COMPILE) -DTEST_CPNAMES cp-name-parser.c
-	$(POSTCOMPILE)
-
-test-cp-name-parser$(EXEEXT): test-cp-name-parser.o $(LIBIBERTY)
-	$(ECHO_CXXLD) $(CC_LD) $(INTERNAL_LDFLAGS) \
-		-o test-cp-name-parser$(EXEEXT) test-cp-name-parser.o \
-		$(LIBIBERTY)
-
 # We do this by grepping through sources.  If that turns out to be too slow,
 # maybe we could just require every .o file to have an initialization routine
 # of a given name (top.o -> _initialize_top, etc.).
@@ -2148,7 +2163,6 @@ test-cp-name-parser$(EXEEXT): test-cp-name-parser.o $(LIBIBERTY)
 # computing the list of source files from the list of object files.
 
 INIT_FILES_FILTER_OUT = \
-	cp-name-parser.o \
 	init.o \
 	version.o \
 	xml-builtin.o \
@@ -2163,7 +2177,9 @@ INIT_FILES = \
 init.c: stamp-init; @true
 stamp-init: $(INIT_FILES) config.status $(srcdir)/make-init-c
 	$(ECHO_INIT_C)
-	$(SILENCE) $(srcdir)/make-init-c $(addprefix $(srcdir)/,$(INIT_FILES)) > init.c-tmp
+	$(SILENCE) $(srcdir)/make-init-c \
+		$(filter-out config.status $(srcdir)/make-init-c,$^) \
+		> init.c-tmp
 	$(SILENCE) $(SHELL) $(srcdir)/../move-if-change init.c-tmp init.c
 	$(SILENCE) echo stamp > stamp-init
 
@@ -2224,7 +2240,6 @@ clean mostlyclean: $(CONFIG_CLEAN)
 	rm -f init.c stamp-init version.c stamp-version
 	rm -f gdb$(EXEEXT) core make.log
 	rm -f gdb[0-9]$(EXEEXT)
-	rm -f test-cp-name-parser$(EXEEXT)
 	rm -f xml-builtin.c stamp-xml
 	rm -f $(DEPDIR)/*
 	for i in $(CONFIG_SRC_SUBDIR); do \
@@ -2287,37 +2302,47 @@ subdir_do: force
 	done
 
 Makefile: Makefile.in config.status
-	$(SHELL) config.status $@
+	$(ECHO_GEN) $(SHELL) config.status $(SILENT_FLAG) $@
 
 .PHONY: run
 run: Makefile
 	./gdb$(EXEEXT) --data-directory=`pwd`/data-directory $(GDBFLAGS)
 
-jit-reader.h: $(srcdir)/jit-reader.in
-	$(SHELL) config.status $@
+jit-reader.h: $(srcdir)/jit-reader.in config.status
+	$(ECHO_GEN) $(SHELL) config.status $(SILENT_FLAG) $@
 
-gcore: $(srcdir)/gcore.in
-	$(SHELL) config.status $@
+gcore: $(srcdir)/gcore.in config.status
+	$(ECHO_GEN) $(SHELL) config.status $(SILENT_FLAG) $@
 
-gdb-gdb.py: $(srcdir)/gdb-gdb.py.in
-	$(SHELL) config.status $@
+gdb-gdb.py: $(srcdir)/gdb-gdb.py.in config.status
+	$(ECHO_GEN) $(SHELL) config.status $(SILENT_FLAG) $@
 
-gdb-gdb.gdb: $(srcdir)/gdb-gdb.gdb.in
-	$(SHELL) config.status $@
+gdb-gdb.gdb: $(srcdir)/gdb-gdb.gdb.in config.status
+	$(ECHO_GEN) $(SHELL) config.status $(SILENT_FLAG) $@
 
 config.h: stamp-h ; @true
 stamp-h: $(srcdir)/config.in config.status
-	$(SHELL) config.status config.h
+	$(ECHO_GEN) $(SHELL) config.status $(SILENT_FLAG) config.h
 
 nm.h: stamp-nmh ; @true
 stamp-nmh: config.status
-	$(SHELL) config.status nm.h
+	$(ECHO_GEN) $(SHELL) config.status $(SILENT_FLAG) nm.h
 
-config.status: $(srcdir)/configure configure.nat configure.tgt configure.host ../bfd/development.sh
-	$(SHELL) config.status --recheck
+# Files included from config.status or the configure script.  When
+# these change the configure script doesn't need regenerating, but its
+# output (and so that of config.status) might change.
+config_status_deps = \
+	$(srcdir)/configure \
+	$(srcdir)/configure.nat \
+	$(srcdir)/configure.tgt \
+	$(srcdir)/configure.host \
+	$(srcdir)/../bfd/development.sh \
+	$(srcdir)/../bfd/config.bfd
+
+config.status: $(config_status_deps)
+	$(ECHO_GEN) $(SHELL) config.status $(SILENT_FLAG) --recheck
 
 ACLOCAL = aclocal
-ACLOCAL_AMFLAGS = -I ../config
 
 # Keep these in sync with the includes in acinclude.m4.
 aclocal_m4_deps = \
@@ -2345,7 +2370,7 @@ aclocal_m4_deps = \
 	../config/ax_pthread.m4
 
 $(srcdir)/aclocal.m4: @MAINTAINER_MODE_TRUE@ $(aclocal_m4_deps)
-	cd $(srcdir) && $(ACLOCAL) $(ACLOCAL_AMFLAGS)
+	cd $(srcdir) && $(ACLOCAL)
 
 AUTOCONF = autoconf
 configure_deps = $(srcdir)/configure.ac $(srcdir)/aclocal.m4
@@ -2647,8 +2672,7 @@ endif
 
 # A list of all the objects we might care about in this build, for
 # dependency tracking.
-all_object_files = gdb.o $(LIBGDB_OBS) gdbtk-main.o \
-	test-cp-name-parser.o
+all_object_files = gdb.o $(LIBGDB_OBS) gdbtk-main.o
 
 # All the .deps files to include.
 all_deps_files = $(foreach dep,$(patsubst %.o,%.Po,$(all_object_files)),\

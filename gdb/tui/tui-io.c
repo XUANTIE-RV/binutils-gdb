@@ -19,7 +19,6 @@
    You should have received a copy of the GNU General Public License
    along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
 
-#include "defs.h"
 #include "target.h"
 #include "gdbsupport/event-loop.h"
 #include "event-top.h"
@@ -33,7 +32,6 @@
 #include "tui/tui-win.h"
 #include "tui/tui-wingeneral.h"
 #include "tui/tui-file.h"
-#include "tui/tui-out.h"
 #include "ui-out.h"
 #include "cli-out.h"
 #include <fcntl.h>
@@ -566,15 +564,7 @@ tui_puts_internal (WINDOW *w, const char *string, int *height)
 void
 tui_redisplay_readline (void)
 {
-  int prev_col;
-  int height;
-  int col;
-  int c_pos;
-  int c_line;
-  int in;
-  WINDOW *w;
   const char *prompt;
-  int start_line;
 
   /* Detect when we temporarily left SingleKey and now the readline
      edit buffer is empty, automatically restore the SingleKey
@@ -590,18 +580,17 @@ tui_redisplay_readline (void)
   else
     prompt = rl_display_prompt;
   
-  c_pos = -1;
-  c_line = -1;
-  w = TUI_CMD_WIN->handle.get ();
-  start_line = TUI_CMD_WIN->start_line;
+  int c_pos = -1;
+  int c_line = -1;
+  WINDOW *w = TUI_CMD_WIN->handle.get ();
+  int start_line = TUI_CMD_WIN->start_line;
   wmove (w, start_line, 0);
-  prev_col = 0;
-  height = 1;
+  int height = 1;
   if (prompt != nullptr)
     tui_puts_internal (w, prompt, &height);
 
-  prev_col = getcurx (w);
-  for (in = 0; in <= rl_end; in++)
+  int prev_col = getcurx (w);
+  for (int in = 0; in <= rl_end; in++)
     {
       unsigned char c;
       
@@ -622,7 +611,7 @@ tui_redisplay_readline (void)
       else if (c == '\t')
 	{
 	  /* Expand TABs, since ncurses on MS-Windows doesn't.  */
-	  col = getcurx (w);
+	  int col = getcurx (w);
 	  do
 	    {
 	      waddch (w, ' ');
@@ -635,7 +624,7 @@ tui_redisplay_readline (void)
 	}
       if (c == '\n')
 	TUI_CMD_WIN->start_line = getcury (w);
-      col = getcurx (w);
+      int col = getcurx (w);
       if (col < prev_col)
 	height++;
       prev_col = col;
@@ -850,7 +839,6 @@ tui_setup_io (int mode)
       gdb_stderr = tui_stderr;
       gdb_stdlog = tui_stdlog;
       gdb_stdtarg = gdb_stderr;
-      gdb_stdtargerr = gdb_stderr;
       current_uiout = tui_out;
 
       /* Save tty for SIGCONT.  */
@@ -863,7 +851,6 @@ tui_setup_io (int mode)
       gdb_stderr = tui_old_stderr;
       gdb_stdlog = tui_old_stdlog;
       gdb_stdtarg = gdb_stderr;
-      gdb_stdtargerr = gdb_stderr;
       current_uiout = tui_old_uiout;
 
       /* Restore readline.  */
@@ -917,7 +904,7 @@ tui_initialize_io (void)
   tui_stdout = new pager_file (new tui_file (stdout, true));
   tui_stderr = new tui_file (stderr, false);
   tui_stdlog = new timestamped_file (tui_stderr);
-  tui_out = new tui_ui_out (tui_stdout);
+  tui_out = new cli_ui_out (tui_stdout, 0);
 
   /* Create the default UI.  */
   tui_old_uiout = new cli_ui_out (gdb_stdout);

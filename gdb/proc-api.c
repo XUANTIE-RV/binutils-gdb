@@ -24,8 +24,7 @@
  * Pretty-print trace of api calls to the /proc api
  */
 
-#include "defs.h"
-#include "gdbcmd.h"
+#include "cli/cli-cmds.h"
 #include "completer.h"
 
 #include <sys/types.h>

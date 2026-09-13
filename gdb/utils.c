@@ -17,7 +17,6 @@
    You should have received a copy of the GNU General Public License
    along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
 
-#include "defs.h"
 #include <ctype.h>
 #include "gdbsupport/gdb_wait.h"
 #include "event-top.h"
@@ -38,7 +37,7 @@
 #endif
 
 #include <signal.h>
-#include "gdbcmd.h"
+#include "cli/cli-cmds.h"
 #include "serial.h"
 #include "bfd.h"
 #include "target.h"
@@ -128,7 +127,32 @@ show_pagination_enabled (struct ui_file *file, int from_tty,
 }
 
 
+/* Warning hook pointer.  This has to be 'static' to avoid link
+   problems with thread-locals on AIX.  */
 
+static thread_local warning_hook_handler warning_hook;
+
+/* See utils.h.  */
+
+warning_hook_handler
+get_warning_hook_handler ()
+{
+  return warning_hook;
+}
+
+/* See utils.h.  */
+
+scoped_restore_warning_hook::scoped_restore_warning_hook
+     (warning_hook_handler new_handler)
+       : m_save (warning_hook)
+{
+  warning_hook = new_handler;
+}
+
+scoped_restore_warning_hook::~scoped_restore_warning_hook ()
+{
+  warning_hook = m_save;
+}
 
 /* Print a warning message.  The first argument STRING is the warning
    message, used as an fprintf format string, the second is the
@@ -139,8 +163,8 @@ show_pagination_enabled (struct ui_file *file, int from_tty,
 void
 vwarning (const char *string, va_list args)
 {
-  if (deprecated_warning_hook)
-    (*deprecated_warning_hook) (string, args);
+  if (warning_hook != nullptr)
+    warning_hook->warn (string, args);
   else
     {
       std::optional<target_terminal::scoped_restore_terminal_state> term_state;
@@ -628,47 +652,6 @@ warning_filename_and_errno (const char *filename, int saved_errno)
 	   safe_strerror (saved_errno));
 }
 
-/* Control C eventually causes this to be called, at a convenient time.  */
-
-void
-quit (void)
-{
-  if (sync_quit_force_run)
-    {
-      sync_quit_force_run = false;
-      throw_forced_quit ("SIGTERM");
-    }
-
-#ifdef __MSDOS__
-  /* No steenking SIGINT will ever be coming our way when the
-     program is resumed.  Don't lie.  */
-  throw_quit ("Quit");
-#else
-  if (job_control
-      /* If there is no terminal switching for this target, then we can't
-	 possibly get screwed by the lack of job control.  */
-      || !target_supports_terminal_ours ())
-    throw_quit ("Quit");
-  else
-    throw_quit ("Quit (expect signal SIGINT when the program is resumed)");
-#endif
-}
-
-/* See defs.h.  */
-
-void
-maybe_quit (void)
-{
-  if (!is_main_thread ())
-    return;
-
-  if (sync_quit_force_run)
-    quit ();
-
-  quit_handler ();
-}
-
-
 /* Called when a memory allocation fails, with the number of bytes of
    memory requested in SIZE.  */
 
@@ -1812,6 +1795,12 @@ void
 gdb_puts (const char *linebuffer, struct ui_file *stream)
 {
   stream->puts (linebuffer);
+}
+
+void
+gdb_puts (const std::string &s, ui_file *stream)
+{
+  gdb_puts (s.c_str (), stream);
 }
 
 /* See utils.h.  */

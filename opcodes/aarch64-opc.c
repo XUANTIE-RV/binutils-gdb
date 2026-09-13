@@ -3270,6 +3270,17 @@ operand_general_constraint_met_p (const aarch64_opnd_info *opnds, int idx,
 	    }
 	  break;
 
+	case AARCH64_OPND_Rm_LSL:
+	  /* We expect here that opnd->shifter.kind != AARCH64_MOD_LSL
+	     because the parser already restricts the type of shift to LSL only,
+	     so another check of shift kind would be redundant.  */
+	  if (!value_in_range_p (opnd->shifter.amount, 0, 7))
+	    {
+	      set_sft_amount_out_of_range_error (mismatch_detail, idx, 0, 7);
+	      return 0;
+	    }
+	  break;
+
 	default:
 	  break;
 	}
@@ -3689,8 +3700,8 @@ print_register_list (char *buf, size_t size, const aarch64_opnd_info *opnd,
   else
     tb[0] = '\0';
 
-  /* The hyphenated form is preferred for disassembly if there are
-     more than two registers in the list, and the register numbers
+  /* The hyphenated form is preferred for disassembly if there is
+     more than one register in the list, and the register numbers
      are monotonically increasing in increments of one.  */
   if (stride == 1 && num_regs > 1
       && ((opnd->type != AARCH64_OPND_SME_Zt2)
@@ -4005,6 +4016,20 @@ aarch64_print_operand (char *buf, size_t size, bfd_vma pc,
 		  style_imm (styler, "#%" PRIi64, opnd->shifter.amount));
       break;
 
+    case AARCH64_OPND_Rm_LSL:
+      assert (opnd->qualifier == AARCH64_OPND_QLF_X);
+      assert (opnd->shifter.kind == AARCH64_MOD_LSL);
+      if (opnd->shifter.amount == 0)
+	snprintf (buf, size, "%s",
+		  style_reg (styler, get_int_reg_name (opnd->reg.regno,
+						       opnd->qualifier, 0)));
+      else
+	snprintf (buf, size, "%s, %s %s",
+		  style_reg (styler, get_int_reg_name (opnd->reg.regno, opnd->qualifier, 0)),
+		  style_sub_mnem (styler, aarch64_operand_modifiers[opnd->shifter.kind].name),
+		  style_imm (styler, "#%" PRIi64, opnd->shifter.amount));
+      break;
+
     case AARCH64_OPND_Fd:
     case AARCH64_OPND_Fn:
     case AARCH64_OPND_Fm:
@@ -4211,7 +4236,7 @@ aarch64_print_operand (char *buf, size_t size, bfd_vma pc,
       break;
 
     case AARCH64_OPND_SME_list_of_64bit_tiles:
-      print_sme_za_list (buf, size, opnd->reg.regno, styler);
+      print_sme_za_list (buf, size, opnd->imm.value, styler);
       break;
 
     case AARCH64_OPND_SME_ZA_array_off1x4:

@@ -173,6 +173,9 @@ struct thread_control_state
      command.  This is used to decide whether "set scheduler-locking
      step" behaves like "on" or "off".  */
   int stepping_command = 0;
+
+  /* True if the thread is evaluating a BP condition.  */
+  bool in_cond_eval = false;
 };
 
 /* Inferior thread specific part of `struct infcall_suspend_state'.  */
@@ -244,10 +247,11 @@ using private_thread_info_up = std::unique_ptr<private_thread_info>;
    strong reference, and is thus not accounted for in the thread's
    refcount.
 
-   The intrusive_list_node base links threads in a per-inferior list.  */
+   The intrusive_list_node base links threads in a per-inferior list.
+   We place it first in the inherit order to work around PR gcc/113599.  */
 
-class thread_info : public refcounted_object,
-		    public intrusive_list_node<thread_info>
+class thread_info : public intrusive_list_node<thread_info>,
+		    public refcounted_object
 {
 public:
   explicit thread_info (inferior *inf, ptid_t ptid);

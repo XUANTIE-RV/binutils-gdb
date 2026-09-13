@@ -17,7 +17,6 @@
    You should have received a copy of the GNU General Public License
    along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
 
-#include "defs.h"
 #include "dwarf2/dwz.h"
 
 #include "build-id.h"
@@ -188,6 +187,8 @@ dwarf2_read_dwz_file (dwarf2_per_objfile *per_objfile)
      only be run in the main thread.  */
   gdb_assert (is_main_thread ());
 
+  /* This should only be called once.  */
+  gdb_assert (!per_bfd->dwz_file.has_value ());
   /* Set this early, so that on error it remains NULL.  */
   per_bfd->dwz_file.emplace (nullptr);
 

@@ -1038,7 +1038,7 @@ aarch64_ext_ft (const aarch64_operand *self ATTRIBUTE_UNUSED,
 	return false;
       info->qualifier = get_sreg_qualifier_from_value (value);
       if (info->qualifier == AARCH64_OPND_QLF_ERR)
-	return 0;
+	return false;
     }
 
   return true;
@@ -1560,6 +1560,23 @@ aarch64_ext_reg_shifted (const aarch64_operand *self ATTRIBUTE_UNUSED,
   /* This makes the constraint checking happy.  */
   info->shifter.operator_present = 1;
 
+  return true;
+}
+
+/* Decode the LSL-shifted register operand for e.g.
+     ADDPT <Xd|SP>, <Xn|SP>, <Xm>{, LSL #<amount>}.  */
+bool
+aarch64_ext_reg_lsl_shifted (const aarch64_operand *self ATTRIBUTE_UNUSED,
+			     aarch64_opnd_info *info,
+			     aarch64_insn code,
+			     const aarch64_inst *inst ATTRIBUTE_UNUSED,
+			     aarch64_operand_error *errors ATTRIBUTE_UNUSED)
+{
+  /* Rm */
+  info->reg.regno = extract_field (FLD_Rm, code, 0);
+  /* imm3 */
+  info->shifter.kind = AARCH64_MOD_LSL;
+  info->shifter.amount = extract_field (FLD_imm3_10, code,  0);
   return true;
 }
 

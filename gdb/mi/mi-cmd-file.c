@@ -17,7 +17,6 @@
    You should have received a copy of the GNU General Public License
    along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
 
-#include "defs.h"
 #include "mi-cmds.h"
 #include "mi-getopt.h"
 #include "mi-interp.h"
@@ -163,7 +162,7 @@ mi_cmd_file_list_shared_libraries (const char *command,
   /* Print the table header.  */
   ui_out_emit_list list_emitter (uiout, "shared-libraries");
 
-  for (const shobj &so : current_program_space->solibs ())
+  for (const solib &so : current_program_space->solibs ())
     {
       if (so.so_name.empty ())
 	continue;

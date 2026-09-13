@@ -30,7 +30,7 @@ struct compunit_symtab;
 struct block_namespace_info;
 struct using_direct;
 struct obstack;
-struct addrmap;
+struct addrmap_fixed;
 
 /* Blocks can occupy non-contiguous address ranges.  When this occurs,
    startaddr and endaddr within struct block (still) specify the lowest
@@ -105,7 +105,7 @@ struct blockranges
    This implies that within the body of one function
    the blocks appear in the order of a depth-first tree walk.  */
 
-struct block : public allocate_on_obstack
+struct block : public allocate_on_obstack<block>
 {
   /* Return this block's start address.  */
   CORE_ADDR start () const
@@ -410,22 +410,22 @@ struct blockvector
   { return this->block (STATIC_BLOCK); }
 
   /* Return the address -> block map of this blockvector.  */
-  addrmap *map ()
+  addrmap_fixed *map ()
   { return m_map; }
 
   /* Const version of the above.  */
-  const addrmap *map () const
+  const addrmap_fixed *map () const
   { return m_map; }
 
   /* Set this blockvector's address -> block map.  */
-  void set_map (addrmap *map)
+  void set_map (addrmap_fixed *map)
   { m_map = map; }
 
 private:
   /* An address map mapping addresses to blocks in this blockvector.
      This pointer is zero if the blocks' start and end addresses are
      enough.  */
-  struct addrmap *m_map;
+  addrmap_fixed *m_map;
 
   /* Number of blocks in the list.  */
   int m_num_blocks;
@@ -554,28 +554,28 @@ typedef iterator_range<block_iterator_wrapper> block_iterator_range;
 
 /* Return true if symbol A is the best match possible for DOMAIN.  */
 
-extern bool best_symbol (struct symbol *a, const domain_enum domain);
+extern bool best_symbol (struct symbol *a, const domain_search_flags domain);
 
 /* Return symbol B if it is a better match than symbol A for DOMAIN.
    Otherwise return A.  */
 
 extern struct symbol *better_symbol (struct symbol *a, struct symbol *b,
-				     const domain_enum domain);
+				     const domain_search_flags domain);
 
 /* Search BLOCK for symbol NAME in DOMAIN.  */
 
 extern struct symbol *block_lookup_symbol (const struct block *block,
-					   const char *name,
-					   symbol_name_match_type match_type,
-					   const domain_enum domain);
+					   const lookup_name_info &name,
+					   const domain_search_flags domain);
 
 /* Search BLOCK for symbol NAME in DOMAIN but only in primary symbol table of
    BLOCK.  BLOCK must be STATIC_BLOCK or GLOBAL_BLOCK.  Function is useful if
    one iterates all global/static blocks of an objfile.  */
 
-extern struct symbol *block_lookup_symbol_primary (const struct block *block,
-						   const char *name,
-						   const domain_enum domain);
+extern struct symbol *block_lookup_symbol_primary
+     (const struct block *block,
+      const char *name,
+      const domain_search_flags domain);
 
 /* Find symbol NAME in BLOCK and in DOMAIN.  This will return a
    matching symbol whose type is not a "opaque", see TYPE_IS_OPAQUE.
@@ -584,7 +584,7 @@ extern struct symbol *block_lookup_symbol_primary (const struct block *block,
 
 extern struct symbol *block_find_symbol (const struct block *block,
 					 const lookup_name_info &name,
-					 const domain_enum domain,
+					 const domain_search_flags domain,
 					 struct symbol **stub);
 
 /* Given a vector of pairs, allocate and build an obstack allocated

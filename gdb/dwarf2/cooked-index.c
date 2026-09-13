@@ -17,7 +17,6 @@
    You should have received a copy of the GNU General Public License
    along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
 
-#include "defs.h"
 #include "dwarf2/cooked-index.h"
 #include "dwarf2/read.h"
 #include "dwarf2/stringify.h"
@@ -25,6 +24,7 @@
 #include "cp-support.h"
 #include "c-lang.h"
 #include "ada-lang.h"
+#include "event-top.h"
 #include "split-name.h"
 #include "observable.h"
 #include "run-on-main-thread.h"
@@ -48,7 +48,6 @@ to_string (cooked_index_flag flags)
   static constexpr cooked_index_flag::string_mapping mapping[] = {
     MAP_ENUM_FLAG (IS_MAIN),
     MAP_ENUM_FLAG (IS_STATIC),
-    MAP_ENUM_FLAG (IS_ENUM_CLASS),
     MAP_ENUM_FLAG (IS_LINKAGE),
     MAP_ENUM_FLAG (IS_TYPE_DECLARATION),
     MAP_ENUM_FLAG (IS_PARENT_DEFERRED),
@@ -199,6 +198,18 @@ test_compare ()
 
 /* See cooked-index.h.  */
 
+bool
+cooked_index_entry::matches (domain_search_flags kind) const
+{
+  /* Just reject type declarations.  */
+  if ((flags & IS_TYPE_DECLARATION) != 0)
+    return false;
+
+  return tag_matches_domain (tag, kind, lang);
+}
+
+/* See cooked-index.h.  */
+
 const char *
 cooked_index_entry::full_name (struct obstack *storage, bool for_main) const
 {
@@ -208,7 +219,7 @@ cooked_index_entry::full_name (struct obstack *storage, bool for_main) const
     return local_name;
 
   const char *sep = nullptr;
-  switch (per_cu->lang ())
+  switch (lang)
     {
     case language_cplus:
     case language_rust:
@@ -248,11 +259,12 @@ cooked_index_entry::write_scope (struct obstack *storage,
 
 cooked_index_entry *
 cooked_index_shard::add (sect_offset die_offset, enum dwarf_tag tag,
-			 cooked_index_flag flags, const char *name,
+			 cooked_index_flag flags, enum language lang,
+			 const char *name,
 			 cooked_index_entry_ref parent_entry,
 			 dwarf2_per_cu_data *per_cu)
 {
-  cooked_index_entry *result = create (die_offset, tag, flags, name,
+  cooked_index_entry *result = create (die_offset, tag, flags, lang, name,
 				       parent_entry, per_cu);
   m_entries.push_back (result);
 
@@ -263,7 +275,7 @@ cooked_index_shard::add (sect_offset die_offset, enum dwarf_tag tag,
   else if ((flags & IS_PARENT_DEFERRED) == 0
 	   && parent_entry.resolved == nullptr
 	   && m_main == nullptr
-	   && language_may_use_plain_main (per_cu->lang ())
+	   && language_may_use_plain_main (lang)
 	   && strcmp (name, "main") == 0)
     m_main = result;
 
@@ -302,7 +314,7 @@ cooked_index_shard::handle_gnat_encoded_entry (cooked_index_entry *entry,
 	  gdb::unique_xmalloc_ptr<char> new_name
 	    = make_unique_xstrndup (name.data (), name.length ());
 	  last = create (entry->die_offset, DW_TAG_namespace,
-			 0, new_name.get (), parent,
+			 0, language_ada, new_name.get (), parent,
 			 entry->per_cu);
 	  last->canonical = last->name;
 	  m_names.push_back (std::move (new_name));
@@ -319,7 +331,7 @@ cooked_index_shard::handle_gnat_encoded_entry (cooked_index_entry *entry,
 /* See cooked-index.h.  */
 
 void
-cooked_index_shard::finalize ()
+cooked_index_shard::finalize (const parent_map_map *parent_maps)
 {
   auto hash_name_ptr = [] (const void *p)
     {
@@ -360,12 +372,19 @@ cooked_index_shard::finalize ()
 
   for (cooked_index_entry *entry : m_entries)
     {
+      if ((entry->flags & IS_PARENT_DEFERRED) != 0)
+	{
+	  const cooked_index_entry *new_parent
+	    = parent_maps->find (entry->get_deferred_parent ());
+	  entry->resolve_parent (new_parent);
+	}
+
       /* Note that this code must be kept in sync with
 	 language_requires_canonicalization.  */
       gdb_assert (entry->canonical == nullptr);
       if ((entry->flags & IS_LINKAGE) != 0)
 	entry->canonical = entry->name;
-      else if (entry->per_cu->lang () == language_ada)
+      else if (entry->lang == language_ada)
 	{
 	  gdb::unique_xmalloc_ptr<char> canon_name
 	    = handle_gnat_encoded_entry (entry, gnat_entries.get ());
@@ -377,15 +396,14 @@ cooked_index_shard::finalize ()
 	      m_names.push_back (std::move (canon_name));
 	    }
 	}
-      else if (entry->per_cu->lang () == language_cplus
-	       || entry->per_cu->lang () == language_c)
+      else if (entry->lang == language_cplus || entry->lang == language_c)
 	{
 	  void **slot = htab_find_slot (seen_names.get (), entry,
 					INSERT);
 	  if (*slot == nullptr)
 	    {
 	      gdb::unique_xmalloc_ptr<char> canon_name
-		= (entry->per_cu->lang () == language_cplus
+		= (entry->lang == language_cplus
 		   ? cp_canonicalize_string (entry->name)
 		   : c_canonicalize_name (entry->name));
 	      if (canon_name == nullptr)
@@ -443,9 +461,150 @@ cooked_index_shard::find (const std::string &name, bool completing) const
   return range (lower, upper);
 }
 
+/* See cooked-index.h.  */
 
-cooked_index::cooked_index (dwarf2_per_objfile *per_objfile)
-  : m_state (std::make_unique<cooked_index_worker> (per_objfile)),
+void
+cooked_index_worker::start ()
+{
+  gdb::thread_pool::g_thread_pool->post_task ([=] ()
+  {
+    try
+      {
+	do_reading ();
+      }
+    catch (const gdb_exception &exc)
+      {
+	m_failed = exc;
+	set (cooked_state::CACHE_DONE);
+      }
+
+    bfd_thread_cleanup ();
+  });
+}
+
+/* See cooked-index.h.  */
+
+bool
+cooked_index_worker::wait (cooked_state desired_state, bool allow_quit)
+{
+  bool done;
+#if CXX_STD_THREAD
+  {
+    std::unique_lock<std::mutex> lock (m_mutex);
+
+    /* This may be called from a non-main thread -- this functionality
+       is needed for the index cache -- but in this case we require
+       that the desired state already have been attained.  */
+    gdb_assert (is_main_thread () || desired_state <= m_state);
+
+    while (desired_state > m_state)
+      {
+	if (allow_quit)
+	  {
+	    std::chrono::milliseconds duration { 15 };
+	    if (m_cond.wait_for (lock, duration) == std::cv_status::timeout)
+	      QUIT;
+	  }
+	else
+	  m_cond.wait (lock);
+      }
+    done = m_state == cooked_state::CACHE_DONE;
+  }
+#else
+  /* Without threads, all the work is done immediately on the main
+     thread, and there is never anything to wait for.  */
+  done = desired_state == cooked_state::CACHE_DONE;
+#endif /* CXX_STD_THREAD */
+
+  /* Only the main thread is allowed to report complaints and the
+     like.  */
+  if (!is_main_thread ())
+    return false;
+
+  if (m_reported)
+    return done;
+  m_reported = true;
+
+  /* Emit warnings first, maybe they were emitted before an exception
+     (if any) was thrown.  */
+  m_warnings.emit ();
+
+  if (m_failed.has_value ())
+    {
+      /* do_reading failed -- report it.  */
+      exception_print (gdb_stderr, *m_failed);
+      m_failed.reset ();
+      return done;
+    }
+
+  /* Only show a given exception a single time.  */
+  std::unordered_set<gdb_exception> seen_exceptions;
+  for (auto &one_result : m_results)
+    {
+      re_emit_complaints (std::get<1> (one_result));
+      for (auto &one_exc : std::get<2> (one_result))
+	if (seen_exceptions.insert (one_exc).second)
+	  exception_print (gdb_stderr, one_exc);
+    }
+
+  print_stats ();
+
+  struct objfile *objfile = m_per_objfile->objfile;
+  dwarf2_per_bfd *per_bfd = m_per_objfile->per_bfd;
+  cooked_index *table
+    = (gdb::checked_static_cast<cooked_index *>
+       (per_bfd->index_table.get ()));
+
+  auto_obstack temp_storage;
+  enum language lang = language_unknown;
+  const char *main_name = table->get_main_name (&temp_storage, &lang);
+  if (main_name != nullptr)
+    set_objfile_main_name (objfile, main_name, lang);
+
+  /* dwarf_read_debug_printf ("Done building psymtabs of %s", */
+  /* 			   objfile_name (objfile)); */
+
+  return done;
+}
+
+/* See cooked-index.h.  */
+
+void
+cooked_index_worker::set (cooked_state desired_state)
+{
+  gdb_assert (desired_state != cooked_state::INITIAL);
+
+#if CXX_STD_THREAD
+  std::lock_guard<std::mutex> guard (m_mutex);
+  gdb_assert (desired_state > m_state);
+  m_state = desired_state;
+  m_cond.notify_one ();
+#else
+  /* Without threads, all the work is done immediately on the main
+     thread, and there is never anything to do.  */
+#endif /* CXX_STD_THREAD */
+}
+
+/* See cooked-index.h.  */
+
+void
+cooked_index_worker::write_to_cache (const cooked_index *idx,
+				     deferred_warnings *warn) const
+{
+  if (idx != nullptr)
+    {
+      /* Writing to the index cache may cause a warning to be emitted.
+	 See PR symtab/30837.  This arranges to capture all such
+	 warnings.  This is safe because we know the deferred_warnings
+	 object isn't in use by any other thread at this point.  */
+      scoped_restore_warning_hook defer (warn);
+      m_cache_store.store ();
+    }
+}
+
+cooked_index::cooked_index (dwarf2_per_objfile *per_objfile,
+			    std::unique_ptr<cooked_index_worker> &&worker)
+  : m_state (std::move (worker)),
     m_per_bfd (per_objfile->per_bfd)
 {
   /* ACTIVE_VECTORS is not locked, and this assert ensures that this
@@ -479,30 +638,30 @@ cooked_index::wait (cooked_state desired_state, bool allow_quit)
 }
 
 void
-cooked_index::set_contents (vec_type &&vec)
+cooked_index::set_contents (vec_type &&vec, deferred_warnings *warn,
+			    const parent_map_map *parent_maps)
 {
   gdb_assert (m_vector.empty ());
   m_vector = std::move (vec);
 
   m_state->set (cooked_state::MAIN_AVAILABLE);
 
-  index_cache_store_context ctx (global_index_cache, m_per_bfd);
-
   /* This is run after finalization is done -- but not before.  If
      this task were submitted earlier, it would have to wait for
      finalization.  However, that would take a slot in the global
      thread pool, and if enough such tasks were submitted at once, it
      would cause a livelock.  */
-  gdb::task_group finalizers ([this, ctx = std::move (ctx)] ()
+  gdb::task_group finalizers ([=] ()
   {
     m_state->set (cooked_state::FINALIZED);
-    maybe_write_index (m_per_bfd, ctx);
+    m_state->write_to_cache (index_for_writing (), warn);
+    m_state->set (cooked_state::CACHE_DONE);
   });
 
   for (auto &idx : m_vector)
     {
       auto this_index = idx.get ();
-      finalizers.add_task ([=] () { this_index->finalize (); });
+      finalizers.add_task ([=] () { this_index->finalize (parent_maps); });
     }
 
   finalizers.start ();
@@ -573,7 +732,7 @@ cooked_index::get_main_name (struct obstack *obstack, enum language *lang)
   if (entry == nullptr)
     return nullptr;
 
-  *lang = entry->per_cu->lang ();
+  *lang = entry->lang;
   return entry->full_name (obstack, true);
 }
 
@@ -596,7 +755,7 @@ cooked_index::get_main () const
 	{
 	  if ((entry->flags & IS_MAIN) != 0)
 	    {
-	      if (!language_requires_canonicalization (entry->per_cu->lang ()))
+	      if (!language_requires_canonicalization (entry->lang))
 		{
 		  /* There won't be one better than this.  */
 		  return entry;
@@ -615,6 +774,12 @@ cooked_index::get_main () const
     }
 
   return best_entry;
+}
+
+quick_symbol_functions_up
+cooked_index::make_quick_functions () const
+{
+  return quick_symbol_functions_up (new cooked_index_functions);
 }
 
 /* See cooked-index.h.  */
@@ -693,15 +858,6 @@ cooked_index::dump (gdbarch *arch)
 
       gdb_printf ("\n");
     }
-}
-
-void
-cooked_index::maybe_write_index (dwarf2_per_bfd *per_bfd,
-				 const index_cache_store_context &ctx)
-{
-  /* (maybe) store an index in the cache.  */
-  global_index_cache.store (m_per_bfd, ctx);
-  m_state->set (cooked_state::CACHE_DONE);
 }
 
 /* Wait for all the index cache entries to be written before gdb

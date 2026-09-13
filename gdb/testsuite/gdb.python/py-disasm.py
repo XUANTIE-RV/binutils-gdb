@@ -13,11 +13,11 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-import gdb
-import gdb.disassembler
 import struct
 import sys
 
+import gdb
+import gdb.disassembler
 from gdb.disassembler import Disassembler, DisassemblerResult
 
 # A global, holds the program-counter address at which we should
@@ -46,7 +46,7 @@ def check_building_disassemble_result():
 
 
 def is_nop(s):
-    return s == "nop" or s == "nop\t0"
+    return s == "nop" or s == "nop\t0" or s == "nop\t{0}"
 
 
 # Remove all currently registered disassemblers.

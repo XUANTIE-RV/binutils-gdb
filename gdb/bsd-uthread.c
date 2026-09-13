@@ -17,7 +17,7 @@
    You should have received a copy of the GNU General Public License
    along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
 
-#include "defs.h"
+#include "extract-store-integer.h"
 #include "gdbcore.h"
 #include "gdbthread.h"
 #include "inferior.h"
@@ -275,7 +275,7 @@ static const char * const bsd_uthread_solib_names[] =
 };
 
 static void
-bsd_uthread_solib_loaded (shobj &so)
+bsd_uthread_solib_loaded (solib &so)
 {
   const char * const *names = bsd_uthread_solib_names;
 
@@ -295,7 +295,7 @@ bsd_uthread_solib_loaded (shobj &so)
 }
 
 static void
-bsd_uthread_solib_unloaded (program_space *pspace, const shobj &so)
+bsd_uthread_solib_unloaded (program_space *pspace, const solib &so)
 {
   if (bsd_uthread_solib_name.empty ())
     return;

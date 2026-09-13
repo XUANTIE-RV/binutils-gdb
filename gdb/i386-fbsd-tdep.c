@@ -17,7 +17,6 @@
    You should have received a copy of the GNU General Public License
    along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
 
-#include "defs.h"
 #include "gdbcore.h"
 #include "osabi.h"
 #include "regcache.h"
@@ -156,7 +155,7 @@ const struct regset i386_fbsd_segbases_regset =
 
 static void
 i386_fbsd_sigframe_init (const struct tramp_frame *self,
-			 frame_info_ptr this_frame,
+			 const frame_info_ptr &this_frame,
 			 struct trad_frame_cache *this_cache,
 			 CORE_ADDR func)
 {
@@ -278,7 +277,8 @@ bool
 i386_fbsd_core_read_x86_xsave_layout (struct gdbarch *gdbarch,
 				      x86_xsave_layout &layout)
 {
-  return i386_fbsd_core_read_xsave_info (core_bfd, layout) != 0;
+  return i386_fbsd_core_read_xsave_info (current_program_space->core_bfd (),
+					 layout) != 0;
 }
 
 /* Implement the core_read_description gdbarch method.  */

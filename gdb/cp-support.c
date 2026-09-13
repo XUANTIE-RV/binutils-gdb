@@ -18,11 +18,10 @@
    You should have received a copy of the GNU General Public License
    along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
 
-#include "defs.h"
 #include "cp-support.h"
 #include "language.h"
 #include "demangle.h"
-#include "gdbcmd.h"
+#include "cli/cli-cmds.h"
 #include "dictionary.h"
 #include "objfiles.h"
 #include "frame.h"
@@ -151,7 +150,7 @@ inspect_type (struct demangle_parse_info *info,
 
   try
     {
-      sym = lookup_symbol (name, 0, VAR_DOMAIN, 0).symbol;
+      sym = lookup_symbol (name, 0, SEARCH_VFT, 0).symbol;
     }
   catch (const gdb_exception &except)
     {
@@ -259,7 +258,7 @@ inspect_type (struct demangle_parse_info *info,
 	  if (i != NULL)
 	    {
 	      /* Merge the two trees.  */
-	      cp_merge_demangle_parse_infos (info, ret_comp, i.get ());
+	      cp_merge_demangle_parse_infos (info, ret_comp, std::move (i));
 
 	      /* Replace any newly introduced typedefs -- but not
 		 if the type is anonymous (that would lead to infinite
@@ -505,7 +504,7 @@ replace_typedefs (struct demangle_parse_info *info,
 	      try
 		{
 		  sym = lookup_symbol (local_name.get (), 0,
-				       VAR_DOMAIN, 0).symbol;
+				       SEARCH_VFT, 0).symbol;
 		}
 	      catch (const gdb_exception &except)
 		{
@@ -1498,9 +1497,9 @@ cp_lookup_rtti_type (const char *name, const struct block *block)
   struct symbol * rtti_sym;
   struct type * rtti_type;
 
-  /* Use VAR_DOMAIN here as NAME may be a typedef.  PR 18141, 18417.
-     Classes "live" in both STRUCT_DOMAIN and VAR_DOMAIN.  */
-  rtti_sym = lookup_symbol (name, block, VAR_DOMAIN, NULL).symbol;
+  rtti_sym = lookup_symbol (name, block,
+			    SEARCH_TYPE_DOMAIN | SEARCH_STRUCT_DOMAIN,
+			    nullptr).symbol;
 
   if (rtti_sym == NULL)
     {
@@ -2187,15 +2186,8 @@ test_cp_remove_params ()
   CHECK_INCOMPL ("A::foo<(anonymous namespace)::B",
 		 "A::foo");
 
-  /* Shouldn't this parse?  Looks like a bug in
-     cp_demangled_name_to_comp.  See PR c++/22411.  */
-#if 0
   CHECK ("A::foo<void(int)>::func(int)",
 	 "A::foo<void(int)>::func");
-#else
-  CHECK_INCOMPL ("A::foo<void(int)>::func(int)",
-		 "A::foo");
-#endif
 
   CHECK_INCOMPL ("A::foo<void(int",
 		 "A::foo");
@@ -2215,19 +2207,11 @@ test_cp_remove_params ()
 static void
 first_component_command (const char *arg, int from_tty)
 {
-  int len;  
-  char *prefix; 
-
   if (!arg)
     return;
 
-  len = cp_find_first_component (arg);
-  prefix = (char *) alloca (len + 1);
-
-  memcpy (prefix, arg, len);
-  prefix[len] = '\0';
-
-  gdb_printf ("%s\n", prefix);
+  int len = cp_find_first_component (arg);
+  gdb_printf ("%.*s\n", len, arg);
 }
 
 /* Implement "info vtbl".  */

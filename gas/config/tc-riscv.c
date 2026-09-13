@@ -213,7 +213,8 @@ riscv_set_default_priv_spec (const char *s)
   obj_attribute *attr;
 
   RISCV_GET_PRIV_SPEC_CLASS (s, class);
-  if (class != PRIV_SPEC_CLASS_NONE)
+  if (class != PRIV_SPEC_CLASS_NONE
+      && class != PRIV_SPEC_CLASS_1P9P1)
     {
       default_priv_spec = class;
       return 1;
@@ -1268,6 +1269,158 @@ flt_lookup (float f, const float *array, size_t size, unsigned *regnop)
   return false;
 }
 
+/* Map ra and s-register to [4,15], so that we can check if the
+   reg2 in register list reg1-reg2 or single reg2 is valid or not,
+   and obtain the corresponding reg_list value.
+
+   ra - 4
+   s0 - 5
+   s1 - 6
+    ....
+   s10 - 0 (invalid)
+   s11 - 15.  */
+
+static int
+regno_to_reg_list (unsigned regno)
+{
+  if (regno == X_RA)
+    return 4;
+  else if (regno == X_S0 || regno == X_S1)
+    return 5 + regno - X_S0;
+  else if (regno >= X_S2 && regno < X_S10)
+    return 7 + regno - X_S2;
+  else if (regno == X_S11)
+    return 15;
+
+  /* Invalid symbol.  */
+  return 0;
+}
+
+/* Parse register list, and return the last register by regno_to_reg_list.
+
+   If ABI register names are used (e.g. ra and s0), the register
+   list could be "{ra}", "{ra, s0}", "{ra, s0-sN}", where 0 < N < 10 or
+   N == 11.
+
+   If numeric register names are used (e.g. x1 and x8), the register list
+   could be "{x1}", "{x1,x8}", "{x1,x8-x9}", "{x1,x8-x9,x18}" and
+   "{x1,x8-x9,x18-xN}", where 19 < N < 25 or N == 27.
+
+   The numeric and ABI register names cannot be used at the same time.
+
+   TODO: Report errors for the following cases,
+   1. Too many registers in the list.
+   2. Cases which return 0.
+   3. Illegal formats, for example, {x1,x8-NULL,x18-x24/x18}, {x1-x2,x8}.  */
+
+static unsigned
+reglist_lookup_internal (char *reglist)
+{
+  unsigned regno = 0;
+  unsigned reg_list = 0;
+  char *regname[3][2] = {{NULL}};
+  char *save_tok, *save_subtok;
+  unsigned i, j;
+
+  char *token = strtok_r (reglist, ",", &save_tok);
+  for (i = 0; i < 3 && token != NULL;
+       token = strtok_r (NULL, ",", &save_tok), i++)
+    {
+      char *subtoken = strtok_r (token, "-", &save_subtok);
+      for (j = 0; j < 2 && subtoken != NULL;
+	   subtoken = strtok_r (NULL, "-", &save_subtok), j++)
+	regname[i][j] = subtoken;
+    }
+
+  bool reg1_numeric = false;
+  for (i = 0; i < 3; i++)
+    {
+      if (regname[i][0] == NULL)
+	continue;
+#define REG_TO_REG_LIST(NAME, NUM, LIST) \
+  (reg_lookup (&NAME, RCLASS_GPR, &NUM) && (LIST = regno_to_reg_list (NUM)))
+#define REG_NUMERIC(NAME) (NAME[0] == 'x')
+#define REG_CONFLICT(NAME, REG_NUMERIC) \
+  ((NAME[0] == 'x' && !REG_NUMERIC) || (NAME[0] != 'x' && REG_NUMERIC))
+      switch (i)
+	{
+	case 0:
+	  reg1_numeric = REG_NUMERIC (regname[i][0]);
+	  if (!REG_TO_REG_LIST (regname[i][0], regno, reg_list)
+	      || regno != X_RA)
+	    return 0;
+	  break;
+	case 1:
+	  if (REG_CONFLICT (regname[i][0], reg1_numeric)
+	      /* The second register should be s0 or its numeric names x8.  */
+	      || !REG_TO_REG_LIST (regname[i][0], regno, reg_list)
+	      || regno != X_S0)
+	    return 0;
+	  else if (regname[i][1] == NULL)
+	    return reg_list;
+
+	  if (REG_CONFLICT (regname[i][1], reg1_numeric)
+	      /* The third register is x9 if the numeric name is used.
+		 Otherwise, it could be any other sN register, where N > 0.  */
+	      || !REG_TO_REG_LIST (regname[i][1], regno, reg_list)
+	      || regno <= X_S0
+	      || (reg1_numeric && regno != X_S1))
+	    return 0;
+	  break;
+	case 2:
+	  /* Must use register numeric names.  */
+	  if (!reg1_numeric
+	      || !REG_NUMERIC (regname[i][0])
+	      /* The fourth register should be s2.  */
+	      || !REG_TO_REG_LIST (regname[i][0], regno, reg_list)
+	      || regno != X_S2)
+	    return 0;
+	  else if (regname[i][1] == NULL)
+	    return reg_list;
+
+	  if (!reg1_numeric
+	      || !REG_NUMERIC (regname[i][1])
+	      /* The fifth register could be any other sN register, where N > 1.  */
+	      || !REG_TO_REG_LIST (regname[i][1], regno, reg_list)
+	      || regno <= X_S2)
+	    return 0;
+	  break;
+	default:
+	  return 0;
+	}
+#undef REG_TO_REG_LIST
+#undef REG_NUMERIC
+#undef REG_CONFLICT
+    }
+  return reg_list;
+}
+
+/* Parse register list.  Return false if REG_LIST is zero, which is an
+   invalid value.  */
+
+static bool
+reglist_lookup (char **s, unsigned *reg_list)
+{
+  *reg_list = 0;
+  char *reglist = strdup (*s);
+  if (reglist != NULL)
+    {
+      char *token = strtok (reglist, "}");
+      if (token != NULL)
+	{
+	  *s += strlen (token);
+	  *reg_list = reglist_lookup_internal (reglist);
+	}
+      else
+	{
+	  as_bad (_("cannot find `}' for cm.push/cm.pop"));
+	  *reg_list = 0;
+	}
+    }
+  free (reglist);
+  return *reg_list == 0 ? false : true;
+}
+
 #define USE_BITS(mask,shift) (used_bits |= ((insn_t)(mask) << (shift)))
 #define USE_IMM(n, s) \
   (used_bits |= ((insn_t)((1ull<<n)-1) << (s)))
@@ -1384,6 +1537,8 @@ validate_riscv_insn (const struct riscv_opcode *opc, int length)
 	case ',': break;
 	case '(': break;
 	case ')': break;
+	case '{': break;
+	case '}': break;
 	case '<': USE_BITS (OP_MASK_SHAMTW, OP_SH_SHAMTW); break;
 	case '>': USE_BITS (OP_MASK_SHAMT, OP_SH_SHAMT); break;
 	case 'A': break; /* Macro operand, must be symbol.  */
@@ -1464,6 +1619,10 @@ validate_riscv_insn (const struct riscv_opcode *opc, int length)
 		case 'h': used_bits |= ENCODE_ZCB_HALFWORD_UIMM (-1U); break;
 		/* halfword immediate operators, load/store halfword insns.  */
 		case 'b': used_bits |= ENCODE_ZCB_BYTE_UIMM (-1U); break;
+		/* Immediate offset operand for cm.push and cm.pop.  */
+		case 'p': used_bits |= ENCODE_ZCMP_SPIMM (-1U); break;
+		/* Register list operand for cm.push and cm.pop.  */
+		case 'r': USE_BITS (OP_MASK_REG_LIST, OP_SH_REG_LIST); break;
 		case 'f': break;
 		default:
 		  goto unknown_validate_operand;
@@ -2326,6 +2485,7 @@ static const struct percent_op_match percent_op_utype[] =
   {"tprel_hi", BFD_RELOC_RISCV_TPREL_HI20},
   {"pcrel_hi", BFD_RELOC_RISCV_PCREL_HI20},
   {"got_pcrel_hi", BFD_RELOC_RISCV_GOT_HI20},
+  {"tlsdesc_hi", BFD_RELOC_RISCV_TLSDESC_HI20},
   {"tls_ie_pcrel_hi", BFD_RELOC_RISCV_TLS_GOT_HI20},
   {"tls_gd_pcrel_hi", BFD_RELOC_RISCV_TLS_GD_HI20},
   {"hi", BFD_RELOC_RISCV_HI20},
@@ -2337,6 +2497,8 @@ static const struct percent_op_match percent_op_itype[] =
   {"lo", BFD_RELOC_RISCV_LO12_I},
   {"tprel_lo", BFD_RELOC_RISCV_TPREL_LO12_I},
   {"pcrel_lo", BFD_RELOC_RISCV_PCREL_LO12_I},
+  {"tlsdesc_load_lo", BFD_RELOC_RISCV_TLSDESC_LOAD_LO12},
+  {"tlsdesc_add_lo", BFD_RELOC_RISCV_TLSDESC_ADD_LO12},
   {0, 0}
 };
 
@@ -2348,8 +2510,9 @@ static const struct percent_op_match percent_op_stype[] =
   {0, 0}
 };
 
-static const struct percent_op_match percent_op_rtype[] =
+static const struct percent_op_match percent_op_relax_only[] =
 {
+  {"tlsdesc_call", BFD_RELOC_RISCV_TLSDESC_CALL},
   {"tprel_add", BFD_RELOC_RISCV_TPREL_ADD},
   {0, 0}
 };
@@ -3325,6 +3488,8 @@ riscv_ip (char *str, struct riscv_cl_insn *ip, expressionS *imm_expr,
 	    case ')':
 	    case '[':
 	    case ']':
+	    case '{':
+	    case '}':
 	      if (*asarg++ == *oparg)
 		continue;
 	      break;
@@ -3510,10 +3675,10 @@ riscv_ip (char *str, struct riscv_cl_insn *ip, expressionS *imm_expr,
 	      *imm_reloc = BFD_RELOC_RISCV_LO12_I;
 	      goto load_store;
 	    case '1':
-	      /* This is used for TLS, where the fourth operand is
-		 %tprel_add, to get a relocation applied to an add
-		 instruction, for relaxation to use.  */
-	      p = percent_op_rtype;
+	      /* This is used for TLS relocations that acts as relaxation
+		 markers and do not change the instruction encoding,
+		 i.e. %tprel_add and %tlsdesc_call.  */
+	      p = percent_op_relax_only;
 	      goto alu_op;
 	    case '0': /* AMO displacement, which must be zero.  */
 	    load_store:
@@ -3779,6 +3944,27 @@ riscv_ip (char *str, struct riscv_cl_insn *ip, expressionS *imm_expr,
 			  || !VALID_ZCB_BYTE_UIMM ((valueT) imm_expr->X_add_number))
 			break;
 		      ip->insn_opcode |= ENCODE_ZCB_BYTE_UIMM (imm_expr->X_add_number);
+		      goto rvc_imm_done;
+		    case 'r':
+		      if (!reglist_lookup (&asarg, &regno))
+			break;
+		      INSERT_OPERAND (REG_LIST, *ip, regno);
+		      continue;
+		    case 'p':
+		      if (my_getSmallExpression (imm_expr, imm_reloc, asarg, p)
+			|| imm_expr->X_op != O_constant)
+			break;
+		      /* Convert stack adjustment of cm.push to a positive
+			 offset.  */
+		      if (ip->insn_mo->match == MATCH_CM_PUSH)
+			imm_expr->X_add_number *= -1;
+		      /* Subtract base stack adjustment and get spimm.  */
+		      imm_expr->X_add_number -=
+			riscv_get_sp_base (ip->insn_opcode, *riscv_rps_as.xlen);
+		      if (!VALID_ZCMP_SPIMM (imm_expr->X_add_number))
+			break;
+		      ip->insn_opcode |=
+			ENCODE_ZCMP_SPIMM (imm_expr->X_add_number);
 		      goto rvc_imm_done;
 		    case 'f': /* Operand for matching immediate 255.  */
 		      if (my_getSmallExpression (imm_expr, imm_reloc, asarg, p)
@@ -4319,6 +4505,12 @@ md_parse_option (int c, const char *arg)
   switch (c)
     {
     case OPTION_MARCH:
+      /* List all avaiable extensions.  */
+      if (strcmp (arg, "help") == 0)
+	{
+	  riscv_print_extensions ();
+	  exit (EXIT_SUCCESS);
+	}
       default_arch_with_ext = arg;
       break;
 
@@ -4537,6 +4729,7 @@ md_apply_fix (fixS *fixP, valueT *valP, segT seg ATTRIBUTE_UNUSED)
     case BFD_RELOC_RISCV_TPREL_LO12_I:
     case BFD_RELOC_RISCV_TPREL_LO12_S:
     case BFD_RELOC_RISCV_TPREL_ADD:
+    case BFD_RELOC_RISCV_TLSDESC_HI20:
       relaxable = true;
       /* Fall through.  */
 
@@ -4675,8 +4868,7 @@ md_apply_fix (fixS *fixP, valueT *valP, segT seg ATTRIBUTE_UNUSED)
 	  bfd_vma target = S_GET_VALUE (fixP->fx_addsy) + *valP;
 	  bfd_vma delta = target - md_pcrel_from (fixP);
 	  bfd_putl32 (bfd_getl32 (buf) | ENCODE_JTYPE_IMM (delta), buf);
-	  if (S_IS_LOCAL (fixP->fx_addsy)
-	      && S_GET_SEGMENT (fixP->fx_addsy) == seg && (!riscv_opts.relax))
+	  if (!riscv_opts.relax && S_IS_LOCAL (fixP->fx_addsy))
 	    fixP->fx_done = 1;
 	}
       break;
@@ -4688,8 +4880,7 @@ md_apply_fix (fixS *fixP, valueT *valP, segT seg ATTRIBUTE_UNUSED)
 	  bfd_vma target = S_GET_VALUE (fixP->fx_addsy) + *valP;
 	  bfd_vma delta = target - md_pcrel_from (fixP);
 	  bfd_putl32 (bfd_getl32 (buf) | ENCODE_BTYPE_IMM (delta), buf);
-	  if (S_IS_LOCAL (fixP->fx_addsy)
-	      && S_GET_SEGMENT (fixP->fx_addsy) == seg && (!riscv_opts.relax))
+	  if (!riscv_opts.relax && S_IS_LOCAL (fixP->fx_addsy))
 	    fixP->fx_done = 1;
 	}
       break;
@@ -4701,8 +4892,7 @@ md_apply_fix (fixS *fixP, valueT *valP, segT seg ATTRIBUTE_UNUSED)
 	  bfd_vma target = S_GET_VALUE (fixP->fx_addsy) + *valP;
 	  bfd_vma delta = target - md_pcrel_from (fixP);
 	  bfd_putl16 (bfd_getl16 (buf) | ENCODE_CBTYPE_IMM (delta), buf);
-	  if (S_IS_LOCAL (fixP->fx_addsy)
-	      && S_GET_SEGMENT (fixP->fx_addsy) == seg && (!riscv_opts.relax))
+	  if (!riscv_opts.relax && S_IS_LOCAL (fixP->fx_addsy))
 	    fixP->fx_done = 1;
 	}
       break;
@@ -4714,14 +4904,16 @@ md_apply_fix (fixS *fixP, valueT *valP, segT seg ATTRIBUTE_UNUSED)
 	  bfd_vma target = S_GET_VALUE (fixP->fx_addsy) + *valP;
 	  bfd_vma delta = target - md_pcrel_from (fixP);
 	  bfd_putl16 (bfd_getl16 (buf) | ENCODE_CJTYPE_IMM (delta), buf);
-	  if (S_IS_LOCAL (fixP->fx_addsy)
-	      && S_GET_SEGMENT (fixP->fx_addsy) == seg && (!riscv_opts.relax))
+	  if (!riscv_opts.relax && S_IS_LOCAL (fixP->fx_addsy))
 	    fixP->fx_done = 1;
 	}
       break;
 
     case BFD_RELOC_RISCV_CALL:
     case BFD_RELOC_RISCV_CALL_PLT:
+    case BFD_RELOC_RISCV_TLSDESC_LOAD_LO12:
+    case BFD_RELOC_RISCV_TLSDESC_ADD_LO12:
+    case BFD_RELOC_RISCV_TLSDESC_CALL:
       relaxable = true;
       break;
 
@@ -5284,7 +5476,7 @@ RISC-V options:\n\
   -fno-pic                    don't generate position-independent code (default)\n\
   -march=ISA                  set the RISC-V architecture\n\
   -misa-spec=ISAspec          set the RISC-V ISA spec (2.2, 20190608, 20191213)\n\
-  -mpriv-spec=PRIVspec        set the RISC-V privilege spec (1.9.1, 1.10, 1.11, 1.12)\n\
+  -mpriv-spec=PRIVspec        set the RISC-V privilege spec (1.10, 1.11, 1.12)\n\
   -mabi=ABI                   set the RISC-V ABI\n\
   -mrelax                     enable relax (default)\n\
   -mno-relax                  disable relax\n\
@@ -5302,7 +5494,7 @@ RISC-V options:\n\
 void
 riscv_cfi_frame_initial_instructions (void)
 {
-  cfi_add_CFA_def_cfa_register (X_SP);
+  cfi_add_CFA_def_cfa (X_SP, 0);
 }
 
 int

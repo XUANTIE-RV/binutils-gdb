@@ -22,13 +22,11 @@
 /* This file contains support routines for creating, manipulating, and
    destroying objfile structures.  */
 
-#include "defs.h"
 #include "bfd.h"
 #include "symtab.h"
 #include "symfile.h"
 #include "objfiles.h"
 #include "target.h"
-#include "bcache.h"
 #include "expression.h"
 #include "parser-defs.h"
 
@@ -47,13 +45,11 @@
 #include "exec.h"
 #include "observable.h"
 #include "complaints.h"
-#include "solist.h"
 #include "gdb_bfd.h"
 #include "btrace.h"
 #include "gdbsupport/pathstuff.h"
 
 #include <algorithm>
-#include <vector>
 
 /* Externally visible variables that are owned by this module.
    See declarations in objfile.h for more info.  */
@@ -1213,7 +1209,7 @@ is_addr_in_objfile (CORE_ADDR addr, const struct objfile *objfile)
       if (section_is_overlay (osect) && !section_is_mapped (osect))
 	continue;
 
-      if (osect->addr () <= addr && addr < osect->endaddr ())
+      if (osect->contains (addr))
 	return true;
     }
   return false;

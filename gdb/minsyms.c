@@ -36,7 +36,6 @@
    to figure out what full symbol table entries need to be read in.  */
 
 
-#include "defs.h"
 #include <ctype.h>
 #include "symtab.h"
 #include "bfd.h"
@@ -716,7 +715,7 @@ frob_address (struct objfile *objfile, CORE_ADDR pc,
 {
   for (obj_section *iter : objfile->sections ())
     {
-      if (pc >= iter->addr () && pc < iter->endaddr ())
+      if (iter->contains (pc))
 	{
 	  *unrel_addr = unrelocated_addr (pc - iter->offset ());
 	  return 1;
@@ -1564,7 +1563,7 @@ lookup_solib_trampoline_symbol_by_pc (CORE_ADDR pc)
    a duplicate function in case this matters someday.  */
 
 CORE_ADDR
-find_solib_trampoline_target (frame_info_ptr frame, CORE_ADDR pc)
+find_solib_trampoline_target (const frame_info_ptr &frame, CORE_ADDR pc)
 {
   struct minimal_symbol *tsymbol = lookup_solib_trampoline_symbol_by_pc (pc);
 

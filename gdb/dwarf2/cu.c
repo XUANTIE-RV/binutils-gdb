@@ -17,7 +17,6 @@
    You should have received a copy of the GNU General Public License
    along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
 
-#include "defs.h"
 #include "dwarf2/cu.h"
 #include "dwarf2/read.h"
 #include "objfiles.h"
@@ -42,8 +41,8 @@ dwarf2_cu::dwarf2_cu (dwarf2_per_cu_data *per_cu,
     producer_is_clang (false),
     producer_is_gas_lt_2_38 (false),
     producer_is_gas_2_39 (false),
-    processing_has_namespace_info (false),
-    load_all_dies (false)
+    producer_is_gas_ge_2_40 (false),
+    processing_has_namespace_info (false)
 {
 }
 

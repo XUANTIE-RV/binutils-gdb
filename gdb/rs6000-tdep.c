@@ -17,14 +17,14 @@
    You should have received a copy of the GNU General Public License
    along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
 
-#include "defs.h"
+#include "extract-store-integer.h"
 #include "frame.h"
 #include "inferior.h"
 #include "infrun.h"
 #include "symtab.h"
 #include "target.h"
 #include "gdbcore.h"
-#include "gdbcmd.h"
+#include "cli/cli-cmds.h"
 #include "objfiles.h"
 #include "arch-utils.h"
 #include "regcache.h"
@@ -130,7 +130,7 @@
     && (regnum) < (tdep)->ppc_cefpr0_regnum + ppc_num_efprs)
 
 /* Holds the current set of options to be passed to the disassembler.  */
-static char *powerpc_disassembler_options;
+static std::string powerpc_disassembler_options;
 
 /* The list of available "set powerpc ..." and "show powerpc ..."
    commands.  */
@@ -743,7 +743,7 @@ insn_changes_sp_or_jumps (unsigned long insn)
 	   limit for the size of an epilogue.  */
 
 static int
-rs6000_in_function_epilogue_frame_p (frame_info_ptr curfrm,
+rs6000_in_function_epilogue_frame_p (const frame_info_ptr &curfrm,
 				     struct gdbarch *gdbarch, CORE_ADDR pc)
 {
   ppc_gdbarch_tdep *tdep = gdbarch_tdep<ppc_gdbarch_tdep> (gdbarch);
@@ -816,7 +816,7 @@ rs6000_stack_frame_destroyed_p (struct gdbarch *gdbarch, CORE_ADDR pc)
 
 /* Get the ith function argument for the current function.  */
 static CORE_ADDR
-rs6000_fetch_pointer_argument (frame_info_ptr frame, int argi, 
+rs6000_fetch_pointer_argument (const frame_info_ptr &frame, int argi,
 			       struct type *type)
 {
   return get_frame_register_unsigned (frame, 3 + argi);
@@ -2316,7 +2316,7 @@ rs6000_in_solib_return_trampoline (struct gdbarch *gdbarch,
    code that should be skipped.  */
 
 static CORE_ADDR
-rs6000_skip_trampoline_code (frame_info_ptr frame, CORE_ADDR pc)
+rs6000_skip_trampoline_code (const frame_info_ptr &frame, CORE_ADDR pc)
 {
   struct gdbarch *gdbarch = get_frame_arch (frame);
   ppc_gdbarch_tdep *tdep = gdbarch_tdep<ppc_gdbarch_tdep> (gdbarch);
@@ -2698,7 +2698,7 @@ ieee_128_float_regnum_adjust (struct gdbarch *gdbarch, struct type *type,
 }
 
 static int
-rs6000_register_to_value (frame_info_ptr frame,
+rs6000_register_to_value (const frame_info_ptr &frame,
 			  int regnum,
 			  struct type *type,
 			  gdb_byte *to,
@@ -2727,7 +2727,7 @@ rs6000_register_to_value (frame_info_ptr frame,
 }
 
 static void
-rs6000_value_to_register (frame_info_ptr frame,
+rs6000_value_to_register (const frame_info_ptr &frame,
 			  int regnum,
 			  struct type *type,
 			  const gdb_byte *from)
@@ -3617,7 +3617,7 @@ struct rs6000_frame_cache
 };
 
 static struct rs6000_frame_cache *
-rs6000_frame_cache (frame_info_ptr this_frame, void **this_cache)
+rs6000_frame_cache (const frame_info_ptr &this_frame, void **this_cache)
 {
   struct rs6000_frame_cache *cache;
   struct gdbarch *gdbarch = get_frame_arch (this_frame);
@@ -3810,7 +3810,7 @@ rs6000_frame_cache (frame_info_ptr this_frame, void **this_cache)
 }
 
 static void
-rs6000_frame_this_id (frame_info_ptr this_frame, void **this_cache,
+rs6000_frame_this_id (const frame_info_ptr &this_frame, void **this_cache,
 		      struct frame_id *this_id)
 {
   struct rs6000_frame_cache *info = rs6000_frame_cache (this_frame,
@@ -3830,7 +3830,7 @@ rs6000_frame_this_id (frame_info_ptr this_frame, void **this_cache,
 }
 
 static struct value *
-rs6000_frame_prev_register (frame_info_ptr this_frame,
+rs6000_frame_prev_register (const frame_info_ptr &this_frame,
 			    void **this_cache, int regnum)
 {
   struct rs6000_frame_cache *info = rs6000_frame_cache (this_frame,
@@ -3853,11 +3853,13 @@ static const struct frame_unwind rs6000_frame_unwind =
    SP is restored and prev-PC is stored in LR.  */
 
 static struct rs6000_frame_cache *
-rs6000_epilogue_frame_cache (frame_info_ptr this_frame, void **this_cache)
+rs6000_epilogue_frame_cache (const frame_info_ptr &this_frame, void **this_cache)
 {
   struct rs6000_frame_cache *cache;
   struct gdbarch *gdbarch = get_frame_arch (this_frame);
   ppc_gdbarch_tdep *tdep = gdbarch_tdep<ppc_gdbarch_tdep> (gdbarch);
+  struct rs6000_framedata fdata;
+  int wordsize = tdep->wordsize;
 
   if (*this_cache)
     return (struct rs6000_frame_cache *) *this_cache;
@@ -3868,17 +3870,56 @@ rs6000_epilogue_frame_cache (frame_info_ptr this_frame, void **this_cache)
 
   try
     {
-      /* At this point the stack looks as if we just entered the
-	 function, and the return address is stored in LR.  */
-      CORE_ADDR sp, lr;
+      /* At this point the stack looks as if we just entered the function.
+	 The SP (r1) has been restored but the LR and r31 may not have been
+	 restored yet.  Need to update the register unrolling information in
+	 the cache for the LR and the saved gprs.  */
+      CORE_ADDR sp;
+      CORE_ADDR func = 0, pc = 0;
 
-      sp = get_frame_register_unsigned (this_frame, gdbarch_sp_regnum (gdbarch));
-      lr = get_frame_register_unsigned (this_frame, tdep->ppc_lr_regnum);
+      func = get_frame_func (this_frame);
+      cache->pc = func;
+      pc = get_frame_pc (this_frame);
+      skip_prologue (gdbarch, func, pc, &fdata);
+
+      /* SP is in r1 and it has been restored.  Get the current value.  */
+      sp = get_frame_register_unsigned (this_frame,
+					gdbarch_sp_regnum (gdbarch));
 
       cache->base = sp;
       cache->initial_sp = sp;
 
-      cache->saved_regs[gdbarch_pc_regnum (gdbarch)].set_value (lr);
+      /* Store the unwinding rules for the gpr registers that have not been
+	 restored yet, specifically r31.
+
+	 if != -1, fdata.saved_gpr is the smallest number of saved_gpr.
+	 All gpr's from saved_gpr to gpr31 are saved (except during the
+	 prologue).  */
+
+      if (fdata.saved_gpr >= 0)
+	{
+	  int i;
+	  CORE_ADDR gpr_addr = cache->base + fdata.gpr_offset;
+
+	  for(i = fdata.saved_gpr; i < ppc_num_gprs; i++)
+	    {
+	      if (fdata.gpr_mask & (1U << i))
+		cache->saved_regs[tdep->ppc_gp0_regnum + i].set_addr (gpr_addr);
+	      gpr_addr += wordsize;
+	    }
+	}
+
+      /* Store the lr unwinding rules.  */
+      if (fdata.lr_offset != 0)
+	cache->saved_regs[tdep->ppc_lr_regnum].set_addr (cache->base
+							 + fdata.lr_offset);
+
+      else if (fdata.lr_register != -1)
+	cache->saved_regs[tdep->ppc_lr_regnum].set_realreg (fdata.lr_register);
+
+      /* The PC is found in the link register.  */
+      cache->saved_regs[gdbarch_pc_regnum (gdbarch)]
+	= cache->saved_regs[tdep->ppc_lr_regnum];
     }
   catch (const gdb_exception_error &ex)
     {
@@ -3893,7 +3934,7 @@ rs6000_epilogue_frame_cache (frame_info_ptr this_frame, void **this_cache)
    Return the frame ID of an epilogue frame.  */
 
 static void
-rs6000_epilogue_frame_this_id (frame_info_ptr this_frame,
+rs6000_epilogue_frame_this_id (const frame_info_ptr &this_frame,
 			       void **this_cache, struct frame_id *this_id)
 {
   CORE_ADDR pc;
@@ -3911,7 +3952,7 @@ rs6000_epilogue_frame_this_id (frame_info_ptr this_frame,
    Return the register value of REGNUM in previous frame.  */
 
 static struct value *
-rs6000_epilogue_frame_prev_register (frame_info_ptr this_frame,
+rs6000_epilogue_frame_prev_register (const frame_info_ptr &this_frame,
 				     void **this_cache, int regnum)
 {
   struct rs6000_frame_cache *info =
@@ -3924,7 +3965,7 @@ rs6000_epilogue_frame_prev_register (frame_info_ptr this_frame,
 
 static int
 rs6000_epilogue_frame_sniffer (const struct frame_unwind *self,
-			       frame_info_ptr this_frame,
+			       const frame_info_ptr &this_frame,
 			       void **this_prologue_cache)
 {
   if (frame_relative_level (this_frame) == 0)
@@ -3950,7 +3991,7 @@ static const struct frame_unwind rs6000_epilogue_frame_unwind =
 
 
 static CORE_ADDR
-rs6000_frame_base_address (frame_info_ptr this_frame, void **this_cache)
+rs6000_frame_base_address (const frame_info_ptr &this_frame, void **this_cache)
 {
   struct rs6000_frame_cache *info = rs6000_frame_cache (this_frame,
 							this_cache);
@@ -3965,7 +4006,7 @@ static const struct frame_base rs6000_frame_base = {
 };
 
 static const struct frame_base *
-rs6000_frame_base_sniffer (frame_info_ptr this_frame)
+rs6000_frame_base_sniffer (const frame_info_ptr &this_frame)
 {
   return &rs6000_frame_base;
 }
@@ -3976,7 +4017,7 @@ rs6000_frame_base_sniffer (frame_info_ptr this_frame)
 static void
 ppc_dwarf2_frame_init_reg (struct gdbarch *gdbarch, int regnum,
 			    struct dwarf2_frame_state_reg *reg,
-			    frame_info_ptr this_frame)
+			    const frame_info_ptr &this_frame)
 {
   ppc_gdbarch_tdep *tdep = gdbarch_tdep<ppc_gdbarch_tdep> (gdbarch);
 
@@ -8606,7 +8647,7 @@ show_powerpc_exact_watchpoints (struct ui_file *file, int from_tty,
 /* Read a PPC instruction from memory.  */
 
 static unsigned int
-read_insn (frame_info_ptr frame, CORE_ADDR pc)
+read_insn (const frame_info_ptr &frame, CORE_ADDR pc)
 {
   struct gdbarch *gdbarch = get_frame_arch (frame);
   enum bfd_endian byte_order = gdbarch_byte_order (gdbarch);
@@ -8628,7 +8669,7 @@ read_insn (frame_info_ptr frame, CORE_ADDR pc)
    necessarily the i'th instruction in memory.  */
 
 int
-ppc_insns_match_pattern (frame_info_ptr frame, CORE_ADDR pc,
+ppc_insns_match_pattern (const frame_info_ptr &frame, CORE_ADDR pc,
 			 const struct ppc_insn_pattern *pattern,
 			 unsigned int *insns)
 {

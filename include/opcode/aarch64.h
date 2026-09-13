@@ -70,7 +70,7 @@ enum aarch64_feature_bit {
   /* Atomic 64-byte load/store.  */
   AARCH64_FEATURE_LS64,
   /* v8.3 Pointer Authentication.  */
-  AARCH64_FEATURE_PAC,
+  AARCH64_FEATURE_PAUTH,
   /* FP instructions.  */
   AARCH64_FEATURE_FP,
   /* SIMD instructions.  */
@@ -218,6 +218,8 @@ enum aarch64_feature_bit {
   AARCH64_FEATURE_PMUv3_SS,
   /* Performance Monitors Instruction Counter Extension.  */
   AARCH64_FEATURE_PMUv3_ICNTR,
+  /* System Performance Monitors Extension */
+  AARCH64_FEATURE_SPMU,
   /* Performance Monitors Synchronous-Exception-Based Event Extension.  */
   AARCH64_FEATURE_SEBEP,
   /* SVE2.1 and SME2.1 non-widening BFloat16 instructions.  */
@@ -228,6 +230,12 @@ enum aarch64_feature_bit {
   AARCH64_FEATURE_SVE2p1,
   /* RCPC3 instructions.  */
   AARCH64_FEATURE_RCPC3,
+  /* Checked Pointer Arithmetic instructions. */
+  AARCH64_FEATURE_CPA,
+  /* FAMINMAX instructions.  */
+  AARCH64_FEATURE_FAMINMAX,
+  /* FP8 instructions.  */
+  AARCH64_FEATURE_FP8,
   AARCH64_NUM_FEATURES
 };
 
@@ -258,7 +266,7 @@ enum aarch64_feature_bit {
 					 | AARCH64_FEATBIT (X, RDMA))
 #define AARCH64_ARCH_V8_2A_FEATURES(X)	(AARCH64_FEATBIT (X, V8_2A))
 #define AARCH64_ARCH_V8_3A_FEATURES(X)	(AARCH64_FEATBIT (X, V8_3A)	\
-					 | AARCH64_FEATBIT (X, PAC)	\
+					 | AARCH64_FEATBIT (X, PAUTH)	\
 					 | AARCH64_FEATBIT (X, RCPC)	\
 					 | AARCH64_FEATBIT (X, COMPNUM) \
 					 | AARCH64_FEATBIT (X, JSCVT))
@@ -305,6 +313,7 @@ enum aarch64_feature_bit {
 					 | AARCH64_FEATBIT (X, PMUv3p9)	\
 					 | AARCH64_FEATBIT (X, PMUv3_SS) \
 					 | AARCH64_FEATBIT (X, PMUv3_ICNTR) \
+					 | AARCH64_FEATBIT (X, SPMU) \
 					 | AARCH64_FEATBIT (X, SEBEP) \
 					 | AARCH64_FEATBIT (X, PREDRES2) \
 					)
@@ -490,6 +499,7 @@ enum aarch64_opnd
   AARCH64_OPND_PAIRREG_OR_XZR,	/* Paired register operand, optionally xzr.  */
   AARCH64_OPND_Rm_EXT,	/* Integer Rm extended.  */
   AARCH64_OPND_Rm_SFT,	/* Integer Rm shifted.  */
+  AARCH64_OPND_Rm_LSL,	/* Integer Rm shifted (LSL-only).  */
 
   AARCH64_OPND_Fd,	/* Floating-point Fd.  */
   AARCH64_OPND_Fn,	/* Floating-point Fn.  */

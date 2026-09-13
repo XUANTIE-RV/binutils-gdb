@@ -19,9 +19,9 @@
    You should have received a copy of the GNU General Public License
    along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
 
-#include "defs.h"
 #include "arch-utils.h"
 #include "bfdlink.h"
+#include "extract-store-integer.h"
 #include "symtab.h"
 #include "gdbtypes.h"
 #include "gdbcore.h"
@@ -31,7 +31,7 @@
 #include "symfile.h"
 #include "objfiles.h"
 #include "source.h"
-#include "gdbcmd.h"
+#include "cli/cli-cmds.h"
 #include "breakpoint.h"
 #include "language.h"
 #include "complaints.h"
@@ -1596,19 +1596,7 @@ validate_readnow_readnever (objfile_flags flags)
     error (_("-readnow and -readnever cannot be used simultaneously"));
 }
 
-/* This is the symbol-file command.  Read the file, analyze its
-   symbols, and add a struct symtab to a symtab list.  The syntax of
-   the command is rather bizarre:
-
-   1. The function buildargv implements various quoting conventions
-   which are undocumented and have little or nothing in common with
-   the way things are quoted (or not quoted) elsewhere in GDB.
-
-   2. Options are used, which are not generally used in GDB (perhaps
-   "set mapped on", "set readnow on" would be better)
-
-   3. The order of options matters, which is contrary to GNU
-   conventions (because it is confusing and inconvenient).  */
+/* See symfile.h.  */
 
 void
 symbol_file_command (const char *args, int from_tty)
@@ -1697,8 +1685,8 @@ set_initial_language_callback ()
     {
       const char *name = main_name ();
       struct symbol *sym
-	= lookup_symbol_in_language (name, NULL, VAR_DOMAIN, default_lang,
-				     NULL).symbol;
+	= lookup_symbol_in_language (name, nullptr, SEARCH_FUNCTION_DOMAIN,
+				     default_lang, nullptr).symbol;
 
       if (sym != NULL)
 	lang = sym->language ();
@@ -3085,8 +3073,7 @@ pc_in_mapped_range (CORE_ADDR pc, struct obj_section *section)
 {
   if (section_is_overlay (section))
     {
-      if (section->addr () <= pc
-	  && pc < section->endaddr ())
+      if (section->contains (pc))
 	return true;
     }
 
@@ -3769,7 +3756,7 @@ expand_symtabs_matching
    gdb::function_view<expand_symtabs_symbol_matcher_ftype> symbol_matcher,
    gdb::function_view<expand_symtabs_exp_notify_ftype> expansion_notify,
    block_search_flags search_flags,
-   enum search_domain kind)
+   domain_search_flags domain)
 {
   for (objfile *objfile : current_program_space->objfiles ())
     if (!objfile->expand_symtabs_matching (file_matcher,
@@ -3777,8 +3764,7 @@ expand_symtabs_matching
 					   symbol_matcher,
 					   expansion_notify,
 					   search_flags,
-					   UNDEF_DOMAIN,
-					   kind))
+					   domain))
       return false;
   return true;
 }

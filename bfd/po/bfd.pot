@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: https://sourceware.org/bugzilla/\n"
-"POT-Creation-Date: 2024-01-29 15:59+0000\n"
+"POT-Creation-Date: 2024-01-15 14:58+0000\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -926,7 +926,7 @@ msgstr ""
 
 #. xgettext:c-format.
 #: elf-ifunc.c:144
-#: elfnn-loongarch.c:1435
+#: elfnn-loongarch.c:1427
 #, c-format
 msgid ""
 "%F%P: dynamic STT_GNU_IFUNC symbol `%s' with pointer equality in `%pB' can "
@@ -1132,7 +1132,7 @@ msgstr ""
 
 #: elf.c:517 elf32-arm.c:17731
 #: elfnn-aarch64.c:8322
-#: elfnn-loongarch.c:5119
+#: elfnn-loongarch.c:5102
 #, c-format
 msgid "%pB symbol number %lu references nonexistent SHT_SYMTAB_SHNDX section"
 msgstr ""
@@ -1439,7 +1439,7 @@ msgid "%pB:%pA: error: attempting to write section into an empty buffer"
 msgstr ""
 
 #: elf.c:10266 elf32-mcore.c:100 elf32-mcore.c:455 elf32-ppc.c:7676
-#: elf32-ppc.c:8864 elf64-ppc.c:16844
+#: elf32-ppc.c:8864 elf64-ppc.c:16839
 #, c-format
 msgid "%pB: %s unsupported"
 msgstr ""
@@ -2211,7 +2211,7 @@ msgstr ""
 #: elfxx-x86.c:970
 #: elfnn-aarch64.c:7826
 #: elfnn-kvx.c:3250
-#: elfnn-loongarch.c:761
+#: elfnn-loongarch.c:756
 #: elfnn-riscv.c:764
 #, c-format
 msgid "%pB: bad symbol index: %d"
@@ -2816,7 +2816,7 @@ msgstr ""
 #: elf32-i386.c:1719 elf32-s390.c:1151 elf32-sh.c:5499 elf32-tilepro.c:1548
 #: elf32-xtensa.c:1263 elf64-s390.c:1083 elfxx-sparc.c:1556
 #: elfxx-tilegx.c:1767
-#: elfnn-loongarch.c:610
+#: elfnn-loongarch.c:612
 #: elfnn-riscv.c:671
 #, c-format
 msgid "%pB: `%s' accessed both as normal and thread local symbol"
@@ -4105,7 +4105,7 @@ msgstr ""
 #: elf32-tilepro.c:3627 elfxx-tilegx.c:4017 elfxx-x86.c:2729
 #: elfnn-aarch64.c:10030
 #: elfnn-kvx.c:4636
-#: elfnn-loongarch.c:5049
+#: elfnn-loongarch.c:5032
 #: elfnn-riscv.c:3481
 #, c-format
 msgid "discarded output section: `%pA'"
@@ -4476,7 +4476,7 @@ msgstr ""
 
 #: elf64-alpha.c:2680 elflink.c:15481
 #: elfnn-kvx.c:4022
-#: elfnn-loongarch.c:1723
+#: elfnn-loongarch.c:1715
 #, c-format
 msgid "%pB: dynamic relocation against `%pT' in read-only section `%pA'\n"
 msgstr ""
@@ -9319,13 +9319,13 @@ msgstr ""
 msgid "relocation against `%s' has faulty GOT type "
 msgstr ""
 
-#: elfnn-loongarch.c:167
-#: elfnn-loongarch.c:219
+#: elfnn-loongarch.c:169
+#: elfnn-loongarch.c:221
 #, c-format
 msgid "%#<PRIx64> invaild imm"
 msgstr ""
 
-#: elfnn-loongarch.c:401
+#: elfnn-loongarch.c:403
 #: elfnn-riscv.c:4028
 #, c-format
 msgid ""
@@ -9333,16 +9333,16 @@ msgid ""
 "  target emulation `%s' does not match `%s'"
 msgstr ""
 
-#: elfnn-loongarch.c:456
+#: elfnn-loongarch.c:458
 #, c-format
 msgid "%pB: can't link different ABI object."
 msgstr ""
 
-#: elfnn-loongarch.c:598
+#: elfnn-loongarch.c:600
 msgid "Internal error: unreachable."
 msgstr ""
 
-#: elfnn-loongarch.c:4354
+#: elfnn-loongarch.c:4339
 #: elfnn-riscv.c:4789
 #, c-format
 msgid ""

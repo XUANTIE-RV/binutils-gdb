@@ -31,7 +31,6 @@
    remote_async_get_pending_events_handler, while in all-stop mode,
    they are processed in remote_resume.  */
 
-#include "defs.h"
 #include "remote.h"
 #include "remote-notif.h"
 #include "observable.h"
@@ -39,7 +38,7 @@
 #include "target.h"
 #include "inferior.h"
 #include "infrun.h"
-#include "gdbcmd.h"
+#include "cli/cli-cmds.h"
 #include "async-event.h"
 
 bool notif_debug = false;

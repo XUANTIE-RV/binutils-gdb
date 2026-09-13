@@ -29,7 +29,6 @@
    during the process of parsing; the lower levels of the tree always
    come first in the result.  */
 
-#include "defs.h"
 #include <ctype.h>
 #include "arch-utils.h"
 #include "symtab.h"
@@ -40,7 +39,7 @@
 #include "command.h"
 #include "language.h"
 #include "parser-defs.h"
-#include "gdbcmd.h"
+#include "cli/cli-cmds.h"
 #include "symfile.h"
 #include "inferior.h"
 #include "target-float.h"
@@ -225,7 +224,8 @@ parser_state::push_dollar (struct stoken str)
   /* On some systems, such as HP-UX and hppa-linux, certain system routines
      have names beginning with $ or $$.  Check for those, first.  */
 
-  sym = lookup_symbol (copy.c_str (), NULL, VAR_DOMAIN, NULL);
+  sym = lookup_symbol (copy.c_str (), nullptr,
+		       SEARCH_VAR_DOMAIN | SEARCH_FUNCTION_DOMAIN, nullptr);
   if (sym.symbol)
     {
       push_new<expr::var_value_operation> (sym);

@@ -2734,18 +2734,16 @@ core_pcbe_init (void)
 {
   switch (cpuid_getvendor ())
     {
-    case X86_VENDOR_AMD:
-      snprintf (core_impl_name, sizeof (core_impl_name), "%s", X86_VENDORSTR_AMD);
-      events_table = events_generic;
-      num_gpc = 4;
-      num_ffc = 0;
-      total_pmc = num_gpc + num_ffc;
-      return 0;
     case ARM_CPU_IMP_ARM:
     case ARM_CPU_IMP_BRCM:
     case ARM_CPU_IMP_CAVIUM:
     case ARM_CPU_IMP_APM:
     case ARM_CPU_IMP_QCOM:
+    case ARM_CPU_IMP_FUJITSU:
+    case ARM_CPU_IMP_NVIDIA:
+    case ARM_CPU_IMP_HISI:
+    case ARM_CPU_IMP_APPLE:
+    case ARM_CPU_IMP_AMPERE:
       snprintf (core_impl_name, sizeof (core_impl_name), "%s", AARCH64_VENDORSTR_ARM);
       events_table = events_generic;
       num_gpc = 4;  // MEZ: a real implementation is needed
@@ -2943,7 +2941,7 @@ core_pcbe_cpuref (void)
 }
 
 static int
-core_pcbe_get_events (hwcf_hwc_cb_t *hwc_cb)
+core_pcbe_get_events (hwcf_hwc_cb_t *hwc_cb, Hwcentry *raw_hwc_tbl)
 {
   int count = 0;
   const struct events_table_t *pevent;
@@ -2961,6 +2959,14 @@ core_pcbe_get_events (hwcf_hwc_cb_t *hwc_cb)
       count++;
     }
   /* add generic events here */
+  if (raw_hwc_tbl)
+    for (Hwcentry *h = raw_hwc_tbl; h->name; h++)
+      if (h->use_perf_event_type)
+	for (int jj = 0; jj < num_gpc; jj++)
+	  {
+	    hwc_cb (jj, h->name);
+	    count++;
+	  }
   return count;
 }
 

@@ -58,18 +58,15 @@ struct using_direct;
 
 struct demangle_parse_info
 {
-  demangle_parse_info ();
-
-  ~demangle_parse_info ();
-
-  /* The memory used during the parse.  */
-  struct demangle_info *info;
-
   /* The result of the parse.  */
-  struct demangle_component *tree;
+  struct demangle_component *tree = nullptr;
 
-  /* Any temporary memory used during typedef replacement.  */
-  struct obstack obstack;
+  /* Any memory used during processing.  */
+  auto_obstack obstack;
+
+  /* Any other objects referred to by this object, and whose storage
+     lifetime must be linked.  */
+  std::vector<std::unique_ptr<demangle_parse_info>> infos;
 };
 
 
@@ -141,27 +138,28 @@ extern struct block_symbol cp_lookup_symbol_nonlocal
      (const struct language_defn *langdef,
       const char *name,
       const struct block *block,
-      const domain_enum domain);
+      const domain_search_flags domain);
 
 extern struct block_symbol
   cp_lookup_symbol_namespace (const char *the_namespace,
 			      const char *name,
 			      const struct block *block,
-			      const domain_enum domain);
+			      const domain_search_flags domain);
 
 extern struct block_symbol cp_lookup_symbol_imports_or_template
      (const char *scope,
       const char *name,
       const struct block *block,
-      const domain_enum domain);
+      const domain_search_flags domain);
 
 extern struct block_symbol
   cp_lookup_nested_symbol (struct type *parent_type,
 			   const char *nested_name,
 			   const struct block *block,
-			   const domain_enum domain);
+			   const domain_search_flags domain);
 
-struct type *cp_lookup_transparent_type (const char *name);
+struct type *cp_lookup_transparent_type (const char *name,
+					 domain_search_flags flags);
 
 /* See description in cp-namespace.c.  */
 
@@ -181,7 +179,7 @@ extern gdb::unique_xmalloc_ptr<char> cp_comp_to_string
 
 extern void cp_merge_demangle_parse_infos (struct demangle_parse_info *,
 					   struct demangle_component *,
-					   struct demangle_parse_info *);
+					   std::unique_ptr<demangle_parse_info>);
 
 /* The list of "maint cplus" commands.  */
 

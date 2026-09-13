@@ -1,5 +1,21 @@
 -*- text -*-
 
+* Readelf now displays RELR relocations in full detail.
+
+* Readelf now has a -j/--display-section option which takes the name or index
+  of a section and displays its contents according to its type.  The option can
+  be used multiple times on the command line to display multiple sections.
+
+* Base register 0 is now printed as "0" instead of "%r0" in s390 disassembly.
+
+* When objdump or readelf are used to display the contents of a .eh_frame
+  section they will now also display the contents of the .eh_frame_hdr section,
+  if present.
+
+* Support for the Maverick co-processor (via -mfpu=maverick) on Arm has been
+  removed.  The CPU name ep9312 is still recognized, but treated as an alias
+  for arm920t.
+
 Changes in 2.42:
 
 * The objdump program has a new command line option -Z/--decompress which

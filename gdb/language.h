@@ -321,7 +321,7 @@ struct language_defn
 
   virtual struct value *read_var_value (struct symbol *var,
 					const struct block *var_block,
-					frame_info_ptr frame) const;
+					const frame_info_ptr &frame) const;
 
   /* Return information about whether TYPE should be passed
      (and returned) by reference at the language level.  The default
@@ -349,9 +349,10 @@ struct language_defn
 
   /* Find the definition of the type with the given name.  */
 
-  virtual struct type *lookup_transparent_type (const char *name) const
+  virtual struct type *lookup_transparent_type (const char *name,
+						domain_search_flags flags) const
   {
-    return basic_lookup_transparent_type (name);
+    return basic_lookup_transparent_type (name, flags);
   }
 
   /* Find all symbols in the current program space matching NAME in
@@ -369,7 +370,7 @@ struct language_defn
      used as the definition.  */
   virtual bool iterate_over_symbols
 	(const struct block *block, const lookup_name_info &name,
-	 domain_enum domain,
+	 domain_search_flags domain,
 	 gdb::function_view<symbol_found_callback_ftype> callback) const
   {
     return ::iterate_over_symbols (block, name, domain, callback);
@@ -513,7 +514,7 @@ struct language_defn
   virtual struct block_symbol lookup_symbol_nonlocal
 	(const char *name,
 	 const struct block *block,
-	 const domain_enum domain) const;
+	 const domain_search_flags domain) const;
 
   /* Return an expression that can be used for a location
      watchpoint.  TYPE is a pointer type that points to the memory

@@ -19,7 +19,7 @@
    You should have received a copy of the GNU General Public License
    along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
 
-#include "defs.h"
+#include "extract-store-integer.h"
 #include "regcache.h"
 #include "inferior.h"
 #include "target.h"
@@ -28,7 +28,7 @@
 #include "gregset.h"
 #include "regset.h"
 #include "nat/linux-ptrace.h"
-#include "gdbcmd.h"
+#include "cli/cli-cmds.h"
 #include "gdbarch.h"
 
 #include "s390-tdep.h"
