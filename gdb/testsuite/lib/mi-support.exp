@@ -1294,7 +1294,7 @@ proc mi_expect_stop { reason func args file line extra test } {
     verbose -log "mi_expect_stop: expecting: \\*stopped,${ebn}${r}${a}${bn}frame=\{addr=\"$hex\",func=\"$func\",args=$args,(?:file=\"$any$file\",fullname=\"${fullname_syntax}$file\",line=\"$line\",arch=\"$any\"|from=\"$file\")\}$after_stopped,thread-id=\"$decimal\",stopped-threads=$any\r\n($thread_selected_re|$breakpoint_re)*$prompt_re"
 
     gdb_expect {
-	-re "\\*stopped,${ebn}${r}${a}${bn}frame=\{addr=\"$hex\",func=\"$func\",args=$args,(?:file=\"$any$file\",fullname=\"${fullname_syntax}$file\",line=\"($line)\",arch=\"$any\"|from=\"$file\")\}$after_stopped,thread-id=\"$decimal\",stopped-threads=$any\r\n($thread_selected_re|$breakpoint_re)*$prompt_re" {
+	-re "\\*stopped,${ebn}${r}${a}${bn}frame=\{addr=\"$hex\",func=\"$func\",args=$args,(?:file=\"$any$file\",fullname=\"${fullname_syntax}$file\",line=\"($line)\",arch=\"$any\"|from=\"$file\"|arch=\"$any\")\}$after_stopped,thread-id=\"$decimal\",stopped-threads=$any\r\n($thread_selected_re|$breakpoint_re)*$prompt_re" {
 	    pass "$test"
 	    if {[array names expect_out "2,string"] != ""} {
 		return $expect_out(2,string)

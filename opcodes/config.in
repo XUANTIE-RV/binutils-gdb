@@ -14,6 +14,9 @@
    language is requested. */
 #undef ENABLE_NLS
 
+/* Define to enable linker plugins */
+#undef ENABLE_PLUGINS
+
 /* Define to 1 if you have the Mac OS X function
    CFLocaleCopyPreferredLanguages in the CoreFoundation framework. */
 #undef HAVE_CFLOCALECOPYPREFERREDLANGUAGES
@@ -72,6 +75,9 @@
 
 /* Define to 1 if you have the <unistd.h> header file. */
 #undef HAVE_UNISTD_H
+
+/* Define to 1 if you have the <windows.h> header file. */
+#undef HAVE_WINDOWS_H
 
 /* Define to the sub-directory in which libtool stores uninstalled libraries.
    */

@@ -1,12 +1,40 @@
 -*- text -*-
+* Add support for RISC-V Zacas extension with version 1.0.
 
-* Add support for RISC-V Zimop, Zcmop extensions with version 1.0.
+* Add support for RISC-V Zcmp (cm.mva01s, cm.mvsa01) and CORE-V (XCvBitmanip)
+  extensions with version 1.0.
 
-* Add support for RISC-V Smrnmi extension CSRs with version 1.0.
+* Remove support for RISC-V privileged spec 1.9.1, but linker can still
+  recognize it in case of linking old objects.
 
-* Add support for RISC-V Zcmp (cm.mva01s, cm.mvsa01) with version 1.0.
+* Add support for RISC-V Zcmp (cm.mva01s, cm.mvsa01), Smrnmi and CORE-V
+  (xcvbitmanip, xcvsimd) extensions with version 1.0.
 
-* Add support for RISC-V Smcdeleg and Ssccfg extensions with version 1.0.
+* Add support for RISC-V S[sm]dbltrp extensions with version 1.0.
+
+Changes in 2.43:
+
+* Add support for LoongArch .option for fine-grained control of assembly
+  code options.
+
+* The MIPS '--trap' command-line option now causes GAS to dynamically
+  track the ISA setting as code is assembled and to emit either trap or
+  breakpoint instructions according to whether the currently selected ISA
+  permits the use of trap instructions or not.  Previously the ISA was
+  only checked at startup and GAS bailed out if the initial ISA was
+  incompatible with the '--trap' option.
+
+* Support CFCMOV feature in Intel APX. Now, APX_F is fully supportted.
+
+* Support CCMP and CTEST feature in Intel APX.
+
+* Support zero-upper feature in Intel APX.
+
+* Add support for RISC-V Zcmp extension with version 1.0.
+
+* Add support for RISC-V Zcmop extension with version 1.0.
+
+* Add support for RISC-V Zimop extension with version 1.0.
 
 * Assembler macros as well as the bodies of .irp / .irpc can now use the
   syntax \+ to access the number of times a given macro has been executed.
@@ -23,8 +51,6 @@
 
 * Remove support for RISC-V privileged spec 1.9.1, but linker can still
   recognize it in case of linking old objects.
-
-* Add support for RISC-V Zacas extension with version 1.0.
 
 * Add support for RISC-V Zcmp extension with version 1.0.
 

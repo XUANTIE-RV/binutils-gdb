@@ -15900,6 +15900,7 @@ test_packet_check_result ()
 } // namespace selftests
 #endif /* GDB_SELF_TEST */
 
+
 void _initialize_remote ();
 void
 _initialize_remote ()

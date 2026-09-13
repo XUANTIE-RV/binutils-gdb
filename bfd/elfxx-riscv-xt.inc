@@ -24,6 +24,10 @@
 const char *
 riscv_xuantie_get_series_with_subset (riscv_parse_subset_t *rps)
 {
+  /* Only C908x has xtheadvsfa_xtheadvfcvt_xtheadvreductions
+     */
+  if (riscv_subset_supports (rps, "xtheadvfcvt"))
+    return "c908x";
   /* Only C910v2
      rv64imafdc_zicbom_zicbop_zicboz_zicond_zihintntl_zihintpause_zawrs
      _zfa_zfbfmin_zfh_zca_zcb_zcd_zba_zbb_zbc_zbs_svinval_svnapot_svpbmt
@@ -55,6 +59,7 @@ riscv_xuantie_get_series_with_subset (riscv_parse_subset_t *rps)
 }
 
 bool
+
 riscv_vendor_perfer_subset (riscv_subset_list_t *subset_list,
                             const char *subset, int major, int minor)
 {
@@ -85,3 +90,10 @@ riscv_vendor_perfer_subset (riscv_subset_list_t *subset_list,
   return false;
 }
 
+bool
+xuantie_check_implicit_matrix0p3 (const char *implicit ATTRIBUTE_UNUSED,
+		       riscv_subset_t *subset)
+{
+  return (subset->major_version == 0
+	      && subset->minor_version == 3);
+}

@@ -95,7 +95,9 @@ START_RELOC_NUMBERS (elf_riscv_reloc_type)
   RELOC_NUMBER (R_RISCV_TLSDESC_LOAD_LO12, 63)
   RELOC_NUMBER (R_RISCV_TLSDESC_ADD_LO12, 64)
   RELOC_NUMBER (R_RISCV_TLSDESC_CALL, 65)
-END_RELOC_NUMBERS (R_RISCV_max)
+  RELOC_NUMBER (R_RISCV_VENDOR, 191)
+/* Keep internal relocation numbers stable; vendor relocation 192 is unused.  */
+END_RELOC_NUMBERS (R_RISCV_max = 193)
 
 /* Internal relocations used exclusively by the relaxation pass.  */
 #define R_RISCV_DELETE  (R_RISCV_max)

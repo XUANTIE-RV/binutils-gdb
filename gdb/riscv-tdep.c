@@ -131,6 +131,7 @@ static const char *riscv_feature_name_fpu = "org.gnu.gdb.riscv.fpu";
 static const char *riscv_feature_name_virtual = "org.gnu.gdb.riscv.virtual";
 static const char *riscv_feature_name_vector = "org.gnu.gdb.riscv.vector";
 
+
 /* The current set of options to be passed to the disassembler.  */
 static std::string riscv_disassembler_options;
 
@@ -717,6 +718,7 @@ struct riscv_vector_feature : public riscv_register_feature
 /* An instance of the v-register feature set.  */
 
 static const struct riscv_vector_feature riscv_vector_feature;
+
 
 /* Controls whether we place compressed breakpoints or not.  When in auto
    mode GDB tries to determine if the target supports compressed
@@ -1607,7 +1609,6 @@ public:
       SC_D,
       /* This instruction is used to do a syscall.  */
       ECALL,
-
       /* Other instructions are not interesting during the prologue scan, and
 	 are ignored.  */
       OTHER
@@ -1799,6 +1800,7 @@ private:
     m_rs1 = decode_register_index_short (ival, OP_SH_CRS1S);
     m_rs2 = decode_register_index_short (ival, OP_SH_CRS2S);
   }
+
 
   /* Fetch instruction from target memory at ADDR, return the content of
      the instruction, and update LEN with the instruction length.  */
@@ -4168,6 +4170,7 @@ static const char *const stap_register_indirection_suffixes[] =
 {
   ")", nullptr
 };
+
 
 /* Initialize the current architecture based on INFO.  If possible,
    re-use an architecture from ARCHES, which is a list of

@@ -33,6 +33,7 @@
 # define NFPREG 33
 #endif
 
+
 /* RISC-V Linux native additions to the default linux support.  */
 
 class riscv_linux_nat_target final : public linux_nat_target
@@ -195,6 +196,7 @@ fill_fpregset (const struct regcache *regcache, prfpregset_t *fpregs,
     }
 }
 
+
 /* Return a target description for the current target.  */
 
 const struct target_desc *
@@ -322,6 +324,7 @@ riscv_linux_nat_target::store_registers (struct regcache *regcache, int regnum)
 	    perror_with_name (_("Couldn't set registers"));
 	}
     }
+
 
   /* Access to CSRs has potential security issues, don't support them for
      now.  */

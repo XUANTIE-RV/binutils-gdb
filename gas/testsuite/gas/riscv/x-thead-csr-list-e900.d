@@ -24,3 +24,7 @@ Disassembly of section .text:
 [ 	]+[0-9a-f]+:[ 	]+bed02573[ 	]+csrr[ 	]+a0,t_mdcr
 [ 	]+[0-9a-f]+:[ 	]+bee02573[ 	]+csrr[ 	]+a0,t_mpcr
 [ 	]+[0-9a-f]+:[ 	]+bef02573[ 	]+csrr[ 	]+a0,pmpteecfg
+[ 	]+[0-9a-f]+:[ 	]+7e002573[ 	]+csrr[ 	]+a0,mraddr
+[ 	]+[0-9a-f]+:[ 	]+7e102573[ 	]+csrr[ 	]+a0,mexstatus
+[ 	]+[0-9a-f]+:[ 	]+7e202573[ 	]+csrr[ 	]+a0,mnmicause
+[ 	]+[0-9a-f]+:[ 	]+7e302573[ 	]+csrr[ 	]+a0,mnmipc

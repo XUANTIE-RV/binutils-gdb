@@ -5,7 +5,6 @@
 
 .*:     file format .*
 
-
 Disassembly of section .text:
 
 [0-9a-f]+ <fn1>:

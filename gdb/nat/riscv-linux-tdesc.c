@@ -30,6 +30,7 @@
 # define NFPREG 33
 #endif
 
+
 /* See nat/riscv-linux-tdesc.h.  */
 
 struct riscv_gdbarch_features
@@ -77,6 +78,7 @@ riscv_linux_read_features (int tid)
 	features.flen = flen;
       break;
     }
+
 
   return features;
 }

@@ -31,6 +31,11 @@
 
 #include <stdint.h>
 #include <ctype.h>
+#if !defined(HAVE_DLFCN_H) && defined(HAVE_WINDOWS_H)
+#include <windows.h>
+#else
+#include <dlfcn.h>
+#endif
 
 /* Current XLEN for the disassembler.  */
 static unsigned xlen = 0;
@@ -56,7 +61,7 @@ struct riscv_private_data
 {
   bfd_vma gp;
   bfd_vma print_addr;
-  bfd_vma hi_addr[OP_MASK_RD + 1];
+  bfd_vma hi_addr[2*(OP_MASK_RD + 1)];
   bool to_print_addr;
   bool has_gp;
 };
@@ -68,6 +73,15 @@ static bfd_vma last_map_symbol_boundary = 0;
 static enum riscv_seg_mstate last_map_state = MAP_NONE;
 static asection *last_map_section = NULL;
 
+/* Cached subset query results to avoid repeated linked-list lookups.
+   These are invalidated when the subset list is re-parsed.  */
+static int cached_subset_zfinx = -1;    /* -1 = not cached */
+static int cached_subset_xtheadvector = -1;
+
+/* Track the last arch string used to parse the subset list, so we can
+   skip re-parsing when consecutive mapping symbols use the same ISA.  */
+static const char *last_parsed_arch = NULL;
+
 /* Register names as used by the disassembler.  */
 static const char (*riscv_gpr_names)[NRC];
 static const char (*riscv_fpr_names)[NRC];
@@ -75,12 +89,66 @@ static const char (*riscv_fpr_names)[NRC];
 /* If set, disassemble as most general instruction.  */
 static bool no_aliases = false;
 
-/* Default architecture string for the object file, used for mapping symbol $x.  */
-static const char *default_arch;
+/* Default architecture string for the object file.  It will be changed once
+   elf architecture attribute exits.  This is used for mapping symbol $x.  */
+static const char* default_arch;
 
-/* If set, disassemble without checking architectire string, just like what
-   we did at the beginning.  */
+/* If set, don't check ISA ext.  */
 static bool all_ext = false;
+
+/* handle for dsa library.  */
+static void *dsa_handle = NULL;
+
+/* print insn with DSA.  */
+static uint32_t (*XCEDisassemblerInsn) (uint32_t, void *, uint32_t, uint32_t, uint32_t);
+
+#if !defined(HAVE_DLFCN_H) && defined(HAVE_WINDOWS_H)
+
+#define RTLD_NOW 0 /* Dummy value.  */
+#define RTLD_LAZY 1 /* Dummy value.  */
+
+static void *
+dlopen (const char *file, int mode ATTRIBUTE_UNUSED)
+{
+  return LoadLibrary (file);
+}
+
+static void *
+dlsym (void *handle, const char *name)
+{
+  return GetProcAddress (handle, name);
+}
+
+static int
+dlclose (void *handle)
+{
+  FreeLibrary (handle);
+  return 0;
+}
+
+static char last_error_string[128];
+static const char *
+dlerror(void)
+{
+  DWORD err_code = GetLastError();
+  DWORD length = FormatMessage(
+      FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
+      NULL,
+      err_code,
+      MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
+      last_error_string,
+      sizeof(last_error_string),
+      NULL
+      );
+
+  if (length == 0)
+  {
+    snprintf(last_error_string, sizeof(last_error_string), "Error code: %lu", err_code);
+  }
+  return last_error_string;
+}
+
+#endif /* !defined (HAVE_DLFCN_H) && defined (HAVE_WINDOWS_H)  */
 
 /* Set default RISC-V disassembler options.  */
 
@@ -105,7 +173,9 @@ parse_riscv_dis_option_without_args (const char *option)
       riscv_fpr_names = riscv_fpr_names_numeric;
     }
   else if (strcmp (option, "max") == 0)
-    all_ext = true;
+    {
+      all_ext = true;
+    }
   else
     return false;
   return true;
@@ -157,6 +227,19 @@ parse_riscv_dis_option (const char *option)
 	  opcodes_error_handler (_("mis-matched privilege spec set by %s=%s, "
 				   "the elf privilege attribute is %s"),
 				 option, value, name);
+	}
+    }
+  else if (strcmp (option, "dsa") == 0)
+    {
+      dsa_handle = dlopen (value, RTLD_LAZY);
+      if (!dsa_handle)
+	opcodes_error_handler (_ ("unable to load DSA library: %s, %s"), value, dlerror());
+      else
+	{
+	  XCEDisassemblerInsn = dlsym (dsa_handle, "XCEDisassemblerInsn");
+	  if (!XCEDisassemblerInsn)
+	    opcodes_error_handler (
+		_ ("unable to get XCEDisassemblerInsn in %s"), value);
 	}
     }
   else
@@ -223,6 +306,8 @@ maybe_print_address (struct riscv_private_data *pd, int base_reg, int offset,
     pd->print_addr = (bfd_vma)(uint32_t)pd->print_addr;
 }
 
+#include "riscv-dis-xt.inc"
+
 /* Get Zcmp reg_list field.  */
 
 static void
@@ -275,8 +360,6 @@ riscv_zcmp_get_sregno (unsigned sreg_idx)
   return sreg_idx > 1 ?
       sreg_idx + 16 : sreg_idx + 8;
 }
-
-#include "riscv-dis-xt.inc"
 
 /* Print insn arguments for 32/64-bit code.  */
 
@@ -434,7 +517,8 @@ print_insn_args (const char *oparg, insn_t l, bfd_vma pc, disassemble_info *info
 		unsigned int imm_vsew = EXTRACT_OPERAND (VSEW, imm);
 		unsigned int imm_vta = EXTRACT_OPERAND (VTA, imm);
 		unsigned int imm_vma = EXTRACT_OPERAND (VMA, imm);
-		unsigned int imm_vtype_res = (imm >> 8);
+		unsigned int imm_altfmt = EXTRACT_OPERAND (ALTFMT, imm);
+		unsigned int imm_vtype_res = (imm >> 9);
 
 		if (imm_vsew < ARRAY_SIZE (riscv_vsew)
 		    && imm_vlmul < ARRAY_SIZE (riscv_vlmul)
@@ -444,7 +528,7 @@ print_insn_args (const char *oparg, insn_t l, bfd_vma pc, disassemble_info *info
 		    && riscv_vsew[imm_vsew] != NULL
 		    && riscv_vlmul[imm_vlmul] != NULL)
 		  print (info->stream, dis_style_text, "%s,%s,%s,%s",
-			 riscv_vsew[imm_vsew],
+			 imm_altfmt ? riscv_vsew_altfmt[imm_vsew] : riscv_vsew[imm_vsew],
 			 riscv_vlmul[imm_vlmul], riscv_vta[imm_vta],
 			 riscv_vma[imm_vma]);
 		else
@@ -634,7 +718,10 @@ print_insn_args (const char *oparg, insn_t l, bfd_vma pc, disassemble_info *info
 
 	    if (riscv_csr_hash[csr] != NULL)
 	      {
-		if (riscv_subset_supports (&riscv_rps_dis, "xtheadvector")
+		if (cached_subset_xtheadvector < 0)
+		  cached_subset_xtheadvector
+		    = riscv_subset_supports (&riscv_rps_dis, "xtheadvector");
+		if (cached_subset_xtheadvector
 		    && (csr == CSR_VSTART || csr == CSR_VXSAT
 			|| csr == CSR_VXRM || csr == CSR_VL || csr == CSR_VTYPE
 			|| csr == CSR_VLENB))
@@ -763,52 +850,7 @@ print_insn_args (const char *oparg, insn_t l, bfd_vma pc, disassemble_info *info
 		    else
 		      print (info->stream, dis_style_immediate, "%d", imm);
 		    break;
-		  case 'M': /* Matrix.  */
-		    switch (*++oparg)
-		      {
-		      case 'd':
-			print (info->stream, dis_style_register, "%s",
-			       riscv_xuantie_mr_names_numeric[EXTRACT_OPERAND (
-				   MD, l)]);
-			break;
-		      case 's':
-			print (info->stream, dis_style_register, "%s",
-			       riscv_xuantie_mr_names_numeric[EXTRACT_OPERAND (
-				   MS1, l)]);
-			break;
-		      case 't':
-			print (info->stream, dis_style_register, "%s",
-			       riscv_xuantie_mr_names_numeric[EXTRACT_OPERAND (
-				   MS2, l)]);
-			break;
-		      case 'u':
-			print (info->stream, dis_style_register, "%s",
-			       riscv_xuantie_mr_names_numeric[EXTRACT_OPERAND (
-				   MS3, l)]);
-			break;
-		      }
-		    break;
-		  case 'P':
-		    switch (*++oparg)
-		      {
-		      case 'd':
-			print (info->stream, dis_style_immediate, "%s",
-			       riscv_gpr_names[EXTRACT_OPERAND (PD, l)]);
-			break;
-		      case 's':
-			print (info->stream, dis_style_immediate, "%s",
-			       riscv_gpr_names[EXTRACT_OPERAND (PS1, l)]);
-			break;
-		      case 't':
-			print (info->stream, dis_style_immediate, "%s",
-			       riscv_gpr_names[EXTRACT_OPERAND (PS2, l)]);
-			break;
-		      case 'r':
-			print (info->stream, dis_style_immediate, "%s",
-			       riscv_gpr_names[EXTRACT_OPERAND (PS3, l)]);
-			break;
-		      }
-		    break;
+
 		    case 'i': /* immediate split into 2 parts.  */
 		      {
 			/* XA*nbit*hK@AlJ@B
@@ -889,7 +931,10 @@ print_insn_args (const char *oparg, insn_t l, bfd_vma pc, disassemble_info *info
 		      print (info->stream, dis_style_immediate, "%li",
 			     (signed long)EXTRACT_S_IMM (n, s, l));
 		    break;
+
 		  default:
+		    if (riscv_xuantie_print_args (&oparg, l, pc, info))
+		      break;
 		    goto undefined_modifier;
 		  }
 	      }
@@ -1012,8 +1057,11 @@ riscv_disassemble_insn (bfd_vma memaddr,
 	  xlen = ehdr->e_ident[EI_CLASS] == ELFCLASS64 ? 64 : 32;
 	}
 
-      /* If arch has the Zfinx extension, replace FPR with GPR.  */
-      if (riscv_subset_supports (&riscv_rps_dis, "zfinx"))
+      /* If arch has the Zfinx extension, replace FPR with GPR.
+	 Use cached result to avoid repeated linked-list lookups.  */
+      if (cached_subset_zfinx < 0)
+	cached_subset_zfinx = riscv_subset_supports (&riscv_rps_dis, "zfinx");
+      if (cached_subset_zfinx)
 	riscv_fpr_names = riscv_gpr_names;
       else
 	riscv_fpr_names = riscv_gpr_names == riscv_gpr_names_abi ?
@@ -1025,7 +1073,7 @@ riscv_disassemble_insn (bfd_vma memaddr,
 	  if (op->pinfo == INSN_MACRO)
 	    continue;
 	  /* Does the opcode match?  */
-	  if (! (op->match_func) (op, word, xlen))
+	  if (! (op->match_func) (op, word, xlen, 1, NULL))
 	    continue;
 	  /* Is this a pseudo-instruction and may we print it as such?  */
 	  if (no_aliases && (op->pinfo & INSN_ALIAS))
@@ -1034,14 +1082,15 @@ riscv_disassemble_insn (bfd_vma memaddr,
 	  if ((op->xlen_requirement != 0) && (op->xlen_requirement != xlen))
 	    continue;
 	  /* Is this instruction supported by the current architecture?  */
-	  if (!all_ext
-	      && !riscv_multi_subset_supports (&riscv_rps_dis, op->insn_class))
+	  if (!all_ext && !riscv_multi_subset_supports (&riscv_rps_dis,
+		op->insn_class))
 	    continue;
 
 	  /* Is thead* and startwith "th."?
 	     Do not dump theadvector with no "th."  */
-	  if (op->insn_class > INSN_CLASS_XCVALU
-	      && op->insn_class < INSN_CLASS_XTHEADMATRIX
+	  if ((op->insn_class == INSN_CLASS_XTHEADVECTOR
+	       || (op->insn_class > INSN_CLASS_XTHEAD_START
+		   && op->insn_class <= INSN_CLASS_XTHEAD_END))
 	      && (strncmp (op->name, "th.", 3) != 0))
 	    continue;
 
@@ -1090,6 +1139,21 @@ riscv_disassemble_insn (bfd_vma memaddr,
 	}
     }
 
+  if (XCEDisassemblerInsn)
+    {
+      // static uint32_t (*XCEDisassemblerInsn)(uint32_t xlen, void *, uint32_t, uint32_t,
+      // uint32_t);
+      char buff[128] = { 0 };
+      uint32_t size;
+      size = XCEDisassemblerInsn (xlen, buff, sizeof (buff), word, 0);
+      if (size > 0)
+	{
+	  (*info->fprintf_styled_func) (info->stream, dis_style_immediate,
+					"%s", buff);
+	  return insnlen;
+	}
+    }
+
   /* We did not find a match, so just print the instruction bits in
      the shape of an assembler .insn directive.  */
   info->insn_type = dis_noninsn;
@@ -1131,33 +1195,63 @@ riscv_update_map_state (int n,
     return;
 
   name = bfd_asymbol_name(info->symtab[n]);
-  if (strcmp (name, "$d") == 0)
+  if (name[0] != '$')
+    return;
+  if (name[1] == 'd')
     *state = MAP_DATA;
-  else if (strcmp (name, "$x") == 0)
+  else if (name[1] == 'x' && (name[2] == '\0' || name[2] == '.'))
     {
+      /* $x or $x.N - use default arch.  Only re-parse if the arch
+	 string actually changed to avoid expensive subset list rebuild.
+	 default_arch may be NULL when the ELF has no arch attribute
+	 (e.g. assembled with -mno-arch-attr), so guard the comparisons
+	 and strdup accordingly.  */
       *state = MAP_INSN;
-      riscv_release_subset_list (&riscv_subsets);
-      riscv_parse_subset (&riscv_rps_dis, default_arch);
+      if (last_parsed_arch != default_arch
+	  && (last_parsed_arch == NULL
+	      || default_arch == NULL
+	      || strcmp (last_parsed_arch, default_arch) != 0))
+	{
+	  riscv_release_subset_list (&riscv_subsets);
+	  riscv_parse_subset (&riscv_rps_dis, default_arch);
+	  cached_subset_zfinx = -1;
+	  cached_subset_xtheadvector = -1;
+	  free ((void *) last_parsed_arch);
+	  last_parsed_arch = default_arch ? strdup (default_arch) : NULL;
+	}
     }
-  else if (strncmp (name, "$xrv", 4) == 0)
+  else if (name[1] == 'x' && name[2] == 'r' && name[3] == 'v')
     {
       *state = MAP_INSN;
-      riscv_release_subset_list (&riscv_subsets);
 
       /* ISA mapping string may be numbered, suffixed with '.n'. Do not
 	 consider this as part of the ISA string.  */
+      const char *arch_str;
+      char *name_substr = NULL;
       char *suffix = strchr (name, '.');
       if (suffix)
 	{
 	  int suffix_index = (int)(suffix - name);
-	  char *name_substr = xmalloc (suffix_index + 1);
+	  name_substr = xmalloc (suffix_index + 1);
 	  strncpy (name_substr, name, suffix_index);
 	  name_substr[suffix_index] = '\0';
-	  riscv_parse_subset (&riscv_rps_dis, name_substr + 2);
-	  free (name_substr);
+	  arch_str = name_substr + 2;
 	}
       else
-	riscv_parse_subset (&riscv_rps_dis, name + 2);
+	arch_str = name + 2;
+
+      /* Only re-parse if the arch string actually changed.  */
+      if (last_parsed_arch == NULL
+	  || strcmp (last_parsed_arch, arch_str) != 0)
+	{
+	  riscv_release_subset_list (&riscv_subsets);
+	  riscv_parse_subset (&riscv_rps_dis, arch_str);
+	  cached_subset_zfinx = -1;
+	  cached_subset_xtheadvector = -1;
+	  free ((void *) last_parsed_arch);
+	  last_parsed_arch = strdup (arch_str);
+	}
+      free (name_substr);
     }
 }
 
@@ -1491,8 +1585,6 @@ print_insn_riscv (bfd_vma memaddr, struct disassemble_info *info)
 disassembler_ftype
 riscv_get_disassembler (bfd *abfd)
 {
-  default_arch = "rv64gc";
-
   if (abfd && bfd_get_flavour (abfd) == bfd_target_elf_flavour)
     {
       const char *sec_name = get_elf_backend_data (abfd)->obj_attrs_section;
@@ -1512,6 +1604,14 @@ riscv_get_disassembler (bfd *abfd)
 
   riscv_release_subset_list (&riscv_subsets);
   riscv_parse_subset (&riscv_rps_dis, default_arch);
+  cached_subset_zfinx = -1;
+  cached_subset_xtheadvector = -1;
+  free ((void *) last_parsed_arch);
+  /* default_arch may be NULL when the ELF has no Tag_RISCV_arch
+     attribute, in which case riscv_parse_subset falls back to the
+     built-in default; we mirror that by leaving last_parsed_arch
+     NULL so the next $x symbol re-syncs correctly.  */
+  last_parsed_arch = default_arch ? strdup (default_arch) : NULL;
   return print_insn_riscv;
 }
 
@@ -1541,6 +1641,7 @@ typedef enum
 {
   RISCV_OPTION_ARG_NONE = -1,
   RISCV_OPTION_ARG_PRIV_SPEC,
+  RISCV_OPTION_ARG_DSA_FILE,
 
   RISCV_OPTION_ARG_COUNT
 } riscv_option_arg_t;
@@ -1555,14 +1656,20 @@ static struct
 } riscv_options[] =
 {
   { "numeric",
-    N_("Print numeric register names, rather than ABI names."),
+    N_ ("Print numeric register names, rather than ABI names."),
     RISCV_OPTION_ARG_NONE },
   { "no-aliases",
-    N_("Disassemble only into canonical instructions."),
+    N_ ("Disassemble only into canonical instructions."),
+    RISCV_OPTION_ARG_NONE },
+  { "max",
+    N_ ("Disassemble without checking architecture string."),
     RISCV_OPTION_ARG_NONE },
   { "priv-spec=",
-    N_("Print the CSR according to the chosen privilege spec."),
-    RISCV_OPTION_ARG_PRIV_SPEC }
+    N_ ("Print the CSR according to the chosen privilege spec."),
+    RISCV_OPTION_ARG_PRIV_SPEC },
+  { "dsa=",
+    N_ ("Specify the DSA library path"),
+    RISCV_OPTION_ARG_DSA_FILE }
 };
 
 /* Build the structure representing valid RISCV disassembler options.
@@ -1593,6 +1700,10 @@ disassembler_options_riscv (void)
           = riscv_priv_specs[i].name;
       /* The array we return must be NULL terminated.  */
       args[RISCV_OPTION_ARG_PRIV_SPEC].values[i] = NULL;
+
+      /* dsa file path.  */
+      args[RISCV_OPTION_ARG_DSA_FILE].name = "FILE";
+      args[RISCV_OPTION_ARG_DSA_FILE].values = NULL;
 
       /* The array we return must be NULL terminated.  */
       args[num_args].name = NULL;
@@ -1688,4 +1799,10 @@ with the -M switch (multiple options should be separated by commas):\n"));
 void disassemble_free_riscv (struct disassemble_info *info ATTRIBUTE_UNUSED)
 {
   riscv_release_subset_list (&riscv_subsets);
+  if (dsa_handle)
+    {
+      dlclose (dsa_handle);
+      dsa_handle = NULL;
+      XCEDisassemblerInsn = NULL;
+    }
 }

@@ -7,7 +7,7 @@
 Disassembly of section .text:
 
 0+000 <.text>:
-[ 	]+[0-9a-f]+:[ 	]+c81de00b[ 	]+th.vfredsum.dup.32[ 	]+v0,v1
+[ 	]+[0-9a-f]+:[ 	]+d010600b[ 	]+th.vfredsum.dup.32[ 	]+v0,v1
 [ 	]+[0-9a-f]+:[ 	]+d010e00b[ 	]+th.vfredsum.dup.64[ 	]+v0,v1
 [ 	]+[0-9a-f]+:[ 	]+d011600b[ 	]+th.vfredmax.dup.32[ 	]+v0,v1
 [ 	]+[0-9a-f]+:[ 	]+d011e00b[ 	]+th.vfredmax.dup.64[ 	]+v0,v1
@@ -19,17 +19,17 @@ Disassembly of section .text:
 [ 	]+[0-9a-f]+:[ 	]+d019e00b[ 	]+th.vfredmax.c.64[ 	]+v0,v1
 [ 	]+[0-9a-f]+:[ 	]+d01a600b[ 	]+th.vfredmin.c.32[ 	]+v0,v1
 [ 	]+[0-9a-f]+:[ 	]+d01ae00b[ 	]+th.vfredmin.c.64[ 	]+v0,v1
-[ 	]+[0-9a-f]+:[ 	]+d410600b[ 	]+th.vbfredsum.dup.32[ 	]+v0,v1
-[ 	]+[0-9a-f]+:[ 	]+d410e00b[ 	]+th.vbfredsum.dup.64[ 	]+v0,v1
-[ 	]+[0-9a-f]+:[ 	]+d411600b[ 	]+th.vbfredmax.dup.32[ 	]+v0,v1
-[ 	]+[0-9a-f]+:[ 	]+d411e00b[ 	]+th.vbfredmax.dup.64[ 	]+v0,v1
-[ 	]+[0-9a-f]+:[ 	]+d412600b[ 	]+th.vbfredmin.dup.32[ 	]+v0,v1
-[ 	]+[0-9a-f]+:[ 	]+d412e00b[ 	]+th.vbfredmin.dup.64[ 	]+v0,v1
-[ 	]+[0-9a-f]+:[ 	]+d418600b[ 	]+th.vbfredsum.c.32[ 	]+v0,v1
-[ 	]+[0-9a-f]+:[ 	]+d418e00b[ 	]+th.vbfredsum.c.64[ 	]+v0,v1
-[ 	]+[0-9a-f]+:[ 	]+d419600b[ 	]+th.vbfredmax.c.32[ 	]+v0,v1
-[ 	]+[0-9a-f]+:[ 	]+d419e00b[ 	]+th.vbfredmax.c.64[ 	]+v0,v1
-[ 	]+[0-9a-f]+:[ 	]+d41a600b[ 	]+th.vbfredmin.c.32[ 	]+v0,v1
-[ 	]+[0-9a-f]+:[ 	]+d41ae00b[ 	]+th.vbfredmin.c.64[ 	]+v0,v1
-[ 	]+[0-9a-f]+:[ 	]+d014600b[ 	]+th.varydup.32[ 	]+v0,v1
-[ 	]+[0-9a-f]+:[ 	]+d014e00b[ 	]+th.varydup.64[ 	]+v0,v1
+[ 	]+[0-9a-f]+:[ 	]+d210600b[ 	]+th.vbfredsum.dup.32[ 	]+v0,v1
+[ 	]+[0-9a-f]+:[ 	]+d210e00b[ 	]+th.vbfredsum.dup.64[ 	]+v0,v1
+[ 	]+[0-9a-f]+:[ 	]+d211600b[ 	]+th.vbfredmax.dup.32[ 	]+v0,v1
+[ 	]+[0-9a-f]+:[ 	]+d211e00b[ 	]+th.vbfredmax.dup.64[ 	]+v0,v1
+[ 	]+[0-9a-f]+:[ 	]+d212600b[ 	]+th.vbfredmin.dup.32[ 	]+v0,v1
+[ 	]+[0-9a-f]+:[ 	]+d212e00b[ 	]+th.vbfredmin.dup.64[ 	]+v0,v1
+[ 	]+[0-9a-f]+:[ 	]+d218600b[ 	]+th.vbfredsum.c.32[ 	]+v0,v1
+[ 	]+[0-9a-f]+:[ 	]+d218e00b[ 	]+th.vbfredsum.c.64[ 	]+v0,v1
+[ 	]+[0-9a-f]+:[ 	]+d219600b[ 	]+th.vbfredmax.c.32[ 	]+v0,v1
+[ 	]+[0-9a-f]+:[ 	]+d219e00b[ 	]+th.vbfredmax.c.64[ 	]+v0,v1
+[ 	]+[0-9a-f]+:[ 	]+d21a600b[ 	]+th.vbfredmin.c.32[ 	]+v0,v1
+[ 	]+[0-9a-f]+:[ 	]+d21ae00b[ 	]+th.vbfredmin.c.64[ 	]+v0,v1
+[ 	]+[0-9a-f]+:[ 	]+d014600b[ 	]+th.vary.dup.32[ 	]+v0,v1
+[ 	]+[0-9a-f]+:[ 	]+d014e00b[ 	]+th.vary.dup.64[ 	]+v0,v1

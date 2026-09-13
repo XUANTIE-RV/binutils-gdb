@@ -341,7 +341,7 @@ How to create the release.
         make install-gas install-gold install-ld install-binutils install-gprofng
 
         # Needed for step 29...
-	make html pdf html-libctf pdf-libctf html-libsframe pdf-libsframe#
+	make html pdf html-libctf pdf-libctf html-libsframe pdf-libsframe
 
         popd
 

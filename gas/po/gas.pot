@@ -10646,12 +10646,12 @@ msgstr ""
 msgid "signed37 PCREL value out of range"
 msgstr ""
 
-#: config/tc-loongarch.c:417
+#: config/tc-loongarch.c:404
 #, c-format
 msgid "insn name: %s\tformat: %s\tsyntax error"
 msgstr ""
 
-#: config/tc-loongarch.c:420
+#: config/tc-loongarch.c:407
 #, c-format
 msgid ""
 "insn name: %s\n"
@@ -10659,7 +10659,7 @@ msgid ""
 "we want macro but macro is NULL"
 msgstr ""
 
-#: config/tc-loongarch.c:425
+#: config/tc-loongarch.c:412
 #, c-format
 msgid ""
 "insn name: %s\n"
@@ -10667,7 +10667,7 @@ msgid ""
 "macro: %s\tsyntax error"
 msgstr ""
 
-#: config/tc-loongarch.c:456
+#: config/tc-loongarch.c:455
 #, c-format
 msgid "Unsupported use of %s"
 msgstr ""

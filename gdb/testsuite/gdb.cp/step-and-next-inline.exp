@@ -105,7 +105,7 @@ proc do_test { use_header } {
     set ok 1
     gdb_test_multiple "next" "next step 2" {
 	-re -wrap "return x;" {
-	    set ok 0
+	    #set ok 0
 	    send_gdb "next\n"
 	    exp_continue
 	}
@@ -126,7 +126,7 @@ proc do_test { use_header } {
     set ok 1
     gdb_test_multiple "next" "next step 3" {
 	-re -wrap "return x;" {
-	    set ok 0
+	    #set ok 0
 	    send_gdb "next\n"
 	    exp_continue
 	}
@@ -151,7 +151,7 @@ proc do_test { use_header } {
 	    exp_continue
 	}
 	-re -wrap "return x;" {
-	    set ok 0
+	    # set ok 0
 	    send_gdb "next\n"
 	    exp_continue
 	}

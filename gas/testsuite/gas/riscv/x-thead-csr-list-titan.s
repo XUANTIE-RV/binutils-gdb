@@ -1,0 +1,9 @@
+csrr a0, utnmode
+csrr a0, mtnaddr2
+csrr a0, mtncr
+csrr a0, mtnsr
+csrr a0, mtner
+csrr a0, mtnaddr
+csrr a0, mtndebugpc
+csrr a0, mtnlowpower
+csrr a0, mtnfastmba

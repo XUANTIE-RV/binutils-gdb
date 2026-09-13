@@ -16,4 +16,8 @@ csrr a0, t_usp
 csrr a0, t_mdcr
 csrr a0, t_mpcr
 csrr a0, pmpteecfg
+csrr a0, mraddr
+csrr a0, mexstatus
+csrr a0, mnmicause
+csrr a0, mnmipc
 

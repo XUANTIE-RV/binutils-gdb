@@ -1106,11 +1106,11 @@ msgstr ""
 msgid "Don't understand 0x%x \n"
 msgstr ""
 
-#: i386-dis.c:8436
+#: i386-dis.c:8432
 msgid "<internal disassembler error>"
 msgstr ""
 
-#: i386-dis.c:8684
+#: i386-dis.c:8680
 #, c-format
 msgid ""
 "\n"
@@ -1119,86 +1119,86 @@ msgid ""
 "with the -M switch (multiple options should be separated by commas):\n"
 msgstr ""
 
-#: i386-dis.c:8688
+#: i386-dis.c:8684
 #, c-format
 msgid "  x86-64      Disassemble in 64bit mode\n"
 msgstr ""
 
-#: i386-dis.c:8689
+#: i386-dis.c:8685
 #, c-format
 msgid "  i386        Disassemble in 32bit mode\n"
 msgstr ""
 
-#: i386-dis.c:8690
+#: i386-dis.c:8686
 #, c-format
 msgid "  i8086       Disassemble in 16bit mode\n"
 msgstr ""
 
-#: i386-dis.c:8691
+#: i386-dis.c:8687
 #, c-format
 msgid "  att         Display instruction in AT&T syntax\n"
 msgstr ""
 
-#: i386-dis.c:8692
+#: i386-dis.c:8688
 #, c-format
 msgid "  intel       Display instruction in Intel syntax\n"
 msgstr ""
 
-#: i386-dis.c:8693
+#: i386-dis.c:8689
 #, c-format
 msgid ""
 "  att-mnemonic  (AT&T syntax only)\n"
 "              Display instruction with AT&T mnemonic\n"
 msgstr ""
 
-#: i386-dis.c:8695
+#: i386-dis.c:8691
 #, c-format
 msgid ""
 "  intel-mnemonic  (AT&T syntax only)\n"
 "              Display instruction with Intel mnemonic\n"
 msgstr ""
 
-#: i386-dis.c:8697
+#: i386-dis.c:8693
 #, c-format
 msgid "  addr64      Assume 64bit address size\n"
 msgstr ""
 
-#: i386-dis.c:8698
+#: i386-dis.c:8694
 #, c-format
 msgid "  addr32      Assume 32bit address size\n"
 msgstr ""
 
-#: i386-dis.c:8699
+#: i386-dis.c:8695
 #, c-format
 msgid "  addr16      Assume 16bit address size\n"
 msgstr ""
 
-#: i386-dis.c:8700
+#: i386-dis.c:8696
 #, c-format
 msgid "  data32      Assume 32bit data size\n"
 msgstr ""
 
-#: i386-dis.c:8701
+#: i386-dis.c:8697
 #, c-format
 msgid "  data16      Assume 16bit data size\n"
 msgstr ""
 
-#: i386-dis.c:8702
+#: i386-dis.c:8698
 #, c-format
 msgid "  suffix      Always display instruction suffix in AT&T syntax\n"
 msgstr ""
 
-#: i386-dis.c:8703
+#: i386-dis.c:8699
 #, c-format
 msgid "  amd64       Display instruction in AMD64 ISA\n"
 msgstr ""
 
-#: i386-dis.c:8704
+#: i386-dis.c:8700
 #, c-format
 msgid "  intel64     Display instruction in Intel64 ISA\n"
 msgstr ""
 
-#: i386-dis.c:9459
+#: i386-dis.c:9447
 msgid "64-bit address is disabled"
 msgstr ""
 

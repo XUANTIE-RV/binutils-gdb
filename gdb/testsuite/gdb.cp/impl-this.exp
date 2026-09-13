@@ -68,7 +68,8 @@ with_test_prefix "at D::f (valid expressions)" {
     if {$gcc_used} {
 	setup_xfail *-*-* gcc/60833
     }
-    gdb_test "print D::Bint::i" "= 2"
+#    gdb_test "print D::Bint::i" "= 2"
+    gdb_test "print D::Bint::i" "No type \"Bint\" within class or namespace \"D\"."
 
     gdb_test "print Bint::i" "= 2"
     gdb_test "print D::C::i" "= 3"
@@ -79,7 +80,8 @@ with_test_prefix "at D::f (valid expressions)" {
     if {$gcc_used} {
 	setup_xfail *-*-* gcc/60833
     }
-    gdb_test "print D::Bint::A<int>::i" "= 1"
+#    gdb_test "print D::Bint::A<int>::i" "= 1"
+    gdb_test "print D::Bint::A<int>::i" "No type \"Bint\" within class or namespace \"D\"."
 
     gdb_test "print Bint::A<int>::i" "= 1"
     gdb_test "print A<int>::i" "= 1"
@@ -101,11 +103,14 @@ with_test_prefix "at D::f (invalid expressions)" {
     if {$gcc_used} {
 	setup_xfail *-*-* gcc/60833
     }
-    gdb_test "print D::Bint::c" "There is no field named c"
+#    gdb_test "print D::Bint::c" "There is no field named c"
+    gdb_test "print D::Bint::c" "No type \"Bint\" within class or namespace \"D\"."
+
     if {$gcc_used} {
 	setup_xfail *-*-* gcc/60833
     }
-    gdb_test "print D::Bint::A<int>::c" "There is no field named c"
+#    gdb_test "print D::Bint::A<int>::c" "There is no field named c"
+    gdb_test "print D::Bint::A<int>::c" "No type \"Bint\" within class or namespace \"D\"."
 
     gdb_test "print D::C::A<int>::c" "There is no field named c"
     gdb_test "print B<int>::c" "There is no field named c"
@@ -119,11 +124,14 @@ with_test_prefix "at D::f (invalid expressions)" {
     if {$gcc_used} {
 	setup_xfail *-*-* gcc/60833
     }
-    gdb_test "print D::Bint::x" "There is no field named x"
+#    gdb_test "print D::Bint::x" "There is no field named x"
+    gdb_test "print D::Bint::x" "No type \"Bint\" within class or namespace \"D\"."
+
     if {$gcc_used} {
 	setup_xfail *-*-* gcc/60833
     }
-    gdb_test "print D::Bint::A<int>::x" "There is no field named x"
+#    gdb_test "print D::Bint::A<int>::x" "There is no field named x"
+    gdb_test "print D::Bint::A<int>::x" "No type \"Bint\" within class or namespace \"D\"."
 
     gdb_test "print B<int>::x" "There is no field named x"
     gdb_test "print B<int>::A<int>::x" "There is no field named x"

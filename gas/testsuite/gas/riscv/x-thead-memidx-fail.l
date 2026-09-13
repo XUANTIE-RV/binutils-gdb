@@ -4,8 +4,8 @@
 .*: Error: improper immediate value \(16\)
 .*: Error: improper immediate value \(4\)
 
-.*: Error: illegal operands `th.ldia a0,\(a0\),0,0'
-.*: Error: illegal operands `th.ldib a0,\(a0\),0,0'
+.*: Error: illegal operands rd should not be equal to rs1 `th.ldia a0,\(a0\),0,0'
+.*: Error: illegal operands rd should not be equal to rs1 `th.ldib a0,\(a0\),0,0'
 
 .*: Error: improper immediate value \(-?\d+\)
 .*: Error: improper immediate value \(4\)

@@ -677,7 +677,6 @@ loongarch_can_trans_tls (bfd *input_bfd,
 {
   char symbol_tls_type;
   unsigned int reloc_got_type;
-  unsigned int r_symndx = ELFNN_R_SYM (rel->r_info);
 
   /* Only TLS DESC/IE in normal code mode will perform type
      transition.  */

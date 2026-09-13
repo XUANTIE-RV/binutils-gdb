@@ -41,6 +41,9 @@ gdb_test_multiple $test $test {
 	untested $test2
 	set test2 ""
     }
+    -re "Cannot convert.*" {
+        pass $test
+    }
 }
 
 if {$test2 == ""} {

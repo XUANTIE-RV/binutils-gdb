@@ -218,7 +218,10 @@ sim_install_dv_sockser (SIM_DESC sd)
 static int
 connected_p (SIM_DESC sd)
 {
-  int numfds,flags;
+  int numfds;
+#if defined(F_GETFL) && defined(O_NONBLOCK)
+  int flags;
+#endif
   struct timeval tv;
   fd_set readfds;
   struct sockaddr sockaddr;

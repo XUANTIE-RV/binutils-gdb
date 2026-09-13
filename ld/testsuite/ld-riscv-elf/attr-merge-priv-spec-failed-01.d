@@ -1,7 +1,7 @@
 #source: attr-merge-priv-spec-a.s
 #source: attr-merge-priv-spec-c.s
 #as:
-#ld: -r
+#ld: -r -warn-priv-version
 #warning: .*use privileged spec version 1.11.0 but the output use version 1.10.0
 #readelf: -A
 

@@ -220,6 +220,14 @@ AC_SUBST(SHARED_LDFLAGS)
 AC_SUBST(SHARED_LIBADD)
 AC_SUBST(SHARED_DEPENDENCIES)
 
+AC_PLUGINS
+if test "$plugins" = "yes"; then
+  AC_DEFINE(ENABLE_PLUGINS, 1,
+            [Define to enable linker plugins])
+fi
+AM_CONDITIONAL(PLUGINS, test "$plugins" = "yes")
+
+
 # target-specific stuff:
 
 # Canonicalize the secondary target names.

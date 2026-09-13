@@ -1938,6 +1938,7 @@ perform_relocation (const reloc_howto_type *howto,
       break;
 
     case R_RISCV_DELETE:
+    case R_RISCV_VENDOR:
       return bfd_reloc_ok;
 
     default:
@@ -2237,7 +2238,7 @@ riscv_elf_relocate_section (bfd *output_bfd,
       bool resolved_to_zero;
 
       if (howto == NULL)
-	continue;
+	goto out;
 
       /* This is a final link.  */
       r_symndx = ELFNN_R_SYM (rel->r_info);
@@ -2551,6 +2552,7 @@ riscv_elf_relocate_section (bfd *output_bfd,
 	case R_RISCV_SET32:
 	case R_RISCV_32_PCREL:
 	case R_RISCV_DELETE:
+	case R_RISCV_VENDOR:
 	  /* These require no special handling beyond perform_relocation.  */
 	  break;
 

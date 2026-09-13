@@ -1,0 +1,13 @@
+target:
+	lb.aq	a0, (a1)
+	lb.aqrl	a0, (a1)
+	lh.aq	a0, (a1)
+	lh.aqrl	a0, (a1)
+	lw.aq	a0, (a1)
+	lw.aqrl	a0, (a1)
+	sb.rl	a2, (a1)
+	sb.aqrl	a2, (a1)
+	sh.rl	a2, (a1)
+	sh.aqrl	a2, (a1)
+	sw.rl	a2, (a1)
+	sw.aqrl	a2, (a1)

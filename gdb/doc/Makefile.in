@@ -88,7 +88,7 @@ SET_TEXINPUTS = \
    TEXINPUTS=${TEXIDIR}:.:$(srcdir):$(READLINE_DIR):$(GDBMI_DIR):$$TEXINPUTS
 
 # Files which should be generated via 'info' and installed by 'install-info'
-INFO_DEPS = gdb.info stabs.info annotate.info
+INFO_DEPS =
 
 # Files which should be generated via 'dvi' and installed by 'install-dvi'
 DVIFILES = gdb.dvi stabs.dvi refcard.dvi annotate.dvi

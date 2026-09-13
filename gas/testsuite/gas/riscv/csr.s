@@ -90,6 +90,9 @@
 	# Supervisor Protection and Translation
 	csr satp		# Added in 1.10
 
+	# Ssqosid
+	csr srmcfg		# Added in ssqosid, version unsatisfied
+
 	# Machine Information Registers
 	csr mvendorid
 	csr marchid
@@ -415,7 +418,6 @@
 	csr hviprio2h
 	csr vsieh
 	csr vsiph
-
 	# Ssccfg or Smcdeleg
 	csr scountinhibit
 

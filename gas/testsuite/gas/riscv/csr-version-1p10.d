@@ -159,6 +159,8 @@ Disassembly of section .text:
 [ 	]+[0-9a-f]+:[ 	]+14459073[ 	]+csrw[ 	]+sip,a1
 [ 	]+[0-9a-f]+:[ 	]+18002573[ 	]+csrr[ 	]+a0,satp
 [ 	]+[0-9a-f]+:[ 	]+18059073[ 	]+csrw[ 	]+satp,a1
+[ 	]+[0-9a-f]+:[ 	]+18102573[ 	]+csrr[ 	]+a0,srmcfg
+[ 	]+[0-9a-f]+:[ 	]+18159073[ 	]+csrw[ 	]+srmcfg,a1
 [ 	]+[0-9a-f]+:[ 	]+f1102573[ 	]+csrr[ 	]+a0,mvendorid
 [ 	]+[0-9a-f]+:[ 	]+f1159073[ 	]+csrw[ 	]+mvendorid,a1
 [ 	]+[0-9a-f]+:[ 	]+f1202573[ 	]+csrr[ 	]+a0,marchid

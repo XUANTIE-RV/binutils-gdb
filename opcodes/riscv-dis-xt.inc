@@ -28,9 +28,10 @@ static bool
 riscv_xuantie_print_csr( unsigned csr, disassemble_info *info)
 {
   fprintf_styled_ftype print = info->fprintf_styled_func;
+  const char *xuantie_series = riscv_xuantie_get_series_with_subset (
+      &riscv_rps_dis);
 
-  if (strcmp (riscv_xuantie_get_series_with_subset (
-      &riscv_rps_dis), "c907") == 0
+  if (strcmp (xuantie_series, "c907") == 0
       && (csr == CSR_MHINT2H || csr == CSR_MCCR2H))
     {
       if (csr == CSR_MHINT2H)
@@ -39,9 +40,10 @@ riscv_xuantie_print_csr( unsigned csr, disassemble_info *info)
         print (info->stream, dis_style_register, "%s", "mccr2h");
       return true;
     }
-  else if (strcmp (riscv_xuantie_get_series_with_subset (&riscv_rps_dis), "e900") == 0
+  else if (strcmp (xuantie_series, "e900") == 0
 	   && (csr == CSR_MRADDR || csr == CSR_MNMICAUSE
-	   || csr == CSR_MNMIPC || csr == CSR_MCLICBASE))
+	   || csr == CSR_MNMIPC || csr == CSR_MCLICBASE
+           || csr == CSR_MEXSTATUS))
     {
       if (csr == CSR_MRADDR)
 	print (info->stream, dis_style_register, "%s", "mraddr");
@@ -57,6 +59,77 @@ riscv_xuantie_print_csr( unsigned csr, disassemble_info *info)
     }
 
   return false;
+}
+
+static bool
+riscv_xuantie_print_args (const char **oparg, insn_t l, bfd_vma pc ATTRIBUTE_UNUSED,
+			  disassemble_info *info)
+{
+  fprintf_styled_ftype print = info->fprintf_styled_func;
+  const char *arg = *oparg;
+  bool ret = true;
+
+  switch (*arg)
+    {
+    case 'M': /* Matrix.  */
+      switch (*++arg)
+	{
+	case 'd':
+	  print (info->stream, dis_style_register, "%s",
+		 riscv_xuantie_mr_names_numeric[EXTRACT_OPERAND (MD, l)]);
+	  break;
+	case 's':
+	  print (info->stream, dis_style_register, "%s",
+		 riscv_xuantie_mr_names_numeric[EXTRACT_OPERAND (MS1, l)]);
+	  break;
+	case 't':
+	  print (info->stream, dis_style_register, "%s",
+		 riscv_xuantie_mr_names_numeric[EXTRACT_OPERAND (MS2, l)]);
+	  break;
+	case 'u':
+	  print (info->stream, dis_style_register, "%s",
+		 riscv_xuantie_mr_names_numeric[EXTRACT_OPERAND (MS3, l)]);
+	  break;
+	}
+      break;
+    case 'x':
+      switch (*++arg)
+	{
+	case 's':
+	  print (info->stream, dis_style_register, "%s",
+		 riscv_gpr_names[EXTRACT_OPERAND (TH_RS1L, l) + 8]);
+	  break;
+	}
+      break;
+
+    case 'P':
+      switch (*++arg)
+	{
+	case 'd':
+	  print (info->stream, dis_style_immediate, "%s",
+		 riscv_gpr_names[EXTRACT_OPERAND (PD, l)]);
+	  break;
+	case 's':
+	  print (info->stream, dis_style_immediate, "%s",
+		 riscv_gpr_names[EXTRACT_OPERAND (PS1, l)]);
+	  break;
+	case 't':
+	  print (info->stream, dis_style_immediate, "%s",
+		 riscv_gpr_names[EXTRACT_OPERAND (PS2, l)]);
+	  break;
+	case 'r':
+	  print (info->stream, dis_style_immediate, "%s",
+		 riscv_gpr_names[EXTRACT_OPERAND (PS3, l)]);
+	  break;
+	}
+      break;
+
+    default:
+      ret = false;
+      break;
+    }
+  *oparg = arg;
+  return ret;
 }
 
 #endif

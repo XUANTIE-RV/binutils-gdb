@@ -1,0 +1,17 @@
+csrr a0, mdbginfo2
+csrr a0, msdeip
+csrr a0, hxstatus
+csrr a0, cestatus
+csrr a0, ser
+csrr a0, suenq
+csrr a0, xscountinhibit
+csrr a0, xhcounteren
+csrr a0, msdcfg
+csrr a0, mrmcfg
+csrr a0, msdeie
+csrr a0, xmcounteren
+csrr a0, xmcountinhibit
+csrr a0, mxctx
+csrr a0, mxpc
+csrr a0, xscountovf
+csrr a0, mcdata2

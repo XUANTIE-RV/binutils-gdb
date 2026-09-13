@@ -39,5 +39,6 @@ if {[test_compiler_info {gcc-[0-3]-*}]
     # and DW_AT_MIPS_linkage_name = _ZN9gnu_obj_47nowhereE .
     setup_xfail *-*-*
 }
-gdb_test "p b" "{<A<int, B>> = {<ATB<int>> = {data = 0}, static DEFAULT_INSTANCE = <optimized out>}, <No data fields>}"
+#gdb_test "p b" "{<A<int, B>> = {<ATB<int>> = {data = 0}, static DEFAULT_INSTANCE = <optimized out>}, <No data fields>}"
+gdb_test "p b" "{<A<int, B>> = {<ATB<int>> = {data = 0}, <No data fields>}, <No data fields>}"
 

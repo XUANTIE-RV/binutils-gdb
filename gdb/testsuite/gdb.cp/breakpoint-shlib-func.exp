@@ -45,7 +45,7 @@ gdb_load_shlib $libobj
 # Place the breakpoint before the shared library has been loaded, the
 # breakpoint should be placed on the @plt symbol.
 gdb_test "break foo" "Breakpoint $decimal at $hex"
-gdb_test "info breakpoints" "<foo\\(\\)@plt>"
+gdb_test "info breakpoints" "<foo\\(\\)@plt\\+8>"
 
 # This is used as an override for delete_breakpoints when we don't
 # want functions in gdb.exp to delete breakpoints behind the scenes

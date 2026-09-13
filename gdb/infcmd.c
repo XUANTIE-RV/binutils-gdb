@@ -55,6 +55,7 @@
 #include "source.h"
 #include "cli/cli-style.h"
 
+
 /* Local functions: */
 
 static void until_next_command (int);

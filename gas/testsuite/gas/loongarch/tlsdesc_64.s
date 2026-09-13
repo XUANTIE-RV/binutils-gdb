@@ -8,5 +8,5 @@
 	# R_LARCH_TLS_DESC_CALL var
 	jirl    $ra,$ra,%desc_call(var)
 
-	# with R_LARCH_RELAX
+	# test macro, pcalau12i + addi.d => pcaddi
 	la.tls.desc	$a0,var

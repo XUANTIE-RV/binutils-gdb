@@ -1,7 +1,6 @@
 #name: Test of SME2.1 movaz instructions.
 #as: -march=armv9.4-a+sme2p1
 #objdump: -dr
-#xfail: *-*-*
 
 [^:]+:     file format .*
 

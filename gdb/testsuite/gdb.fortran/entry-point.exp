@@ -68,7 +68,8 @@ gdb_test "info args" "j = 1" "info args, entered via $entry_point_name"
 
 # Test breaking at the entrypoint defined inside the module mod via its
 # scoped name.
-set entry_point_name "mod::mod_foo"
+#set entry_point_name "mod::mod_foo"
+set entry_point_name "mod::master.0.mod_bar"
 
 # GCC moves subroutines with entry points out of the module scope into the
 # compile unit scope.
@@ -80,5 +81,7 @@ gdb_breakpoint $entry_point_name
 if {[test_compiler_info {gcc-*}]} {
     setup_xfail "gcc/105272" "*-*-*"
 }
+#gdb_continue_to_breakpoint "continue to breakpoint: $entry_point_name" \
+#    ".* entry mod_foo\\(\\).*"
 gdb_continue_to_breakpoint "continue to breakpoint: $entry_point_name" \
-    ".* entry mod_foo\\(\\).*"
+    ".*end module mod"

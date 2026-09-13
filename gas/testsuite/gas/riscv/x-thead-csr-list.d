@@ -45,7 +45,7 @@ Disassembly of section .text:
 [ 	]+[0-9a-f]+:[ 	]+fc002573[ 	]+csrr[ 	]+a0,mcpuid
 [ 	]+[0-9a-f]+:[ 	]+fc102573[ 	]+csrr[ 	]+a0,mapbaddr
 [ 	]+[0-9a-f]+:[ 	]+fc202573[ 	]+csrr[ 	]+a0,mwmsr
-[ 	]+[0-9a-f]+:[ 	]+80002573[ 	]+csrr[ 	]+a0,fxcr
+[ 	]+[0-9a-f]+:[ 	]+8da02573[ 	]+csrr[ 	]+a0,utnmode
 [ 	]+[0-9a-f]+:[ 	]+9c002573[ 	]+csrr[ 	]+a0,smir
 [ 	]+[0-9a-f]+:[ 	]+9c102573[ 	]+csrr[ 	]+a0,smel
 [ 	]+[0-9a-f]+:[ 	]+9c202573[ 	]+csrr[ 	]+a0,smeh

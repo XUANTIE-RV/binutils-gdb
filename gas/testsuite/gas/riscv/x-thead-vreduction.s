@@ -22,5 +22,5 @@ th.vbfredmax.c.32 v0,v1
 th.vbfredmax.c.64 v0,v1
 th.vbfredmin.c.32 v0,v1
 th.vbfredmin.c.64 v0,v1
-th.varydup.32 v0,v1
-th.varydup.64 v0,v1
+th.vary.dup.32 v0,v1
+th.vary.dup.64 v0,v1

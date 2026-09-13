@@ -32,6 +32,7 @@ EOF
 
 # Define some shell vars to insert bits of code into the standard elf
 # parse_args and list_options functions.  */
+
 PARSE_AND_LIST_LONGOPTS=${PARSE_AND_LIST_LONGOPTS}'
     { "relax-gp", no_argument, NULL, OPTION_RELAX_GP },
     { "no-relax-gp", no_argument, NULL, OPTION_NO_RELAX_GP },

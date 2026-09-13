@@ -259,6 +259,10 @@
 .*Info: macro .*
 .*Warning: invalid CSR `senvcfg' for the privileged spec `1.11'
 .*Info: macro .*
+.*Warning: invalid CSR `srmcfg', needs `ssqosid' extension
+.*Info: macro .*
+.*Warning: invalid CSR `srmcfg', needs `ssqosid' extension
+.*Info: macro .*
 .*Warning: read-only CSR is written `csrw mvendorid,a1'
 .*Info: macro .*
 .*Warning: read-only CSR is written `csrw marchid,a1'

@@ -1,4 +1,4 @@
-#as: -mno-relax -march=rv64gc
+#as: -mno-relax
 #objdump: -r
 
 .*:[ 	]+file format .*

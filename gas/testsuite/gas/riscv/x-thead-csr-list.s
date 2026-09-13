@@ -36,7 +36,7 @@ csrr a0, meicr2
 csrr a0, mcpuid
 csrr a0, mapbaddr
 csrr a0, mwmsr
-csrr a0, fxcr
+csrr a0, utnmode
 csrr a0, smir
 csrr a0, smel
 csrr a0, smeh

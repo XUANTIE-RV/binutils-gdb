@@ -255,6 +255,10 @@
 .*Info: macro .*
 .*Warning: read-only CSR is written `csrw hpmcounter31h,a1'
 .*Info: macro .*
+.*Warning: invalid CSR `srmcfg', needs `ssqosid' extension
+.*Info: macro .*
+.*Warning: invalid CSR `srmcfg', needs `ssqosid' extension
+.*Info: macro .*
 .*Warning: read-only CSR is written `csrw mvendorid,a1'
 .*Info: macro .*
 .*Warning: read-only CSR is written `csrw marchid,a1'

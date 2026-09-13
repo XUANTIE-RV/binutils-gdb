@@ -23,6 +23,7 @@
 #include "sysdep.h"
 #include "opcode/riscv.h"
 #include <stdio.h>
+#include "riscv-opc-xt.def"
 
 /* Register names used by gas and objdump.  */
 
@@ -31,7 +32,7 @@ const char riscv_gpr_names_numeric[NGPR][NRC] =
   "x0",   "x1",   "x2",   "x3",   "x4",   "x5",   "x6",   "x7",
   "x8",   "x9",   "x10",  "x11",  "x12",  "x13",  "x14",  "x15",
   "x16",  "x17",  "x18",  "x19",  "x20",  "x21",  "x22",  "x23",
-  "x24",  "x25",  "x26",  "x27",  "x28",  "x29",  "x30",  "x31"
+  "x24",  "x25",  "x26",  "x27",  "x28",  "x29",  "x30",  "x31",
 };
 
 const char riscv_gpr_names_abi[NGPR][NRC] =
@@ -39,7 +40,7 @@ const char riscv_gpr_names_abi[NGPR][NRC] =
   "zero", "ra",   "sp",   "gp",   "tp",   "t0",   "t1",   "t2",
   "s0",   "s1",   "a0",   "a1",   "a2",   "a3",   "a4",   "a5",
   "a6",   "a7",   "s2",   "s3",   "s4",   "s5",   "s6",   "s7",
-  "s8",   "s9",   "s10",  "s11",  "t3",   "t4",   "t5",   "t6"
+  "s8",   "s9",   "s10",  "s11",  "t3",   "t4",   "t5",   "t6",
 };
 
 const char riscv_fpr_names_numeric[NFPR][NRC] =
@@ -92,6 +93,12 @@ const char * const riscv_vsew[8] =
   "e8", "e16", "e32", "e64", NULL, NULL, NULL, NULL
 };
 
+/* The vsetvli vsew constants with altfmt.  */
+const char * const riscv_vsew_altfmt[8] =
+{
+  "e8alt", NULL, NULL, NULL, NULL, NULL, NULL, NULL
+};
+
 /* The vsetvli vlmul constants.  */
 const char * const riscv_vlmul[8] =
 {
@@ -122,6 +129,12 @@ const char * const riscv_th_vediv[4] =
     "d1", "d2", "d4", "d8"
 };
 
+/* Xuantie matrix register.  */
+const char riscv_xuantie_matirx_register_numeric[NMR][NRC] =
+{
+    "m0", "m1", "m2",  "m3",  "m4",  "m5",  "m6",  "m7"
+};
+
 /* The FLI.[HSDQ] symbolic constants (NULL for numeric constant).  */
 const char * const riscv_fli_symval[32] =
 {
@@ -143,6 +156,12 @@ const float riscv_fli_numval[32] =
   0x1p+3, 0x1p+4, 0x1p+7, 0x1p+8, 0x1p+15, 0x1p+16, 0x0p+0, 0x0p+0
 };
 
+/* Xuantie matrix register.  */
+const char riscv_xuantie_mr_names_numeric[NMR][5] =
+{
+    "m0", "m1", "m2",  "m3",  "m4",  "m5",  "m6",  "m7",
+};
+
 /* Get sp base adjustment.  */
 
 unsigned int
@@ -156,13 +175,6 @@ riscv_get_sp_base (insn_t opcode, unsigned int xlen)
 	   + (min_sp_adj % ZCMP_SP_ALIGNMENT != 0))
 	  * ZCMP_SP_ALIGNMENT);
 }
-
-/* Xuantie matrix register.  */
-const char riscv_xuantie_mr_names_numeric[NMR][5] =
-{
-    "m0", "m1", "m2",  "m3",  "m4",  "m5",  "m6",  "m7",
-    "m8", "m9", "m10", "m11", "m12", "m13", "m14", "m15",
-};
 
 #define MASK_RS1 (OP_MASK_RS1 << OP_SH_RS1)
 #define MASK_RS2 (OP_MASK_RS2 << OP_SH_RS2)
@@ -188,127 +200,134 @@ const char riscv_xuantie_mr_names_numeric[NMR][5] =
 #define MASK_VS1 (OP_MASK_VS1 << OP_SH_VS1)
 #define MASK_VS2 (OP_MASK_VS2 << OP_SH_VS2)
 #define MASK_VMASK (OP_MASK_VMASK << OP_SH_VMASK)
+#define MASK_NF (OP_MASK_NF << OP_SH_NF)
 /* Vendor-specific (CORE-V) masks.  */
 #define MASK_CV_IS3_UIMM5 ENCODE_CV_IS3_UIMM5 (-1U)
 
 static int
-match_opcode (const struct riscv_opcode *op, insn_t insn, unsigned xlen)
+match_opcode (const struct riscv_opcode *op, insn_t insn, unsigned xlen, int check_constraints, const char **error)
 {
   (void)xlen;
+  (void)check_constraints;
+  (void)error;
   return ((insn ^ op->match) & op->mask) == 0;
 }
 
 static int
-match_rs1_eq_rs2 (const struct riscv_opcode *op, insn_t insn, unsigned xlen)
+match_rs1_eq_rs2 (const struct riscv_opcode *op, insn_t insn, unsigned xlen, int check_constraints, const char **error)
 {
   int rs1 = (insn & MASK_RS1) >> OP_SH_RS1;
   int rs2 = (insn & MASK_RS2) >> OP_SH_RS2;
-  return match_opcode (op, insn, xlen) && rs1 == rs2;
+  /* FIXME: always check check_constraints?  */
+  return match_opcode (op, insn, xlen, check_constraints, error) && rs1 == rs2;
 }
 
-// static int
-// match_rs2_rd_even (const struct riscv_opcode *op, insn_t insn, unsigned xlen)
-// {
-//   int rs2 = (insn & MASK_RS2) >> OP_SH_RS2;
-//   int rd = (insn & MASK_RD) >> OP_SH_RD;
-//   return ((rs2 & 1) == 0) && ((rd & 1) == 0) && match_opcode (op, insn, xlen);
-// }
-
 static int
-match_rs2_rd_even (const struct riscv_opcode *op, insn_t insn, unsigned xlen)
+match_rs2_rd_even (const struct riscv_opcode *op, insn_t insn, unsigned xlen, int check_constraints, const char **error)
 {
   int rs2 = (insn & MASK_RS2) >> OP_SH_RS2;
   int rd = (insn & MASK_RD) >> OP_SH_RD;
-  return ((rs2 & 1) == 0) && ((rd & 1) == 0) && match_opcode (op, insn, xlen);
+  /* FIXME: always check check_constraints?  */
+  return ((rs2 & 1) == 0) && ((rd & 1) == 0) && match_opcode (op, insn, xlen, check_constraints, error);
 }
 
 static int
-match_rd_even (const struct riscv_opcode *op, insn_t insn, unsigned xlen)
+match_rd_even (const struct riscv_opcode *op, insn_t insn, unsigned xlen, int check_constraints, const char **error)
 {
   int rd = (insn & MASK_RD) >> OP_SH_RD;
-  return ((rd & 1) == 0) && match_opcode (op, insn, xlen);
+  return ((rd & 1) == 0) && match_opcode (op, insn, xlen, check_constraints, error);
 }
 
 static int
-match_rs2_even (const struct riscv_opcode *op, insn_t insn, unsigned xlen)
+match_rs2_even (const struct riscv_opcode *op, insn_t insn, unsigned xlen, int check_constraints, const char **error)
 {
   int rs2 = (insn & MASK_RS2) >> OP_SH_RS2;
-  return ((rs2 & 1) == 0) && match_opcode (op, insn, xlen);
+  return ((rs2 & 1) == 0) && match_opcode (op, insn, xlen, check_constraints, error);
 }
 
 static int
-match_rd_nonzero (const struct riscv_opcode *op, insn_t insn, unsigned xlen)
+match_rd_nonzero (const struct riscv_opcode *op, insn_t insn, unsigned xlen, int check_constraints, const char **error)
 {
-  return (op->pinfo == INSN_MACRO || match_opcode (op, insn, xlen))
+  /* FIXME: always check check_constraints?  */
+  return (op->pinfo == INSN_MACRO || match_opcode (op, insn, xlen, check_constraints, error))
 	 && ((insn & MASK_RD) != 0);
 }
 
 static int
-match_rd_even_nonzero (const struct riscv_opcode *op, insn_t insn, unsigned xlen)
+match_rd_even_nonzero (const struct riscv_opcode *op, insn_t insn, unsigned xlen, int check_constraints, const char **error)
 {
-  return match_rd_nonzero (op, insn, xlen) && match_rd_even (op, insn, xlen);
+  return match_rd_nonzero (op, insn, xlen, check_constraints, error)
+    && match_rd_even (op, insn, xlen, check_constraints, error);
 }
 
 static int
-match_rs1_nonzero (const struct riscv_opcode *op ATTRIBUTE_UNUSED, insn_t insn, unsigned xlen)
+match_rs1_nonzero (const struct riscv_opcode *op ATTRIBUTE_UNUSED, insn_t insn, unsigned xlen, int check_constraints, const char **error)
 {
   (void)xlen;
+  (void)check_constraints;
+  (void)error;
+  /* FIXME: always check check_constraints?  */
   return (insn & MASK_RS1) != 0;
 }
 
 static int
-match_rs1_nonzero_rs2_even (const struct riscv_opcode *op ATTRIBUTE_UNUSED, insn_t insn, unsigned xlen)
+match_rs1_nonzero_rs2_even (const struct riscv_opcode *op ATTRIBUTE_UNUSED, insn_t insn, unsigned xlen, int check_constraints, const char **error)
 {
-  return match_rs1_nonzero (op, insn, xlen) && match_rs2_even (op, insn, xlen);
+  return match_rs1_nonzero (op, insn, xlen, check_constraints, error) && match_rs2_even (op, insn, xlen, check_constraints, error);
 }
 
 static int
-match_crs2s_even (const struct riscv_opcode *op, insn_t insn, unsigned xlen)
+match_crs2s_even (const struct riscv_opcode *op, insn_t insn, unsigned xlen, int check_constraints, const char **error)
 {
   int crs2s = (insn & MASK_CRS2S) >> OP_SH_CRS2S;
-  return ((crs2s & 1) == 0) && match_opcode (op, insn, xlen);
+  return ((crs2s & 1) == 0) && match_opcode (op, insn, xlen, check_constraints, error);
 }
 
 static int
-match_crs2_even (const struct riscv_opcode *op, insn_t insn, unsigned xlen)
+match_crs2_even (const struct riscv_opcode *op, insn_t insn, unsigned xlen, int check_constraints, const char **error)
 {
   int crs2 = (insn & MASK_CRS2) >> OP_SH_CRS2;
-  return ((crs2 & 1) == 0) && match_opcode (op, insn, xlen);
+  return ((crs2 & 1) == 0) && match_opcode (op, insn, xlen, check_constraints, error);
 }
 
 static int
-match_c_add (const struct riscv_opcode *op, insn_t insn, unsigned xlen)
+match_c_add (const struct riscv_opcode *op, insn_t insn, unsigned xlen, int check_constraints, const char **error)
 {
-  return match_rd_nonzero (op, insn, xlen) && ((insn & MASK_CRS2) != 0);
+  /* FIXME: always check check_constraints?  */
+  return match_rd_nonzero (op, insn, xlen, check_constraints, error) && ((insn & MASK_CRS2) != 0);
 }
 
 /* We don't allow mv zero,X to become a c.mv hint, so we need a separate
    matching function for this.  */
 
 static int
-match_c_add_with_hint (const struct riscv_opcode *op, insn_t insn, unsigned xlen)
+match_c_add_with_hint (const struct riscv_opcode *op, insn_t insn, unsigned xlen, int check_constraints, const char **error)
 {
-  return match_opcode (op, insn, xlen) && ((insn & MASK_CRS2) != 0);
+  /* FIXME: always check check_constraints?  */
+  return match_opcode (op, insn, xlen, check_constraints, error) && ((insn & MASK_CRS2) != 0);
 }
 
 static int
-match_c_nop (const struct riscv_opcode *op, insn_t insn, unsigned xlen)
+match_c_nop (const struct riscv_opcode *op, insn_t insn, unsigned xlen, int check_constraints, const char **error)
 {
-  return (match_opcode (op, insn, xlen)
+  /* FIXME: always check check_constraints?  */
+  return (match_opcode (op, insn, xlen, check_constraints, error)
 	  && (((insn & MASK_RD) >> OP_SH_RD) == 0));
 }
 
 static int
-match_c_addi16sp (const struct riscv_opcode *op, insn_t insn, unsigned xlen)
+match_c_addi16sp (const struct riscv_opcode *op, insn_t insn, unsigned xlen, int check_constraints, const char **error)
 {
-  return (match_opcode (op, insn, xlen)
+  /* FIXME: always check check_constraints?  */
+  return (match_opcode (op, insn, xlen, check_constraints, error)
 	  && (((insn & MASK_RD) >> OP_SH_RD) == 2));
 }
 
 static int
-match_c_lui (const struct riscv_opcode *op, insn_t insn, unsigned xlen)
+match_c_lui (const struct riscv_opcode *op, insn_t insn, unsigned xlen, int check_constraints, const char **error)
 {
-  return (match_rd_nonzero (op, insn, xlen)
+  /* FIXME: always check check_constraints?  */
+  return (match_rd_nonzero (op, insn, xlen, check_constraints, error)
 	  && (((insn & MASK_RD) >> OP_SH_RD) != 2)
 	  && EXTRACT_CITYPE_LUI_IMM (insn) != 0);
 }
@@ -317,88 +336,114 @@ match_c_lui (const struct riscv_opcode *op, insn_t insn, unsigned xlen)
    matching function for this.  */
 
 static int
-match_c_lui_with_hint (const struct riscv_opcode *op, insn_t insn, unsigned xlen)
+match_c_lui_with_hint (const struct riscv_opcode *op, insn_t insn, unsigned xlen, int check_constraints, const char **error)
 {
-  return (match_opcode (op, insn, xlen)
+  /* FIXME: always check check_constraints?  */
+  return (match_opcode (op, insn, xlen, check_constraints, error)
 	  && (((insn & MASK_RD) >> OP_SH_RD) != 2)
 	  && EXTRACT_CITYPE_LUI_IMM (insn) != 0);
 }
 
 static int
-match_c_addi4spn (const struct riscv_opcode *op, insn_t insn, unsigned xlen)
+match_c_addi4spn (const struct riscv_opcode *op, insn_t insn, unsigned xlen, int check_constraints, const char **error)
 {
-  return match_opcode (op, insn, xlen) && EXTRACT_CIWTYPE_ADDI4SPN_IMM (insn) != 0;
+  /* FIXME: always check check_constraints?  */
+  return match_opcode (op, insn, xlen, check_constraints, error) && EXTRACT_CIWTYPE_ADDI4SPN_IMM (insn) != 0;
 }
 
 /* This requires a non-zero shift.  A zero rd is a hint, so is allowed.  */
 
 static int
-match_c_slli (const struct riscv_opcode *op, insn_t insn, unsigned xlen)
+match_c_slli (const struct riscv_opcode *op, insn_t insn, unsigned xlen, int check_constraints, const char **error)
 {
-  return match_opcode (op, insn, xlen) && EXTRACT_CITYPE_IMM (insn) != 0;
+  /* FIXME: always check check_constraints?  */
+  return match_opcode (op, insn, xlen, check_constraints, error) && EXTRACT_CITYPE_IMM (insn) != 0;
 }
 
 /* This requires a non-zero rd, and a non-zero shift.  */
 
 static int
-match_slli_as_c_slli (const struct riscv_opcode *op, insn_t insn, unsigned xlen)
+match_slli_as_c_slli (const struct riscv_opcode *op, insn_t insn, unsigned xlen, int check_constraints, const char **error)
 {
-  return match_rd_nonzero (op, insn, xlen) && EXTRACT_CITYPE_IMM (insn) != 0;
+  /* FIXME: always check check_constraints?  */
+  return match_rd_nonzero (op, insn, xlen, check_constraints, error) && EXTRACT_CITYPE_IMM (insn) != 0;
 }
 
 /* This requires a zero shift.  A zero rd is a hint, so is allowed.  */
 
 static int
-match_c_slli64 (const struct riscv_opcode *op, insn_t insn, unsigned xlen)
+match_c_slli64 (const struct riscv_opcode *op, insn_t insn, unsigned xlen, int check_constraints, const char **error)
 {
-  return match_opcode (op, insn, xlen) && EXTRACT_CITYPE_IMM (insn) == 0;
+  /* FIXME: always check check_constraints?  */
+  return match_opcode (op, insn, xlen, check_constraints, error) && EXTRACT_CITYPE_IMM (insn) == 0;
 }
 
 /* This is used for both srli and srai.  This requires a non-zero shift.
    A zero rd is not possible.  */
 
 static int
-match_srxi_as_c_srxi (const struct riscv_opcode *op, insn_t insn, unsigned xlen)
+match_srxi_as_c_srxi (const struct riscv_opcode *op, insn_t insn, unsigned xlen, int check_constraints, const char **error)
 {
-  return match_opcode (op, insn, xlen) && EXTRACT_CITYPE_IMM (insn) != 0;
+  /* FIXME: always check check_constraints?  */
+  return match_opcode (op, insn, xlen, check_constraints, error) && EXTRACT_CITYPE_IMM (insn) != 0;
 }
 
 static int
 match_vs1_eq_vs2 (const struct riscv_opcode *op,
-		  insn_t insn, unsigned xlen)
+		  insn_t insn, unsigned xlen, int check_constraints, const char **error)
 {
   int vs1 = (insn & MASK_VS1) >> OP_SH_VS1;
   int vs2 = (insn & MASK_VS2) >> OP_SH_VS2;
 
-  return match_opcode (op, insn, xlen) && vs1 == vs2;
+  if (check_constraints && !(vs1 == vs2))
+    {
+      if (error)
+        *error = "illegal operands vs1 should be equal to vs2";
+      return 0;
+    }
+  return match_opcode (op, insn, xlen, check_constraints, error);
 }
 
 static int
 match_vd_eq_vs1_eq_vs2 (const struct riscv_opcode *op,
-			insn_t insn, unsigned xlen)
+			insn_t insn, unsigned xlen, int check_constraints, const char **error)
 {
   int vd =  (insn & MASK_VD) >> OP_SH_VD;
   int vs1 = (insn & MASK_VS1) >> OP_SH_VS1;
   int vs2 = (insn & MASK_VS2) >> OP_SH_VS2;
 
-  return match_opcode (op, insn, xlen) && vd == vs1 && vs1 == vs2;
+  if (check_constraints && !(vd == vs1 && vs1 == vs2))
+    {
+      if (error)
+        *error = "illegal operands vd should be equal to vs1 and vs2";
+      return 0;
+    }
+
+  return  match_opcode (op, insn, xlen, check_constraints, error);
 }
 
 static int
 match_th_load_inc(const struct riscv_opcode *op,
-		  insn_t insn, unsigned xlen)
+		  insn_t insn, unsigned xlen, int check_constraints, const char **error)
 {
   /* Load-increment has the following restriction:
    * The values of rd and rs1 must not be the same.  */
   int rd = (insn & MASK_RD) >> OP_SH_RD;
   int rs1 = (insn & MASK_RS1) >> OP_SH_RS1;
 
-  return rd != rs1 && match_opcode (op, insn, xlen);
+  if (check_constraints && !(rd != rs1))
+    {
+      if (error)
+        *error = "illegal operands rd should not be equal to rs1";
+      return 0;
+    }
+
+  return match_opcode (op, insn, xlen, check_constraints, error);
 }
 
 static int
 match_th_load_pair(const struct riscv_opcode *op,
-		     insn_t insn, unsigned xlen)
+		     insn_t insn, unsigned xlen, int check_constraints, const char **error)
 {
   /* Load pair instructions use the following encoding:
    * - rd1 = RD (insn[11:7])
@@ -410,140 +455,429 @@ match_th_load_pair(const struct riscv_opcode *op,
   int rd2 = (insn & MASK_RS2) >> OP_SH_RS2;
   int rs = (insn & MASK_RS1) >> OP_SH_RS1;
 
-  return rd1 != rd2 && rd1 != rs && rd2 != rs && match_opcode (op, insn, xlen);
+  if (check_constraints && !(rd1 != rd2 && rd1 != rs && rd2 != rs))
+    {
+      if (error)
+        *error = "illegal operands rd1/rd2 should not be equal to rs1";
+      return 0;
+    }
+
+  return match_opcode (op, insn, xlen, check_constraints, error);
 }
 
 #define IS_ODD(val) (val & 1)
 
 static int
 match_thead_p_rd_rs1_rs2_even (const struct riscv_opcode *op, insn_t insn,
-			       unsigned xlen)
+ 			       unsigned xlen, int check_constraints, const char **error)
 {
   int p_rd = ((insn >> OP_SH_PD) & OP_MASK_PD);
   int p_rs1 = ((insn >> OP_SH_PS1) & OP_MASK_PS1);
   int p_rs2 = ((insn >> OP_SH_PS2) & OP_MASK_PS2);
 
-  return match_opcode (op, insn, xlen)
-	 && (xlen == 64
-	     /* rv32 zp64.  */
-	     || !(IS_ODD (p_rd) || IS_ODD (p_rs1) || IS_ODD (p_rs2)));
+  if (check_constraints
+      && !(xlen == 64 || !(IS_ODD (p_rd) || IS_ODD (p_rs1) || IS_ODD (p_rs2))))
+    {
+      if (error)
+        *error = "illegal operands rd/rs1/rs2 should be even in rv32";
+      return 0;
+    }
+  return match_opcode (op, insn, xlen, check_constraints, error);
 }
 
 static int
 match_thead_p_rd_even (const struct riscv_opcode *op, insn_t insn,
-		       unsigned xlen)
+ 		       unsigned xlen, int check_constraints, const char **error)
 {
   int p_rd = ((insn >> OP_SH_PD) & OP_MASK_PD);
-  return match_opcode (op, insn, xlen) && (xlen == 64 || !(IS_ODD (p_rd)));
+
+  if (check_constraints
+      && !(xlen == 64 || !(IS_ODD (p_rd))))
+    {
+      if (error)
+        *error = "illegal operands rd should be even in rv32";
+      return 0;
+    }
+  return match_opcode (op, insn, xlen, check_constraints, error);
 }
 
 static int
 match_thead_p_rd_rs1_even (const struct riscv_opcode *op, insn_t insn,
-			   unsigned xlen)
+ 			   unsigned xlen, int check_constraints, const char **error)
 {
   int p_rd = ((insn >> OP_SH_PD) & OP_MASK_PD);
   int p_rs1 = ((insn >> OP_SH_PS1) & OP_MASK_PS1);
 
-  return match_opcode (op, insn, xlen)
-	 && (xlen == 64
-	     /* rv32 zp64.  */
-	     || !(IS_ODD (p_rd) || IS_ODD (p_rs1)));
+  if (check_constraints && !(xlen == 64 || !(IS_ODD (p_rd) || IS_ODD (p_rs1))))
+    {
+      if (error)
+        *error = "illegal operands rd/rs1 should be even in rv32";
+      return 0;
+    }
+  return match_opcode (op, insn, xlen, check_constraints, error);
 }
 
 static int
 match_thead_p_rs1_even (const struct riscv_opcode *op, insn_t insn,
-			unsigned xlen)
+ 			unsigned xlen, int check_constraints, const char **error)
 {
   int p_rs1 = ((insn >> OP_SH_PS1) & OP_MASK_PS1);
-  return match_opcode (op, insn, xlen) && (xlen == 64 || !IS_ODD (p_rs1));
+
+  if (check_constraints && !(xlen == 64 || !IS_ODD (p_rs1)))
+    {
+      if (error)
+        *error = "illegal operands rs1 should be even in rv32";
+      return 0;
+    }
+  return match_opcode (op, insn, xlen, check_constraints, error);
 }
 
 static int
-match_matrix_nf_vd(const struct riscv_opcode *op,
-                 insn_t insn, unsigned xlen)
+match_rd_is_x1(const struct riscv_opcode *op,
+		     insn_t insn, unsigned xlen, int check_constraints, const char **error)
 {
-  /* TODO: Report error if necessary.  */
-#if 0
-  uint32_t nf = ((insn >> OP_SH_MATRIX_NF) & OP_MASK_MATRIX_NF) + 1;
-  uint32_t ms3 = ((insn >> OP_SH_MS3) & OP_MASK_MS3);
-
-  if (ms3 % nf)
-    *error = "illegal operands md must be multiple of nf";
-#endif
-    return match_opcode (op, insn, xlen);
+  int rd = (insn & MASK_RD) >> OP_SH_RD;
+  /* X1 == X_RA.  */
+  if (check_constraints && (rd != X_RA))
+    {
+      if (error)
+        *error = "illegal operands rd should be ra(x1)";
+      return 0;
+    }
+  return match_opcode (op, insn, xlen, check_constraints, error);
 }
 
 static int
-match_md_neq_ms1_ms2(const struct riscv_opcode *op,
-                 insn_t insn, unsigned xlen)
+match_rd_is_x5(const struct riscv_opcode *op,
+		     insn_t insn, unsigned xlen, int check_constraints, const char **error)
 {
-  /* TODO: Report error if necessary.  */
-#if 0
-  uint32_t md = ((insn >> OP_SH_MD) & OP_MASK_MD);
-  uint32_t ms1 = ((insn >> OP_SH_MS1) & OP_MASK_MS1);
-  uint32_t ms2 = ((insn >> OP_SH_MS2) & OP_MASK_MS2);
-  if (md == ms1 || md == ms2)
-    *error = "illegal operands md cannot overlap ms1 or ms2";
-#endif
-  return match_opcode (op, insn, xlen);
+  int rd = (insn & MASK_RD) >> OP_SH_RD;
+  /* X5 is X_T0.  */
+  if (check_constraints && (rd != X_T0))
+    {
+      if (error)
+        *error = "illegal operands rd should be t0(x5)";
+      return 0;
+    }
+  return match_opcode (op, insn, xlen, check_constraints, error);
 }
 
 static int
-match_md_neq_ms1_ms2_and_ms2_eq_even (const struct riscv_opcode *op,
-                                      insn_t insn, unsigned xlen)
+match_rs2_is_linker(const struct riscv_opcode *op,
+		     insn_t insn, unsigned xlen, int check_constraints, const char **error)
 {
-  /* TODO: Report error if necessary.  */
-#if 0
-  uint32_t md = ((insn >> OP_SH_MD) & OP_MASK_MD);
-  uint32_t ms1 = ((insn >> OP_SH_MS1) & OP_MASK_MS1);
-  uint32_t ms2 = ((insn >> OP_SH_MS2) & OP_MASK_MS2);
-  if (md == ms1 || md == ms2)
-    *error = "illegal operands md cannot overlap ms1 or ms2";
-  else if (IS_ODD(ms2))
-    *error = "illegal operands ms2 must be even";
-#endif
-  return match_opcode (op, insn, xlen);
+  int rs2 = (insn & MASK_RS2) >> OP_SH_RS2;
+  if (check_constraints && !(rs2 == X_RA || rs2 == X_T0))
+    {
+      if (error)
+        *error = "illegal operands rs2 should be ra(x1) or t0(x5)";
+      return 0;
+    }
+  return match_opcode (op, insn, xlen, check_constraints, error);
 }
 
 static int
-match_md_neq_ms1_ms2_and_md_eq_even (const struct riscv_opcode *op,
-                                     insn_t insn, unsigned xlen)
+match_rs1_is_linker(const struct riscv_opcode *op,
+		     insn_t insn, unsigned xlen, int check_constraints, const char **error)
 {
-  /* TODO: Report error if necessary.  */
-#if 0
-  uint32_t md = ((insn >> OP_SH_MD) & OP_MASK_MD);
-  uint32_t ms1 = ((insn >> OP_SH_MS1) & OP_MASK_MS1);
-  uint32_t ms2 = ((insn >> OP_SH_MS2) & OP_MASK_MS2);
-  if (md == ms1 || md == ms2)
-    *error = "illegal operands md cannot overlap ms1 or ms2";
-  else if IS_ODD(md)
-    *error = "illegal operands md must be even";
-#endif
-  return match_opcode (op, insn, xlen);
+  int rs1 = (insn & MASK_RS1) >> OP_SH_RS1;
+  if (check_constraints && !(rs1 == X_RA || rs1 == X_T0))
+    {
+      if (error)
+        *error = "illegal operands rd should be ra(x1) or t0(x5)";
+      return 0;
+    }
+  return match_opcode (op, insn, xlen, check_constraints, error);
 }
 
 static int
-match_sreg1_not_eq_sreg2 (const struct riscv_opcode *op, insn_t insn, unsigned xlen)
+match_vd_neq_vm (const struct riscv_opcode *op, insn_t insn,
+		       unsigned xlen, int check_constraints,
+		       const char **error)
 {
-  return match_opcode (op, insn, xlen)
+  int vd =  (insn & MASK_VD) >> OP_SH_VD;
+  int vm = (insn & MASK_VMASK) >> OP_SH_VMASK;
+
+  if (check_constraints && (!vm && (vd == 0)))
+    {
+      if (error)
+        *error = "illegal operands vd cannot overlap the mask register(v0.t)";
+      return 0;
+    }
+
+  return match_opcode (op, insn, xlen, check_constraints, error);
+}
+
+static int
+match_vd_with_nf (const struct riscv_opcode *op, insn_t insn,
+		       unsigned xlen, int check_constraints,
+		       const char **error)
+{
+  int vd =  (insn & MASK_VD) >> OP_SH_VD;
+  int nf = (insn & MASK_NF) >> OP_SH_NF;
+
+  if (check_constraints && (vd + nf > 31))
+    {
+      if (error)
+	*error = "illegal operands [vd,vd+nf] cannot past v31";
+      return 0;
+    }
+
+  return match_opcode (op, insn, xlen, check_constraints, error);
+}
+
+static int
+match_vd_with_nf_align (const struct riscv_opcode *op, insn_t insn,
+		       unsigned xlen, int check_constraints,
+		       const char **error)
+{
+  int vd =  (insn & MASK_VD) >> OP_SH_VD;
+  int nf = (insn & MASK_NF) >> OP_SH_NF;
+
+  if (check_constraints && ((vd + nf > 31) || ((vd & nf) != 0)))
+    {
+      if (error && (vd + nf > 31))
+	*error = "illegal operands [vd,vd+nf] cannot past v31";
+      if (error &&  ((vd & nf) != 0))
+	*error = "illegal operands vd must be aligned to nf";
+      return 0;
+    }
+
+  return match_opcode (op, insn, xlen, check_constraints, error);
+}
+
+
+
+static int
+match_vd_neq_vm_with_nf (const struct riscv_opcode *op, insn_t insn,
+		       unsigned xlen, int check_constraints,
+		       const char **error)
+{
+  int vd =  (insn & MASK_VD) >> OP_SH_VD;
+  int vm = (insn & MASK_VMASK) >> OP_SH_VMASK;
+  int nf = (insn & MASK_NF) >> OP_SH_NF;
+
+  if (check_constraints && ((!vm && (vd == 0)) || (vd + nf > 31)))
+    {
+      if (!vm && (vd == 0) && error)
+        *error = "illegal operands vd cannot overlap the mask register(v0.t)";
+      else if (vd + nf > 31 && error)
+        *error = "illegal operands [vd,vd+nf] cannot past v31";
+      return 0;
+    }
+
+  return match_opcode (op, insn, xlen, check_constraints, error);
+}
+
+static int
+match_vd_neq_vm_and_vs1_eq_vs2 (const struct riscv_opcode *op, insn_t insn,
+				  unsigned xlen, int check_constraints,
+				  const char **error)
+{
+  int vs1 = (insn & MASK_VS1) >> OP_SH_VS1;
+  int vs2 = (insn & MASK_VS2) >> OP_SH_VS2;
+  int vd = (insn & MASK_VD) >> OP_SH_VD;
+  int vm = (insn & MASK_VMASK) >> OP_SH_VMASK;
+
+  if (check_constraints && (!(vs1 == vs2) || (!vm && (vd == 0))))
+    {
+      if (!(vs1 == vs2) && error)
+	*error = "illegal operands vs1 should be equal to vs2";
+      else if (!vm && (vd == 0) && error)
+        *error = "illegal operands vd cannot overlap the mask register(v0.t)";
+      return 0;
+    }
+  return match_opcode (op, insn, xlen, check_constraints, error);
+}
+
+static int
+match_vd_neq_vm_and_vd_neq_vs1 (const struct riscv_opcode *op, insn_t insn,
+				unsigned xlen, int check_constraints,
+				const char **error)
+{
+  int vd = (insn & MASK_VD) >> OP_SH_VD;
+  int vs1 = (insn & MASK_VS1) >> OP_SH_VS1;
+  int vm = (insn & MASK_VMASK) >> OP_SH_VMASK;
+
+  if (check_constraints && ((!vm && (vd == 0)) || (vd == vs1)))
+    {
+      if ((!vm && (vd == 0)) && error)
+	*error = "illegal operands vd cannot overlap the mask register(v0.t)";
+      else if (vd == vs1 && error)
+	*error = "illegal operands vd cannot overlap vs1";
+      return 0;
+    }
+
+  return match_opcode (op, insn, xlen, check_constraints, error);
+}
+
+static int
+match_vd_neq_vm_and_vd_neq_vs2 (const struct riscv_opcode *op, insn_t insn,
+				unsigned xlen, int check_constraints,
+				const char **error)
+{
+  int vd = (insn & MASK_VD) >> OP_SH_VD;
+  int vs2 = (insn & MASK_VS2) >> OP_SH_VS2;
+  int vm = (insn & MASK_VMASK) >> OP_SH_VMASK;
+
+  if (check_constraints && ((!vm && (vd == 0)) || (vd == vs2)))
+    {
+      if ((!vm && (vd == 0)) && error)
+	*error = "illegal operands vd cannot overlap the mask register(v0.t)";
+      else if (vd == vs2 && error)
+	*error = "illegal operands vd cannot overlap vs2";
+      return 0;
+    }
+
+  return match_opcode (op, insn, xlen, check_constraints, error);
+}
+
+static int
+match_vd_neq_vm_and_vd_neq_vs2_with_nf (const struct riscv_opcode *op,
+					insn_t insn, unsigned xlen,
+					int check_constraints,
+					const char **error)
+{
+  int vd = (insn & MASK_VD) >> OP_SH_VD;
+  int vs2 = (insn & MASK_VS2) >> OP_SH_VS2;
+  int vm = (insn & MASK_VMASK) >> OP_SH_VMASK;
+  int nf = (insn & MASK_NF) >> OP_SH_NF;
+
+  if (check_constraints
+      && (((!vm && (vd == 0)) || (vd <= vs2 && vs2 <= vd + nf)) || (vd + nf > 31)))
+    {
+      if ((!vm && (vd == 0)) && error)
+	*error = "illegal operands vd cannot overlap the mask register(v0.t)";
+      else if (vd <= vs2 && vs2 <= vd + nf && error)
+	*error = "illegal operands [vd,vd+nf] cannot overlap vs2";
+      else if (vd + nf > 31 && error)
+	*error = "illegal operands [vd,vd+nf] cannot past v31";
+      return 0;
+    }
+
+  return match_opcode (op, insn, xlen, check_constraints, error);
+}
+
+
+static int
+match_vd_neq_vm_and_vd_neq_vs1_vs2 (const struct riscv_opcode *op, insn_t insn,
+				unsigned xlen, int check_constraints,
+				const char **error)
+{
+  int vd = (insn & MASK_VD) >> OP_SH_VD;
+  int vs1 = (insn & MASK_VS1) >> OP_SH_VS1;
+  int vs2 = (insn & MASK_VS2) >> OP_SH_VS2;
+  int vm = (insn & MASK_VMASK) >> OP_SH_VMASK;
+
+  if (check_constraints && ((!vm && (vd == 0)) || (vd == vs1) || (vd == vs2)))
+    {
+      if ((!vm && (vd == 0)) && error)
+	*error = "illegal operands vd cannot overlap the mask register(v0.t)";
+      else if (vd == vs1 && error)
+	*error = "illegal operands vd cannot overlap vs1";
+      else if (vd == vs2 && error)
+	*error = "illegal operands vd cannot overlap vs2";
+      return 0;
+    }
+
+  return match_opcode (op, insn, xlen, check_constraints, error);
+}
+
+static int
+match_vd_neq_vs1_vs2 (const struct riscv_opcode *op, insn_t insn,
+				  unsigned xlen, int check_constraints,
+				  const char **error)
+{
+  int vs1 = (insn & MASK_VS1) >> OP_SH_VS1;
+  int vs2 = (insn & MASK_VS2) >> OP_SH_VS2;
+  int vd = (insn & MASK_VD) >> OP_SH_VD;
+
+  if (check_constraints && (vd == vs1 || vd == vs2))
+    {
+      if ((vd == vs1) && error)
+	*error = "illegal operands vd cannot overlap vs1";
+      else if ((vd == vs2) && error)
+	*error = "illegal operands vd cannot overlap vs2";
+      return 0;
+    }
+  return match_opcode (op, insn, xlen, check_constraints, error);
+}
+
+static int
+match_vd_neq_vs2 (const struct riscv_opcode *op, insn_t insn,
+				  unsigned xlen, int check_constraints,
+				  const char **error)
+{
+  int vs2 = (insn & MASK_VS2) >> OP_SH_VS2;
+  int vd = (insn & MASK_VD) >> OP_SH_VD;
+
+  if (check_constraints && (vd == vs2))
+    {
+      if (error)
+	*error = "illegal operands vd cannot overlap vs2";
+      return 0;
+    }
+  return match_opcode (op, insn, xlen, check_constraints, error);
+}
+
+static int
+match_md_aligned_with_nf(const struct riscv_opcode *op, insn_t insn,
+    unsigned xlen, int check_constraints,
+    const char **error)
+{
+  int md = (insn >> OP_SH_MS3) & OP_MASK_MS3;
+  int nf = (insn >> OP_SH_MATRIX_NF) & OP_MASK_MATRIX_NF;
+
+  if (check_constraints && (md & nf))
+    {
+      if (error)
+	*error = "illegal operands md must be aligned with nf";
+      return 0;
+    }
+  return match_opcode (op, insn, xlen, check_constraints, error);
+}
+
+static int
+match_md_neq_ms1_ms2 (const struct riscv_opcode *op, insn_t insn,
+    unsigned xlen, int check_constraints,
+    const char **error)
+{
+  int md = (insn >> OP_SH_MD) & OP_MASK_MD;
+  int ms1 = (insn >> OP_SH_MS1) & OP_MASK_MS1;
+  int ms2 = (insn >> OP_SH_MS2) & OP_MASK_MS2;
+
+  if (check_constraints && (md == ms1 || md == ms2))
+    {
+      if (error)
+	*error = "illegal operands md overlap source ms1/ms2";
+      return 0;
+    }
+  return match_opcode (op, insn, xlen, check_constraints, error);
+}
+
+static int
+match_sreg1_not_eq_sreg2 (const struct riscv_opcode *op, insn_t insn, unsigned xlen,
+    int check_constraints, const char **error)
+{
+  return match_opcode (op, insn, xlen, check_constraints, error)
       && (EXTRACT_OPERAND (SREG1, insn) != EXTRACT_OPERAND (SREG2, insn));
 }
 
 /* This is used for cm.jt. This requires index operand to be less than 32.  */
 
 static int
-match_cm_jt (const struct riscv_opcode *op, insn_t insn, unsigned xlen)
+match_cm_jt (const struct riscv_opcode *op, insn_t insn, unsigned xlen, int check_constraints, const char **error)
 {
-  return match_opcode (op, insn, xlen)
+  return match_opcode (op, insn, xlen, check_constraints, error)
     && EXTRACT_ZCMT_INDEX (insn) < 32;
 }
 
 /* This is used for cm.jalt. This requires index operand to be in 32 to 255.  */
 
 static int
-match_cm_jalt (const struct riscv_opcode *op, insn_t insn, unsigned xlen)
+match_cm_jalt (const struct riscv_opcode *op, insn_t insn, unsigned xlen, int check_constraints, const char **error)
 {
-  return match_opcode (op, insn, xlen)
+  return match_opcode (op, insn, xlen, check_constraints, error)
     && EXTRACT_ZCMT_INDEX (insn) >= 32
     && EXTRACT_ZCMT_INDEX (insn) < 256;
 }
@@ -598,6 +932,7 @@ const struct riscv_opcode riscv_opcodes[] =
 {"jalr",        0, INSN_CLASS_I, "o(s)",      MATCH_JALR|(X_RA << OP_SH_RD), MASK_JALR|MASK_RD, match_opcode, INSN_ALIAS|INSN_JSR },
 {"jalr",        0, INSN_CLASS_I, "s,j",       MATCH_JALR|(X_RA << OP_SH_RD), MASK_JALR|MASK_RD, match_opcode, INSN_ALIAS|INSN_JSR },
 {"jalr",        0, INSN_CLASS_I, "d,s",       MATCH_JALR, MASK_JALR|MASK_IMM, match_opcode, INSN_ALIAS|INSN_JSR },
+{"jalr",        0, INSN_CLASS_C, "CW,0(d)",   MATCH_C_JALR, MASK_C_JALR, match_rd_nonzero, INSN_ALIAS|INSN_JSR },
 {"jalr",        0, INSN_CLASS_I, "d,o(s)",    MATCH_JALR, MASK_JALR, match_opcode, INSN_JSR },
 {"jalr",        0, INSN_CLASS_I, "d,s,1",     MATCH_JALR, MASK_JALR|MASK_IMM, match_opcode, INSN_JSR },
 {"jalr",        0, INSN_CLASS_I, "d,s,j",     MATCH_JALR, MASK_JALR, match_opcode, INSN_JSR },
@@ -713,6 +1048,8 @@ const struct riscv_opcode riscv_opcodes[] =
 {"or",          0, INSN_CLASS_C, "Cs,Cw,Ct",  MATCH_C_OR, MASK_C_OR, match_opcode, INSN_ALIAS },
 {"or",          0, INSN_CLASS_C, "Cs,Ct,Cw",  MATCH_C_OR, MASK_C_OR, match_opcode, INSN_ALIAS },
 {"or",          0, INSN_CLASS_I, "d,s,t",     MATCH_OR, MASK_OR, match_opcode, 0 },
+/* Zicfiss instructions.  */
+{"lpad",        0, INSN_CLASS_ZICFILP, "u",   MATCH_AUIPC, MASK_AUIPC|MASK_RD, match_opcode, INSN_ALIAS },
 {"auipc",       0, INSN_CLASS_I, "d,u",       MATCH_AUIPC, MASK_AUIPC, match_opcode, 0 },
 {"seqz",        0, INSN_CLASS_I, "d,s",       MATCH_SLTIU|ENCODE_ITYPE_IMM (1), MASK_SLTIU | MASK_IMM, match_opcode, INSN_ALIAS },
 {"snez",        0, INSN_CLASS_I, "d,t",       MATCH_SLTU, MASK_SLTU|MASK_RS1, match_opcode, INSN_ALIAS },
@@ -1330,6 +1667,21 @@ const struct riscv_opcode riscv_opcodes[] =
 {"czero.eqz",  0, INSN_CLASS_ZICOND, "d,s,t", MATCH_CZERO_EQZ, MASK_CZERO_EQZ, match_opcode, 0 },
 {"czero.nez",  0, INSN_CLASS_ZICOND, "d,s,t", MATCH_CZERO_NEZ, MASK_CZERO_NEZ, match_opcode, 0 },
 
+/* Zicfiss sspsuh and sspopchk.  */
+{"sspush",           0,  INSN_CLASS_ZICFISS_AND_ZCMOP, "d",  MATCH_C_SSPUSH,  MASK_C_SSPUSH, match_rd_is_x1, INSN_ALIAS },
+{"sspush",           0,  INSN_CLASS_ZICFISS, "t",  MATCH_SSPUSH,  MASK_SSPUSH, match_rs2_is_linker, 0 },
+{"sspopchk",         0,  INSN_CLASS_ZICFISS_AND_ZCMOP, "d",  MATCH_C_SSPOPCHK,  MASK_C_SSPOPCHK, match_rd_is_x5, INSN_ALIAS },
+{"sspopchk",         0,  INSN_CLASS_ZICFISS, "s",  MATCH_SSPOPCHK,  MASK_SSPOPCHK, match_rs1_is_linker, 0 },
+{"ssrdp",            0,  INSN_CLASS_ZICFISS, "d",  MATCH_SSRDP,  MASK_SSRDP, match_rd_nonzero, 0 },
+{"ssamoswap.w",      0,  INSN_CLASS_ZICFISS, "d,t,0(s)",  MATCH_SSAMOSWAP_W,  MASK_SSAMOSWAP_W|MASK_AQRL, match_opcode, 0 },
+{"ssamoswap.w.aq",   0,  INSN_CLASS_ZICFISS, "d,t,0(s)",  MATCH_SSAMOSWAP_W|MASK_AQ,  MASK_SSAMOSWAP_W|MASK_AQRL, match_opcode, 0 },
+{"ssamoswap.w.rl",   0,  INSN_CLASS_ZICFISS, "d,t,0(s)",  MATCH_SSAMOSWAP_W|MASK_RL,  MASK_SSAMOSWAP_W|MASK_AQRL, match_opcode, 0 },
+{"ssamoswap.w.aqrl", 0,  INSN_CLASS_ZICFISS, "d,t,0(s)",  MATCH_SSAMOSWAP_W|MASK_AQRL,  MASK_SSAMOSWAP_W|MASK_AQRL, match_opcode, 0 },
+{"ssamoswap.d",      0,  INSN_CLASS_ZICFISS, "d,t,0(s)",  MATCH_SSAMOSWAP_D,  MASK_SSAMOSWAP_D|MASK_AQRL, match_opcode, 0 },
+{"ssamoswap.d.aq",   0,  INSN_CLASS_ZICFISS, "d,t,0(s)",  MATCH_SSAMOSWAP_D|MASK_AQ,  MASK_SSAMOSWAP_D|MASK_AQRL, match_opcode, 0 },
+{"ssamoswap.d.rl",   0,  INSN_CLASS_ZICFISS, "d,t,0(s)",  MATCH_SSAMOSWAP_D|MASK_RL,  MASK_SSAMOSWAP_D|MASK_AQRL, match_opcode, 0 },
+{"ssamoswap.d.aqrl", 0,  INSN_CLASS_ZICFISS, "d,t,0(s)",  MATCH_SSAMOSWAP_D|MASK_AQRL,  MASK_SSAMOSWAP_D|MASK_AQRL, match_opcode, 0 },
+
 /* Zimop instructions.  */
 {"mop.r.0",    0, INSN_CLASS_ZIMOP, "d,s",    MATCH_MOP_R_0,  MASK_MOP_R_0,  match_opcode, 0 },
 {"mop.r.1",    0, INSN_CLASS_ZIMOP, "d,s",    MATCH_MOP_R_1,  MASK_MOP_R_1,  match_opcode, 0 },
@@ -1371,6 +1723,24 @@ const struct riscv_opcode riscv_opcodes[] =
 {"mop.rr.5",   0, INSN_CLASS_ZIMOP, "d,s,t",  MATCH_MOP_RR_5, MASK_MOP_RR_5, match_opcode, 0 },
 {"mop.rr.6",   0, INSN_CLASS_ZIMOP, "d,s,t",  MATCH_MOP_RR_6, MASK_MOP_RR_6, match_opcode, 0 },
 {"mop.rr.7",   0, INSN_CLASS_ZIMOP, "d,s,t",  MATCH_MOP_RR_7, MASK_MOP_RR_7, match_opcode, 0 },
+
+/* Zalasr instructions.  */
+{"lb.aq",      0, INSN_CLASS_ZALASR, "d,0(s)", MATCH_LB_AQ, MASK_LB_AQ, match_opcode, 0 },
+{"lh.aq",      0, INSN_CLASS_ZALASR, "d,0(s)", MATCH_LH_AQ, MASK_LH_AQ, match_opcode, 0 },
+{"lw.aq",      0, INSN_CLASS_ZALASR, "d,0(s)", MATCH_LW_AQ, MASK_LW_AQ, match_opcode, 0 },
+{"ld.aq",      0, INSN_CLASS_ZALASR, "d,0(s)", MATCH_LD_AQ, MASK_LD_AQ, match_opcode, 0 },
+{"sb.rl",      0, INSN_CLASS_ZALASR, "t,0(s)", MATCH_SB_RL, MASK_SB_RL, match_opcode, 0 },
+{"sh.rl",      0, INSN_CLASS_ZALASR, "t,0(s)", MATCH_SH_RL, MASK_SH_RL, match_opcode, 0 },
+{"sw.rl",      0, INSN_CLASS_ZALASR, "t,0(s)", MATCH_SW_RL, MASK_SW_RL, match_opcode, 0 },
+{"sd.rl",      0, INSN_CLASS_ZALASR, "t,0(s)", MATCH_SD_RL, MASK_SD_RL, match_opcode, 0 },
+{"lb.aqrl",    0, INSN_CLASS_ZALASR, "d,0(s)", MATCH_LB_AQRL, MASK_LB_AQRL, match_opcode, 0 },
+{"lh.aqrl",    0, INSN_CLASS_ZALASR, "d,0(s)", MATCH_LH_AQRL, MASK_LH_AQRL, match_opcode, 0 },
+{"lw.aqrl",    0, INSN_CLASS_ZALASR, "d,0(s)", MATCH_LW_AQRL, MASK_LW_AQRL, match_opcode, 0 },
+{"ld.aqrl",    0, INSN_CLASS_ZALASR, "d,0(s)", MATCH_LD_AQRL, MASK_LD_AQRL, match_opcode, 0 },
+{"sb.aqrl",    0, INSN_CLASS_ZALASR, "t,0(s)", MATCH_SB_AQRL, MASK_SB_AQRL, match_opcode, 0 },
+{"sh.aqrl",    0, INSN_CLASS_ZALASR, "t,0(s)", MATCH_SH_AQRL, MASK_SH_AQRL, match_opcode, 0 },
+{"sw.aqrl",    0, INSN_CLASS_ZALASR, "t,0(s)", MATCH_SW_AQRL, MASK_SW_AQRL, match_opcode, 0 },
+{"sd.aqrl",    0, INSN_CLASS_ZALASR, "t,0(s)", MATCH_SD_AQRL, MASK_SD_AQRL, match_opcode, 0 },
 
 /* Zawrs instructions.  */
 {"wrs.nto",    0, INSN_CLASS_ZAWRS, "", MATCH_WRS_NTO, MASK_WRS_NTO, match_opcode, 0 },
@@ -1550,322 +1920,322 @@ const struct riscv_opcode riscv_opcodes[] =
 {"vle1.v",     0, INSN_CLASS_V,  "Vd,0(s)", MATCH_VLMV, MASK_VLMV, match_opcode, INSN_DREF|INSN_ALIAS },
 {"vse1.v",     0, INSN_CLASS_V,  "Vd,0(s)", MATCH_VSMV, MASK_VSMV, match_opcode, INSN_DREF|INSN_ALIAS },
 
-{"vle8.v",     0, INSN_CLASS_V,  "Vd,0(s)Vm", MATCH_VLE8V, MASK_VLE8V, match_opcode, INSN_DREF },
-{"vle16.v",    0, INSN_CLASS_V,  "Vd,0(s)Vm", MATCH_VLE16V, MASK_VLE16V, match_opcode, INSN_DREF },
-{"vle32.v",    0, INSN_CLASS_V,  "Vd,0(s)Vm", MATCH_VLE32V, MASK_VLE32V, match_opcode, INSN_DREF },
-{"vle64.v",    0, INSN_CLASS_V,  "Vd,0(s)Vm", MATCH_VLE64V, MASK_VLE64V, match_opcode, INSN_DREF|INSN_V_EEW64 },
+{"vle8.v",     0, INSN_CLASS_V,  "Vd,0(s)Vm", MATCH_VLE8V, MASK_VLE8V, match_vd_neq_vm, INSN_DREF },
+{"vle16.v",    0, INSN_CLASS_V,  "Vd,0(s)Vm", MATCH_VLE16V, MASK_VLE16V, match_vd_neq_vm, INSN_DREF },
+{"vle32.v",    0, INSN_CLASS_V,  "Vd,0(s)Vm", MATCH_VLE32V, MASK_VLE32V, match_vd_neq_vm, INSN_DREF },
+{"vle64.v",    0, INSN_CLASS_V,  "Vd,0(s)Vm", MATCH_VLE64V, MASK_VLE64V, match_vd_neq_vm, INSN_DREF|INSN_V_EEW64 },
 
 {"vse8.v",     0, INSN_CLASS_V,  "Vd,0(s)Vm", MATCH_VSE8V, MASK_VSE8V, match_opcode, INSN_DREF },
 {"vse16.v",    0, INSN_CLASS_V,  "Vd,0(s)Vm", MATCH_VSE16V, MASK_VSE16V, match_opcode, INSN_DREF },
 {"vse32.v",    0, INSN_CLASS_V,  "Vd,0(s)Vm", MATCH_VSE32V, MASK_VSE32V, match_opcode, INSN_DREF },
 {"vse64.v",    0, INSN_CLASS_V,  "Vd,0(s)Vm", MATCH_VSE64V, MASK_VSE64V, match_opcode, INSN_DREF|INSN_V_EEW64 },
 
-{"vlse8.v",    0, INSN_CLASS_V,  "Vd,0(s),tVm", MATCH_VLSE8V, MASK_VLSE8V, match_opcode, INSN_DREF },
-{"vlse16.v",   0, INSN_CLASS_V,  "Vd,0(s),tVm", MATCH_VLSE16V, MASK_VLSE16V, match_opcode, INSN_DREF },
-{"vlse32.v",   0, INSN_CLASS_V,  "Vd,0(s),tVm", MATCH_VLSE32V, MASK_VLSE32V, match_opcode, INSN_DREF },
-{"vlse64.v",   0, INSN_CLASS_V,  "Vd,0(s),tVm", MATCH_VLSE64V, MASK_VLSE64V, match_opcode, INSN_DREF|INSN_V_EEW64 },
+{"vlse8.v",    0, INSN_CLASS_V,  "Vd,0(s),tVm", MATCH_VLSE8V, MASK_VLSE8V, match_vd_neq_vm, INSN_DREF },
+{"vlse16.v",   0, INSN_CLASS_V,  "Vd,0(s),tVm", MATCH_VLSE16V, MASK_VLSE16V, match_vd_neq_vm, INSN_DREF },
+{"vlse32.v",   0, INSN_CLASS_V,  "Vd,0(s),tVm", MATCH_VLSE32V, MASK_VLSE32V, match_vd_neq_vm, INSN_DREF },
+{"vlse64.v",   0, INSN_CLASS_V,  "Vd,0(s),tVm", MATCH_VLSE64V, MASK_VLSE64V, match_vd_neq_vm, INSN_DREF|INSN_V_EEW64 },
 
 {"vsse8.v",    0, INSN_CLASS_V,  "Vd,0(s),tVm", MATCH_VSSE8V, MASK_VSSE8V, match_opcode, INSN_DREF },
 {"vsse16.v",   0, INSN_CLASS_V,  "Vd,0(s),tVm", MATCH_VSSE16V, MASK_VSSE16V, match_opcode, INSN_DREF },
 {"vsse32.v",   0, INSN_CLASS_V,  "Vd,0(s),tVm", MATCH_VSSE32V, MASK_VSSE32V, match_opcode, INSN_DREF },
 {"vsse64.v",   0, INSN_CLASS_V,  "Vd,0(s),tVm", MATCH_VSSE64V, MASK_VSSE64V, match_opcode, INSN_DREF|INSN_V_EEW64 },
 
-{"vloxei8.v",   0, INSN_CLASS_V,  "Vd,0(s),VtVm", MATCH_VLOXEI8V, MASK_VLOXEI8V, match_opcode, INSN_DREF },
-{"vloxei16.v",  0, INSN_CLASS_V,  "Vd,0(s),VtVm", MATCH_VLOXEI16V, MASK_VLOXEI16V, match_opcode, INSN_DREF },
-{"vloxei32.v",  0, INSN_CLASS_V,  "Vd,0(s),VtVm", MATCH_VLOXEI32V, MASK_VLOXEI32V, match_opcode, INSN_DREF },
-{"vloxei64.v",  0, INSN_CLASS_V,  "Vd,0(s),VtVm", MATCH_VLOXEI64V, MASK_VLOXEI64V, match_opcode, INSN_DREF|INSN_V_EEW64 },
+{"vloxei8.v",   0, INSN_CLASS_V,  "Vd,0(s),VtVm", MATCH_VLOXEI8V, MASK_VLOXEI8V, match_vd_neq_vm, INSN_DREF },
+{"vloxei16.v",  0, INSN_CLASS_V,  "Vd,0(s),VtVm", MATCH_VLOXEI16V, MASK_VLOXEI16V, match_vd_neq_vm, INSN_DREF },
+{"vloxei32.v",  0, INSN_CLASS_V,  "Vd,0(s),VtVm", MATCH_VLOXEI32V, MASK_VLOXEI32V, match_vd_neq_vm, INSN_DREF },
+{"vloxei64.v",  0, INSN_CLASS_V,  "Vd,0(s),VtVm", MATCH_VLOXEI64V, MASK_VLOXEI64V, match_vd_neq_vm, INSN_DREF|INSN_V_EEW64 },
 
 {"vsoxei8.v",   0, INSN_CLASS_V,  "Vd,0(s),VtVm", MATCH_VSOXEI8V, MASK_VSOXEI8V, match_opcode, INSN_DREF },
 {"vsoxei16.v",  0, INSN_CLASS_V,  "Vd,0(s),VtVm", MATCH_VSOXEI16V, MASK_VSOXEI16V, match_opcode, INSN_DREF },
 {"vsoxei32.v",  0, INSN_CLASS_V,  "Vd,0(s),VtVm", MATCH_VSOXEI32V, MASK_VSOXEI32V, match_opcode, INSN_DREF },
 {"vsoxei64.v",  0, INSN_CLASS_V,  "Vd,0(s),VtVm", MATCH_VSOXEI64V, MASK_VSOXEI64V, match_opcode, INSN_DREF|INSN_V_EEW64 },
 
-{"vluxei8.v",   0, INSN_CLASS_V,  "Vd,0(s),VtVm", MATCH_VLUXEI8V, MASK_VLUXEI8V, match_opcode, INSN_DREF },
-{"vluxei16.v",  0, INSN_CLASS_V,  "Vd,0(s),VtVm", MATCH_VLUXEI16V, MASK_VLUXEI16V, match_opcode, INSN_DREF },
-{"vluxei32.v",  0, INSN_CLASS_V,  "Vd,0(s),VtVm", MATCH_VLUXEI32V, MASK_VLUXEI32V, match_opcode, INSN_DREF },
-{"vluxei64.v",  0, INSN_CLASS_V,  "Vd,0(s),VtVm", MATCH_VLUXEI64V, MASK_VLUXEI64V, match_opcode, INSN_DREF|INSN_V_EEW64 },
+{"vluxei8.v",   0, INSN_CLASS_V,  "Vd,0(s),VtVm", MATCH_VLUXEI8V, MASK_VLUXEI8V, match_vd_neq_vm, INSN_DREF },
+{"vluxei16.v",  0, INSN_CLASS_V,  "Vd,0(s),VtVm", MATCH_VLUXEI16V, MASK_VLUXEI16V, match_vd_neq_vm, INSN_DREF },
+{"vluxei32.v",  0, INSN_CLASS_V,  "Vd,0(s),VtVm", MATCH_VLUXEI32V, MASK_VLUXEI32V, match_vd_neq_vm, INSN_DREF },
+{"vluxei64.v",  0, INSN_CLASS_V,  "Vd,0(s),VtVm", MATCH_VLUXEI64V, MASK_VLUXEI64V, match_vd_neq_vm, INSN_DREF|INSN_V_EEW64 },
 
 {"vsuxei8.v",   0, INSN_CLASS_V,  "Vd,0(s),VtVm", MATCH_VSUXEI8V, MASK_VSUXEI8V, match_opcode, INSN_DREF },
 {"vsuxei16.v",  0, INSN_CLASS_V,  "Vd,0(s),VtVm", MATCH_VSUXEI16V, MASK_VSUXEI16V, match_opcode, INSN_DREF },
 {"vsuxei32.v",  0, INSN_CLASS_V,  "Vd,0(s),VtVm", MATCH_VSUXEI32V, MASK_VSUXEI32V, match_opcode, INSN_DREF },
 {"vsuxei64.v",  0, INSN_CLASS_V,  "Vd,0(s),VtVm", MATCH_VSUXEI64V, MASK_VSUXEI64V, match_opcode, INSN_DREF|INSN_V_EEW64 },
 
-{"vle8ff.v",    0, INSN_CLASS_V,  "Vd,0(s)Vm", MATCH_VLE8FFV, MASK_VLE8FFV, match_opcode, INSN_DREF },
-{"vle16ff.v",   0, INSN_CLASS_V,  "Vd,0(s)Vm", MATCH_VLE16FFV, MASK_VLE16FFV, match_opcode, INSN_DREF },
-{"vle32ff.v",   0, INSN_CLASS_V,  "Vd,0(s)Vm", MATCH_VLE32FFV, MASK_VLE32FFV, match_opcode, INSN_DREF },
-{"vle64ff.v",   0, INSN_CLASS_V,  "Vd,0(s)Vm", MATCH_VLE64FFV, MASK_VLE64FFV, match_opcode, INSN_DREF|INSN_V_EEW64 },
+{"vle8ff.v",    0, INSN_CLASS_V,  "Vd,0(s)Vm", MATCH_VLE8FFV, MASK_VLE8FFV, match_vd_neq_vm, INSN_DREF },
+{"vle16ff.v",   0, INSN_CLASS_V,  "Vd,0(s)Vm", MATCH_VLE16FFV, MASK_VLE16FFV, match_vd_neq_vm, INSN_DREF },
+{"vle32ff.v",   0, INSN_CLASS_V,  "Vd,0(s)Vm", MATCH_VLE32FFV, MASK_VLE32FFV, match_vd_neq_vm, INSN_DREF },
+{"vle64ff.v",   0, INSN_CLASS_V,  "Vd,0(s)Vm", MATCH_VLE64FFV, MASK_VLE64FFV, match_vd_neq_vm, INSN_DREF|INSN_V_EEW64 },
 
-{"vlseg2e8.v",  0, INSN_CLASS_V,  "Vd,0(s)Vm", MATCH_VLSEG2E8V, MASK_VLSEG2E8V, match_opcode, INSN_DREF },
-{"vsseg2e8.v",  0, INSN_CLASS_V,  "Vd,0(s)Vm", MATCH_VSSEG2E8V, MASK_VSSEG2E8V, match_opcode, INSN_DREF },
-{"vlseg3e8.v",  0, INSN_CLASS_V,  "Vd,0(s)Vm", MATCH_VLSEG3E8V, MASK_VLSEG3E8V, match_opcode, INSN_DREF },
-{"vsseg3e8.v",  0, INSN_CLASS_V,  "Vd,0(s)Vm", MATCH_VSSEG3E8V, MASK_VSSEG3E8V, match_opcode, INSN_DREF },
-{"vlseg4e8.v",  0, INSN_CLASS_V,  "Vd,0(s)Vm", MATCH_VLSEG4E8V, MASK_VLSEG4E8V, match_opcode, INSN_DREF },
-{"vsseg4e8.v",  0, INSN_CLASS_V,  "Vd,0(s)Vm", MATCH_VSSEG4E8V, MASK_VSSEG4E8V, match_opcode, INSN_DREF },
-{"vlseg5e8.v",  0, INSN_CLASS_V,  "Vd,0(s)Vm", MATCH_VLSEG5E8V, MASK_VLSEG5E8V, match_opcode, INSN_DREF },
-{"vsseg5e8.v",  0, INSN_CLASS_V,  "Vd,0(s)Vm", MATCH_VSSEG5E8V, MASK_VSSEG5E8V, match_opcode, INSN_DREF },
-{"vlseg6e8.v",  0, INSN_CLASS_V,  "Vd,0(s)Vm", MATCH_VLSEG6E8V, MASK_VLSEG6E8V, match_opcode, INSN_DREF },
-{"vsseg6e8.v",  0, INSN_CLASS_V,  "Vd,0(s)Vm", MATCH_VSSEG6E8V, MASK_VSSEG6E8V, match_opcode, INSN_DREF },
-{"vlseg7e8.v",  0, INSN_CLASS_V,  "Vd,0(s)Vm", MATCH_VLSEG7E8V, MASK_VLSEG7E8V, match_opcode, INSN_DREF },
-{"vsseg7e8.v",  0, INSN_CLASS_V,  "Vd,0(s)Vm", MATCH_VSSEG7E8V, MASK_VSSEG7E8V, match_opcode, INSN_DREF },
-{"vlseg8e8.v",  0, INSN_CLASS_V,  "Vd,0(s)Vm", MATCH_VLSEG8E8V, MASK_VLSEG8E8V, match_opcode, INSN_DREF },
-{"vsseg8e8.v",  0, INSN_CLASS_V,  "Vd,0(s)Vm", MATCH_VSSEG8E8V, MASK_VSSEG8E8V, match_opcode, INSN_DREF },
+{"vlseg2e8.v",  0, INSN_CLASS_V,  "Vd,0(s)Vm", MATCH_VLSEG2E8V, MASK_VLSEG2E8V, match_vd_neq_vm_with_nf, INSN_DREF },
+{"vsseg2e8.v",  0, INSN_CLASS_V,  "Vd,0(s)Vm", MATCH_VSSEG2E8V, MASK_VSSEG2E8V, match_vd_with_nf, INSN_DREF },
+{"vlseg3e8.v",  0, INSN_CLASS_V,  "Vd,0(s)Vm", MATCH_VLSEG3E8V, MASK_VLSEG3E8V, match_vd_neq_vm_with_nf, INSN_DREF },
+{"vsseg3e8.v",  0, INSN_CLASS_V,  "Vd,0(s)Vm", MATCH_VSSEG3E8V, MASK_VSSEG3E8V, match_vd_with_nf, INSN_DREF },
+{"vlseg4e8.v",  0, INSN_CLASS_V,  "Vd,0(s)Vm", MATCH_VLSEG4E8V, MASK_VLSEG4E8V, match_vd_neq_vm_with_nf, INSN_DREF },
+{"vsseg4e8.v",  0, INSN_CLASS_V,  "Vd,0(s)Vm", MATCH_VSSEG4E8V, MASK_VSSEG4E8V, match_vd_with_nf, INSN_DREF },
+{"vlseg5e8.v",  0, INSN_CLASS_V,  "Vd,0(s)Vm", MATCH_VLSEG5E8V, MASK_VLSEG5E8V, match_vd_neq_vm_with_nf, INSN_DREF },
+{"vsseg5e8.v",  0, INSN_CLASS_V,  "Vd,0(s)Vm", MATCH_VSSEG5E8V, MASK_VSSEG5E8V, match_vd_with_nf, INSN_DREF },
+{"vlseg6e8.v",  0, INSN_CLASS_V,  "Vd,0(s)Vm", MATCH_VLSEG6E8V, MASK_VLSEG6E8V, match_vd_neq_vm_with_nf, INSN_DREF },
+{"vsseg6e8.v",  0, INSN_CLASS_V,  "Vd,0(s)Vm", MATCH_VSSEG6E8V, MASK_VSSEG6E8V, match_vd_with_nf, INSN_DREF },
+{"vlseg7e8.v",  0, INSN_CLASS_V,  "Vd,0(s)Vm", MATCH_VLSEG7E8V, MASK_VLSEG7E8V, match_vd_neq_vm_with_nf, INSN_DREF },
+{"vsseg7e8.v",  0, INSN_CLASS_V,  "Vd,0(s)Vm", MATCH_VSSEG7E8V, MASK_VSSEG7E8V, match_vd_with_nf, INSN_DREF },
+{"vlseg8e8.v",  0, INSN_CLASS_V,  "Vd,0(s)Vm", MATCH_VLSEG8E8V, MASK_VLSEG8E8V, match_vd_neq_vm_with_nf, INSN_DREF },
+{"vsseg8e8.v",  0, INSN_CLASS_V,  "Vd,0(s)Vm", MATCH_VSSEG8E8V, MASK_VSSEG8E8V, match_vd_with_nf, INSN_DREF },
 
-{"vlseg2e16.v",  0, INSN_CLASS_V,  "Vd,0(s)Vm", MATCH_VLSEG2E16V, MASK_VLSEG2E16V, match_opcode, INSN_DREF },
-{"vsseg2e16.v",  0, INSN_CLASS_V,  "Vd,0(s)Vm", MATCH_VSSEG2E16V, MASK_VSSEG2E16V, match_opcode, INSN_DREF },
-{"vlseg3e16.v",  0, INSN_CLASS_V,  "Vd,0(s)Vm", MATCH_VLSEG3E16V, MASK_VLSEG3E16V, match_opcode, INSN_DREF },
-{"vsseg3e16.v",  0, INSN_CLASS_V,  "Vd,0(s)Vm", MATCH_VSSEG3E16V, MASK_VSSEG3E16V, match_opcode, INSN_DREF },
-{"vlseg4e16.v",  0, INSN_CLASS_V,  "Vd,0(s)Vm", MATCH_VLSEG4E16V, MASK_VLSEG4E16V, match_opcode, INSN_DREF },
-{"vsseg4e16.v",  0, INSN_CLASS_V,  "Vd,0(s)Vm", MATCH_VSSEG4E16V, MASK_VSSEG4E16V, match_opcode, INSN_DREF },
-{"vlseg5e16.v",  0, INSN_CLASS_V,  "Vd,0(s)Vm", MATCH_VLSEG5E16V, MASK_VLSEG5E16V, match_opcode, INSN_DREF },
-{"vsseg5e16.v",  0, INSN_CLASS_V,  "Vd,0(s)Vm", MATCH_VSSEG5E16V, MASK_VSSEG5E16V, match_opcode, INSN_DREF },
-{"vlseg6e16.v",  0, INSN_CLASS_V,  "Vd,0(s)Vm", MATCH_VLSEG6E16V, MASK_VLSEG6E16V, match_opcode, INSN_DREF },
-{"vsseg6e16.v",  0, INSN_CLASS_V,  "Vd,0(s)Vm", MATCH_VSSEG6E16V, MASK_VSSEG6E16V, match_opcode, INSN_DREF },
-{"vlseg7e16.v",  0, INSN_CLASS_V,  "Vd,0(s)Vm", MATCH_VLSEG7E16V, MASK_VLSEG7E16V, match_opcode, INSN_DREF },
-{"vsseg7e16.v",  0, INSN_CLASS_V,  "Vd,0(s)Vm", MATCH_VSSEG7E16V, MASK_VSSEG7E16V, match_opcode, INSN_DREF },
-{"vlseg8e16.v",  0, INSN_CLASS_V,  "Vd,0(s)Vm", MATCH_VLSEG8E16V, MASK_VLSEG8E16V, match_opcode, INSN_DREF },
-{"vsseg8e16.v",  0, INSN_CLASS_V,  "Vd,0(s)Vm", MATCH_VSSEG8E16V, MASK_VSSEG8E16V, match_opcode, INSN_DREF },
+{"vlseg2e16.v",  0, INSN_CLASS_V,  "Vd,0(s)Vm", MATCH_VLSEG2E16V, MASK_VLSEG2E16V, match_vd_neq_vm_with_nf, INSN_DREF },
+{"vsseg2e16.v",  0, INSN_CLASS_V,  "Vd,0(s)Vm", MATCH_VSSEG2E16V, MASK_VSSEG2E16V, match_vd_with_nf, INSN_DREF },
+{"vlseg3e16.v",  0, INSN_CLASS_V,  "Vd,0(s)Vm", MATCH_VLSEG3E16V, MASK_VLSEG3E16V, match_vd_neq_vm_with_nf, INSN_DREF },
+{"vsseg3e16.v",  0, INSN_CLASS_V,  "Vd,0(s)Vm", MATCH_VSSEG3E16V, MASK_VSSEG3E16V, match_vd_with_nf, INSN_DREF },
+{"vlseg4e16.v",  0, INSN_CLASS_V,  "Vd,0(s)Vm", MATCH_VLSEG4E16V, MASK_VLSEG4E16V, match_vd_neq_vm_with_nf, INSN_DREF },
+{"vsseg4e16.v",  0, INSN_CLASS_V,  "Vd,0(s)Vm", MATCH_VSSEG4E16V, MASK_VSSEG4E16V, match_vd_with_nf, INSN_DREF },
+{"vlseg5e16.v",  0, INSN_CLASS_V,  "Vd,0(s)Vm", MATCH_VLSEG5E16V, MASK_VLSEG5E16V, match_vd_neq_vm_with_nf, INSN_DREF },
+{"vsseg5e16.v",  0, INSN_CLASS_V,  "Vd,0(s)Vm", MATCH_VSSEG5E16V, MASK_VSSEG5E16V, match_vd_with_nf, INSN_DREF },
+{"vlseg6e16.v",  0, INSN_CLASS_V,  "Vd,0(s)Vm", MATCH_VLSEG6E16V, MASK_VLSEG6E16V, match_vd_neq_vm_with_nf, INSN_DREF },
+{"vsseg6e16.v",  0, INSN_CLASS_V,  "Vd,0(s)Vm", MATCH_VSSEG6E16V, MASK_VSSEG6E16V, match_vd_with_nf, INSN_DREF },
+{"vlseg7e16.v",  0, INSN_CLASS_V,  "Vd,0(s)Vm", MATCH_VLSEG7E16V, MASK_VLSEG7E16V, match_vd_neq_vm_with_nf, INSN_DREF },
+{"vsseg7e16.v",  0, INSN_CLASS_V,  "Vd,0(s)Vm", MATCH_VSSEG7E16V, MASK_VSSEG7E16V, match_vd_with_nf, INSN_DREF },
+{"vlseg8e16.v",  0, INSN_CLASS_V,  "Vd,0(s)Vm", MATCH_VLSEG8E16V, MASK_VLSEG8E16V, match_vd_neq_vm_with_nf, INSN_DREF },
+{"vsseg8e16.v",  0, INSN_CLASS_V,  "Vd,0(s)Vm", MATCH_VSSEG8E16V, MASK_VSSEG8E16V, match_vd_with_nf, INSN_DREF },
 
-{"vlseg2e32.v",  0, INSN_CLASS_V,  "Vd,0(s)Vm", MATCH_VLSEG2E32V, MASK_VLSEG2E32V, match_opcode, INSN_DREF },
-{"vsseg2e32.v",  0, INSN_CLASS_V,  "Vd,0(s)Vm", MATCH_VSSEG2E32V, MASK_VSSEG2E32V, match_opcode, INSN_DREF },
-{"vlseg3e32.v",  0, INSN_CLASS_V,  "Vd,0(s)Vm", MATCH_VLSEG3E32V, MASK_VLSEG3E32V, match_opcode, INSN_DREF },
-{"vsseg3e32.v",  0, INSN_CLASS_V,  "Vd,0(s)Vm", MATCH_VSSEG3E32V, MASK_VSSEG3E32V, match_opcode, INSN_DREF },
-{"vlseg4e32.v",  0, INSN_CLASS_V,  "Vd,0(s)Vm", MATCH_VLSEG4E32V, MASK_VLSEG4E32V, match_opcode, INSN_DREF },
-{"vsseg4e32.v",  0, INSN_CLASS_V,  "Vd,0(s)Vm", MATCH_VSSEG4E32V, MASK_VSSEG4E32V, match_opcode, INSN_DREF },
-{"vlseg5e32.v",  0, INSN_CLASS_V,  "Vd,0(s)Vm", MATCH_VLSEG5E32V, MASK_VLSEG5E32V, match_opcode, INSN_DREF },
-{"vsseg5e32.v",  0, INSN_CLASS_V,  "Vd,0(s)Vm", MATCH_VSSEG5E32V, MASK_VSSEG5E32V, match_opcode, INSN_DREF },
-{"vlseg6e32.v",  0, INSN_CLASS_V,  "Vd,0(s)Vm", MATCH_VLSEG6E32V, MASK_VLSEG6E32V, match_opcode, INSN_DREF },
-{"vsseg6e32.v",  0, INSN_CLASS_V,  "Vd,0(s)Vm", MATCH_VSSEG6E32V, MASK_VSSEG6E32V, match_opcode, INSN_DREF },
-{"vlseg7e32.v",  0, INSN_CLASS_V,  "Vd,0(s)Vm", MATCH_VLSEG7E32V, MASK_VLSEG7E32V, match_opcode, INSN_DREF },
-{"vsseg7e32.v",  0, INSN_CLASS_V,  "Vd,0(s)Vm", MATCH_VSSEG7E32V, MASK_VSSEG7E32V, match_opcode, INSN_DREF },
-{"vlseg8e32.v",  0, INSN_CLASS_V,  "Vd,0(s)Vm", MATCH_VLSEG8E32V, MASK_VLSEG8E32V, match_opcode, INSN_DREF },
-{"vsseg8e32.v",  0, INSN_CLASS_V,  "Vd,0(s)Vm", MATCH_VSSEG8E32V, MASK_VSSEG8E32V, match_opcode, INSN_DREF },
+{"vlseg2e32.v",  0, INSN_CLASS_V,  "Vd,0(s)Vm", MATCH_VLSEG2E32V, MASK_VLSEG2E32V, match_vd_neq_vm_with_nf, INSN_DREF },
+{"vsseg2e32.v",  0, INSN_CLASS_V,  "Vd,0(s)Vm", MATCH_VSSEG2E32V, MASK_VSSEG2E32V, match_vd_with_nf, INSN_DREF },
+{"vlseg3e32.v",  0, INSN_CLASS_V,  "Vd,0(s)Vm", MATCH_VLSEG3E32V, MASK_VLSEG3E32V, match_vd_neq_vm_with_nf, INSN_DREF },
+{"vsseg3e32.v",  0, INSN_CLASS_V,  "Vd,0(s)Vm", MATCH_VSSEG3E32V, MASK_VSSEG3E32V, match_vd_with_nf, INSN_DREF },
+{"vlseg4e32.v",  0, INSN_CLASS_V,  "Vd,0(s)Vm", MATCH_VLSEG4E32V, MASK_VLSEG4E32V, match_vd_neq_vm_with_nf, INSN_DREF },
+{"vsseg4e32.v",  0, INSN_CLASS_V,  "Vd,0(s)Vm", MATCH_VSSEG4E32V, MASK_VSSEG4E32V, match_vd_with_nf, INSN_DREF },
+{"vlseg5e32.v",  0, INSN_CLASS_V,  "Vd,0(s)Vm", MATCH_VLSEG5E32V, MASK_VLSEG5E32V, match_vd_neq_vm_with_nf, INSN_DREF },
+{"vsseg5e32.v",  0, INSN_CLASS_V,  "Vd,0(s)Vm", MATCH_VSSEG5E32V, MASK_VSSEG5E32V, match_vd_with_nf, INSN_DREF },
+{"vlseg6e32.v",  0, INSN_CLASS_V,  "Vd,0(s)Vm", MATCH_VLSEG6E32V, MASK_VLSEG6E32V, match_vd_neq_vm_with_nf, INSN_DREF },
+{"vsseg6e32.v",  0, INSN_CLASS_V,  "Vd,0(s)Vm", MATCH_VSSEG6E32V, MASK_VSSEG6E32V, match_vd_with_nf, INSN_DREF },
+{"vlseg7e32.v",  0, INSN_CLASS_V,  "Vd,0(s)Vm", MATCH_VLSEG7E32V, MASK_VLSEG7E32V, match_vd_neq_vm_with_nf, INSN_DREF },
+{"vsseg7e32.v",  0, INSN_CLASS_V,  "Vd,0(s)Vm", MATCH_VSSEG7E32V, MASK_VSSEG7E32V, match_vd_with_nf, INSN_DREF },
+{"vlseg8e32.v",  0, INSN_CLASS_V,  "Vd,0(s)Vm", MATCH_VLSEG8E32V, MASK_VLSEG8E32V, match_vd_neq_vm_with_nf, INSN_DREF },
+{"vsseg8e32.v",  0, INSN_CLASS_V,  "Vd,0(s)Vm", MATCH_VSSEG8E32V, MASK_VSSEG8E32V, match_vd_with_nf, INSN_DREF },
 
-{"vlseg2e64.v",  0, INSN_CLASS_V,  "Vd,0(s)Vm", MATCH_VLSEG2E64V, MASK_VLSEG2E64V, match_opcode, INSN_DREF|INSN_V_EEW64 },
-{"vsseg2e64.v",  0, INSN_CLASS_V,  "Vd,0(s)Vm", MATCH_VSSEG2E64V, MASK_VSSEG2E64V, match_opcode, INSN_DREF|INSN_V_EEW64 },
-{"vlseg3e64.v",  0, INSN_CLASS_V,  "Vd,0(s)Vm", MATCH_VLSEG3E64V, MASK_VLSEG3E64V, match_opcode, INSN_DREF|INSN_V_EEW64 },
-{"vsseg3e64.v",  0, INSN_CLASS_V,  "Vd,0(s)Vm", MATCH_VSSEG3E64V, MASK_VSSEG3E64V, match_opcode, INSN_DREF|INSN_V_EEW64 },
-{"vlseg4e64.v",  0, INSN_CLASS_V,  "Vd,0(s)Vm", MATCH_VLSEG4E64V, MASK_VLSEG4E64V, match_opcode, INSN_DREF|INSN_V_EEW64 },
-{"vsseg4e64.v",  0, INSN_CLASS_V,  "Vd,0(s)Vm", MATCH_VSSEG4E64V, MASK_VSSEG4E64V, match_opcode, INSN_DREF|INSN_V_EEW64 },
-{"vlseg5e64.v",  0, INSN_CLASS_V,  "Vd,0(s)Vm", MATCH_VLSEG5E64V, MASK_VLSEG5E64V, match_opcode, INSN_DREF|INSN_V_EEW64 },
-{"vsseg5e64.v",  0, INSN_CLASS_V,  "Vd,0(s)Vm", MATCH_VSSEG5E64V, MASK_VSSEG5E64V, match_opcode, INSN_DREF|INSN_V_EEW64 },
-{"vlseg6e64.v",  0, INSN_CLASS_V,  "Vd,0(s)Vm", MATCH_VLSEG6E64V, MASK_VLSEG6E64V, match_opcode, INSN_DREF|INSN_V_EEW64 },
-{"vsseg6e64.v",  0, INSN_CLASS_V,  "Vd,0(s)Vm", MATCH_VSSEG6E64V, MASK_VSSEG6E64V, match_opcode, INSN_DREF|INSN_V_EEW64 },
-{"vlseg7e64.v",  0, INSN_CLASS_V,  "Vd,0(s)Vm", MATCH_VLSEG7E64V, MASK_VLSEG7E64V, match_opcode, INSN_DREF|INSN_V_EEW64 },
-{"vsseg7e64.v",  0, INSN_CLASS_V,  "Vd,0(s)Vm", MATCH_VSSEG7E64V, MASK_VSSEG7E64V, match_opcode, INSN_DREF|INSN_V_EEW64 },
-{"vlseg8e64.v",  0, INSN_CLASS_V,  "Vd,0(s)Vm", MATCH_VLSEG8E64V, MASK_VLSEG8E64V, match_opcode, INSN_DREF|INSN_V_EEW64 },
-{"vsseg8e64.v",  0, INSN_CLASS_V,  "Vd,0(s)Vm", MATCH_VSSEG8E64V, MASK_VSSEG8E64V, match_opcode, INSN_DREF|INSN_V_EEW64 },
+{"vlseg2e64.v",  0, INSN_CLASS_V,  "Vd,0(s)Vm", MATCH_VLSEG2E64V, MASK_VLSEG2E64V, match_vd_neq_vm_with_nf, INSN_DREF|INSN_V_EEW64 },
+{"vsseg2e64.v",  0, INSN_CLASS_V,  "Vd,0(s)Vm", MATCH_VSSEG2E64V, MASK_VSSEG2E64V, match_vd_with_nf, INSN_DREF|INSN_V_EEW64 },
+{"vlseg3e64.v",  0, INSN_CLASS_V,  "Vd,0(s)Vm", MATCH_VLSEG3E64V, MASK_VLSEG3E64V, match_vd_neq_vm_with_nf, INSN_DREF|INSN_V_EEW64 },
+{"vsseg3e64.v",  0, INSN_CLASS_V,  "Vd,0(s)Vm", MATCH_VSSEG3E64V, MASK_VSSEG3E64V, match_vd_with_nf, INSN_DREF|INSN_V_EEW64 },
+{"vlseg4e64.v",  0, INSN_CLASS_V,  "Vd,0(s)Vm", MATCH_VLSEG4E64V, MASK_VLSEG4E64V, match_vd_neq_vm_with_nf, INSN_DREF|INSN_V_EEW64 },
+{"vsseg4e64.v",  0, INSN_CLASS_V,  "Vd,0(s)Vm", MATCH_VSSEG4E64V, MASK_VSSEG4E64V, match_vd_with_nf, INSN_DREF|INSN_V_EEW64 },
+{"vlseg5e64.v",  0, INSN_CLASS_V,  "Vd,0(s)Vm", MATCH_VLSEG5E64V, MASK_VLSEG5E64V, match_vd_neq_vm_with_nf, INSN_DREF|INSN_V_EEW64 },
+{"vsseg5e64.v",  0, INSN_CLASS_V,  "Vd,0(s)Vm", MATCH_VSSEG5E64V, MASK_VSSEG5E64V, match_vd_with_nf, INSN_DREF|INSN_V_EEW64 },
+{"vlseg6e64.v",  0, INSN_CLASS_V,  "Vd,0(s)Vm", MATCH_VLSEG6E64V, MASK_VLSEG6E64V, match_vd_neq_vm_with_nf, INSN_DREF|INSN_V_EEW64 },
+{"vsseg6e64.v",  0, INSN_CLASS_V,  "Vd,0(s)Vm", MATCH_VSSEG6E64V, MASK_VSSEG6E64V, match_vd_with_nf, INSN_DREF|INSN_V_EEW64 },
+{"vlseg7e64.v",  0, INSN_CLASS_V,  "Vd,0(s)Vm", MATCH_VLSEG7E64V, MASK_VLSEG7E64V, match_vd_neq_vm_with_nf, INSN_DREF|INSN_V_EEW64 },
+{"vsseg7e64.v",  0, INSN_CLASS_V,  "Vd,0(s)Vm", MATCH_VSSEG7E64V, MASK_VSSEG7E64V, match_vd_with_nf, INSN_DREF|INSN_V_EEW64 },
+{"vlseg8e64.v",  0, INSN_CLASS_V,  "Vd,0(s)Vm", MATCH_VLSEG8E64V, MASK_VLSEG8E64V, match_vd_neq_vm_with_nf, INSN_DREF|INSN_V_EEW64 },
+{"vsseg8e64.v",  0, INSN_CLASS_V,  "Vd,0(s)Vm", MATCH_VSSEG8E64V, MASK_VSSEG8E64V, match_vd_with_nf, INSN_DREF|INSN_V_EEW64 },
 
-{"vlsseg2e8.v",  0, INSN_CLASS_V,  "Vd,0(s),tVm", MATCH_VLSSEG2E8V, MASK_VLSSEG2E8V, match_opcode, INSN_DREF },
-{"vssseg2e8.v",  0, INSN_CLASS_V,  "Vd,0(s),tVm", MATCH_VSSSEG2E8V, MASK_VSSSEG2E8V, match_opcode, INSN_DREF },
-{"vlsseg3e8.v",  0, INSN_CLASS_V,  "Vd,0(s),tVm", MATCH_VLSSEG3E8V, MASK_VLSSEG3E8V, match_opcode, INSN_DREF },
-{"vssseg3e8.v",  0, INSN_CLASS_V,  "Vd,0(s),tVm", MATCH_VSSSEG3E8V, MASK_VSSSEG3E8V, match_opcode, INSN_DREF },
-{"vlsseg4e8.v",  0, INSN_CLASS_V,  "Vd,0(s),tVm", MATCH_VLSSEG4E8V, MASK_VLSSEG4E8V, match_opcode, INSN_DREF },
-{"vssseg4e8.v",  0, INSN_CLASS_V,  "Vd,0(s),tVm", MATCH_VSSSEG4E8V, MASK_VSSSEG4E8V, match_opcode, INSN_DREF },
-{"vlsseg5e8.v",  0, INSN_CLASS_V,  "Vd,0(s),tVm", MATCH_VLSSEG5E8V, MASK_VLSSEG5E8V, match_opcode, INSN_DREF },
-{"vssseg5e8.v",  0, INSN_CLASS_V,  "Vd,0(s),tVm", MATCH_VSSSEG5E8V, MASK_VSSSEG5E8V, match_opcode, INSN_DREF },
-{"vlsseg6e8.v",  0, INSN_CLASS_V,  "Vd,0(s),tVm", MATCH_VLSSEG6E8V, MASK_VLSSEG6E8V, match_opcode, INSN_DREF },
-{"vssseg6e8.v",  0, INSN_CLASS_V,  "Vd,0(s),tVm", MATCH_VSSSEG6E8V, MASK_VSSSEG6E8V, match_opcode, INSN_DREF },
-{"vlsseg7e8.v",  0, INSN_CLASS_V,  "Vd,0(s),tVm", MATCH_VLSSEG7E8V, MASK_VLSSEG7E8V, match_opcode, INSN_DREF },
-{"vssseg7e8.v",  0, INSN_CLASS_V,  "Vd,0(s),tVm", MATCH_VSSSEG7E8V, MASK_VSSSEG7E8V, match_opcode, INSN_DREF },
-{"vlsseg8e8.v",  0, INSN_CLASS_V,  "Vd,0(s),tVm", MATCH_VLSSEG8E8V, MASK_VLSSEG8E8V, match_opcode, INSN_DREF },
-{"vssseg8e8.v",  0, INSN_CLASS_V,  "Vd,0(s),tVm", MATCH_VSSSEG8E8V, MASK_VSSSEG8E8V, match_opcode, INSN_DREF },
+{"vlsseg2e8.v",  0, INSN_CLASS_V,  "Vd,0(s),tVm", MATCH_VLSSEG2E8V, MASK_VLSSEG2E8V, match_vd_neq_vm_with_nf, INSN_DREF },
+{"vssseg2e8.v",  0, INSN_CLASS_V,  "Vd,0(s),tVm", MATCH_VSSSEG2E8V, MASK_VSSSEG2E8V, match_vd_with_nf, INSN_DREF },
+{"vlsseg3e8.v",  0, INSN_CLASS_V,  "Vd,0(s),tVm", MATCH_VLSSEG3E8V, MASK_VLSSEG3E8V, match_vd_neq_vm_with_nf, INSN_DREF },
+{"vssseg3e8.v",  0, INSN_CLASS_V,  "Vd,0(s),tVm", MATCH_VSSSEG3E8V, MASK_VSSSEG3E8V, match_vd_with_nf, INSN_DREF },
+{"vlsseg4e8.v",  0, INSN_CLASS_V,  "Vd,0(s),tVm", MATCH_VLSSEG4E8V, MASK_VLSSEG4E8V, match_vd_neq_vm_with_nf, INSN_DREF },
+{"vssseg4e8.v",  0, INSN_CLASS_V,  "Vd,0(s),tVm", MATCH_VSSSEG4E8V, MASK_VSSSEG4E8V, match_vd_with_nf, INSN_DREF },
+{"vlsseg5e8.v",  0, INSN_CLASS_V,  "Vd,0(s),tVm", MATCH_VLSSEG5E8V, MASK_VLSSEG5E8V, match_vd_neq_vm_with_nf, INSN_DREF },
+{"vssseg5e8.v",  0, INSN_CLASS_V,  "Vd,0(s),tVm", MATCH_VSSSEG5E8V, MASK_VSSSEG5E8V, match_vd_with_nf, INSN_DREF },
+{"vlsseg6e8.v",  0, INSN_CLASS_V,  "Vd,0(s),tVm", MATCH_VLSSEG6E8V, MASK_VLSSEG6E8V, match_vd_neq_vm_with_nf, INSN_DREF },
+{"vssseg6e8.v",  0, INSN_CLASS_V,  "Vd,0(s),tVm", MATCH_VSSSEG6E8V, MASK_VSSSEG6E8V, match_vd_with_nf, INSN_DREF },
+{"vlsseg7e8.v",  0, INSN_CLASS_V,  "Vd,0(s),tVm", MATCH_VLSSEG7E8V, MASK_VLSSEG7E8V, match_vd_neq_vm_with_nf, INSN_DREF },
+{"vssseg7e8.v",  0, INSN_CLASS_V,  "Vd,0(s),tVm", MATCH_VSSSEG7E8V, MASK_VSSSEG7E8V, match_vd_with_nf, INSN_DREF },
+{"vlsseg8e8.v",  0, INSN_CLASS_V,  "Vd,0(s),tVm", MATCH_VLSSEG8E8V, MASK_VLSSEG8E8V, match_vd_neq_vm_with_nf, INSN_DREF },
+{"vssseg8e8.v",  0, INSN_CLASS_V,  "Vd,0(s),tVm", MATCH_VSSSEG8E8V, MASK_VSSSEG8E8V, match_vd_with_nf, INSN_DREF },
 
-{"vlsseg2e16.v",  0, INSN_CLASS_V,  "Vd,0(s),tVm", MATCH_VLSSEG2E16V, MASK_VLSSEG2E16V, match_opcode, INSN_DREF },
-{"vssseg2e16.v",  0, INSN_CLASS_V,  "Vd,0(s),tVm", MATCH_VSSSEG2E16V, MASK_VSSSEG2E16V, match_opcode, INSN_DREF },
-{"vlsseg3e16.v",  0, INSN_CLASS_V,  "Vd,0(s),tVm", MATCH_VLSSEG3E16V, MASK_VLSSEG3E16V, match_opcode, INSN_DREF },
-{"vssseg3e16.v",  0, INSN_CLASS_V,  "Vd,0(s),tVm", MATCH_VSSSEG3E16V, MASK_VSSSEG3E16V, match_opcode, INSN_DREF },
-{"vlsseg4e16.v",  0, INSN_CLASS_V,  "Vd,0(s),tVm", MATCH_VLSSEG4E16V, MASK_VLSSEG4E16V, match_opcode, INSN_DREF },
-{"vssseg4e16.v",  0, INSN_CLASS_V,  "Vd,0(s),tVm", MATCH_VSSSEG4E16V, MASK_VSSSEG4E16V, match_opcode, INSN_DREF },
-{"vlsseg5e16.v",  0, INSN_CLASS_V,  "Vd,0(s),tVm", MATCH_VLSSEG5E16V, MASK_VLSSEG5E16V, match_opcode, INSN_DREF },
-{"vssseg5e16.v",  0, INSN_CLASS_V,  "Vd,0(s),tVm", MATCH_VSSSEG5E16V, MASK_VSSSEG5E16V, match_opcode, INSN_DREF },
-{"vlsseg6e16.v",  0, INSN_CLASS_V,  "Vd,0(s),tVm", MATCH_VLSSEG6E16V, MASK_VLSSEG6E16V, match_opcode, INSN_DREF },
-{"vssseg6e16.v",  0, INSN_CLASS_V,  "Vd,0(s),tVm", MATCH_VSSSEG6E16V, MASK_VSSSEG6E16V, match_opcode, INSN_DREF },
-{"vlsseg7e16.v",  0, INSN_CLASS_V,  "Vd,0(s),tVm", MATCH_VLSSEG7E16V, MASK_VLSSEG7E16V, match_opcode, INSN_DREF },
-{"vssseg7e16.v",  0, INSN_CLASS_V,  "Vd,0(s),tVm", MATCH_VSSSEG7E16V, MASK_VSSSEG7E16V, match_opcode, INSN_DREF },
-{"vlsseg8e16.v",  0, INSN_CLASS_V,  "Vd,0(s),tVm", MATCH_VLSSEG8E16V, MASK_VLSSEG8E16V, match_opcode, INSN_DREF },
-{"vssseg8e16.v",  0, INSN_CLASS_V,  "Vd,0(s),tVm", MATCH_VSSSEG8E16V, MASK_VSSSEG8E16V, match_opcode, INSN_DREF },
+{"vlsseg2e16.v",  0, INSN_CLASS_V,  "Vd,0(s),tVm", MATCH_VLSSEG2E16V, MASK_VLSSEG2E16V, match_vd_neq_vm_with_nf, INSN_DREF },
+{"vssseg2e16.v",  0, INSN_CLASS_V,  "Vd,0(s),tVm", MATCH_VSSSEG2E16V, MASK_VSSSEG2E16V, match_vd_with_nf, INSN_DREF },
+{"vlsseg3e16.v",  0, INSN_CLASS_V,  "Vd,0(s),tVm", MATCH_VLSSEG3E16V, MASK_VLSSEG3E16V, match_vd_neq_vm_with_nf, INSN_DREF },
+{"vssseg3e16.v",  0, INSN_CLASS_V,  "Vd,0(s),tVm", MATCH_VSSSEG3E16V, MASK_VSSSEG3E16V, match_vd_with_nf, INSN_DREF },
+{"vlsseg4e16.v",  0, INSN_CLASS_V,  "Vd,0(s),tVm", MATCH_VLSSEG4E16V, MASK_VLSSEG4E16V, match_vd_neq_vm_with_nf, INSN_DREF },
+{"vssseg4e16.v",  0, INSN_CLASS_V,  "Vd,0(s),tVm", MATCH_VSSSEG4E16V, MASK_VSSSEG4E16V, match_vd_with_nf, INSN_DREF },
+{"vlsseg5e16.v",  0, INSN_CLASS_V,  "Vd,0(s),tVm", MATCH_VLSSEG5E16V, MASK_VLSSEG5E16V, match_vd_neq_vm_with_nf, INSN_DREF },
+{"vssseg5e16.v",  0, INSN_CLASS_V,  "Vd,0(s),tVm", MATCH_VSSSEG5E16V, MASK_VSSSEG5E16V, match_vd_with_nf, INSN_DREF },
+{"vlsseg6e16.v",  0, INSN_CLASS_V,  "Vd,0(s),tVm", MATCH_VLSSEG6E16V, MASK_VLSSEG6E16V, match_vd_neq_vm_with_nf, INSN_DREF },
+{"vssseg6e16.v",  0, INSN_CLASS_V,  "Vd,0(s),tVm", MATCH_VSSSEG6E16V, MASK_VSSSEG6E16V, match_vd_with_nf, INSN_DREF },
+{"vlsseg7e16.v",  0, INSN_CLASS_V,  "Vd,0(s),tVm", MATCH_VLSSEG7E16V, MASK_VLSSEG7E16V, match_vd_neq_vm_with_nf, INSN_DREF },
+{"vssseg7e16.v",  0, INSN_CLASS_V,  "Vd,0(s),tVm", MATCH_VSSSEG7E16V, MASK_VSSSEG7E16V, match_vd_with_nf, INSN_DREF },
+{"vlsseg8e16.v",  0, INSN_CLASS_V,  "Vd,0(s),tVm", MATCH_VLSSEG8E16V, MASK_VLSSEG8E16V, match_vd_neq_vm_with_nf, INSN_DREF },
+{"vssseg8e16.v",  0, INSN_CLASS_V,  "Vd,0(s),tVm", MATCH_VSSSEG8E16V, MASK_VSSSEG8E16V, match_vd_with_nf, INSN_DREF },
 
-{"vlsseg2e32.v",  0, INSN_CLASS_V,  "Vd,0(s),tVm", MATCH_VLSSEG2E32V, MASK_VLSSEG2E32V, match_opcode, INSN_DREF },
-{"vssseg2e32.v",  0, INSN_CLASS_V,  "Vd,0(s),tVm", MATCH_VSSSEG2E32V, MASK_VSSSEG2E32V, match_opcode, INSN_DREF },
-{"vlsseg3e32.v",  0, INSN_CLASS_V,  "Vd,0(s),tVm", MATCH_VLSSEG3E32V, MASK_VLSSEG3E32V, match_opcode, INSN_DREF },
-{"vssseg3e32.v",  0, INSN_CLASS_V,  "Vd,0(s),tVm", MATCH_VSSSEG3E32V, MASK_VSSSEG3E32V, match_opcode, INSN_DREF },
-{"vlsseg4e32.v",  0, INSN_CLASS_V,  "Vd,0(s),tVm", MATCH_VLSSEG4E32V, MASK_VLSSEG4E32V, match_opcode, INSN_DREF },
-{"vssseg4e32.v",  0, INSN_CLASS_V,  "Vd,0(s),tVm", MATCH_VSSSEG4E32V, MASK_VSSSEG4E32V, match_opcode, INSN_DREF },
-{"vlsseg5e32.v",  0, INSN_CLASS_V,  "Vd,0(s),tVm", MATCH_VLSSEG5E32V, MASK_VLSSEG5E32V, match_opcode, INSN_DREF },
-{"vssseg5e32.v",  0, INSN_CLASS_V,  "Vd,0(s),tVm", MATCH_VSSSEG5E32V, MASK_VSSSEG5E32V, match_opcode, INSN_DREF },
-{"vlsseg6e32.v",  0, INSN_CLASS_V,  "Vd,0(s),tVm", MATCH_VLSSEG6E32V, MASK_VLSSEG6E32V, match_opcode, INSN_DREF },
-{"vssseg6e32.v",  0, INSN_CLASS_V,  "Vd,0(s),tVm", MATCH_VSSSEG6E32V, MASK_VSSSEG6E32V, match_opcode, INSN_DREF },
-{"vlsseg7e32.v",  0, INSN_CLASS_V,  "Vd,0(s),tVm", MATCH_VLSSEG7E32V, MASK_VLSSEG7E32V, match_opcode, INSN_DREF },
-{"vssseg7e32.v",  0, INSN_CLASS_V,  "Vd,0(s),tVm", MATCH_VSSSEG7E32V, MASK_VSSSEG7E32V, match_opcode, INSN_DREF },
-{"vlsseg8e32.v",  0, INSN_CLASS_V,  "Vd,0(s),tVm", MATCH_VLSSEG8E32V, MASK_VLSSEG8E32V, match_opcode, INSN_DREF },
-{"vssseg8e32.v",  0, INSN_CLASS_V,  "Vd,0(s),tVm", MATCH_VSSSEG8E32V, MASK_VSSSEG8E32V, match_opcode, INSN_DREF },
+{"vlsseg2e32.v",  0, INSN_CLASS_V,  "Vd,0(s),tVm", MATCH_VLSSEG2E32V, MASK_VLSSEG2E32V, match_vd_neq_vm_with_nf, INSN_DREF },
+{"vssseg2e32.v",  0, INSN_CLASS_V,  "Vd,0(s),tVm", MATCH_VSSSEG2E32V, MASK_VSSSEG2E32V, match_vd_with_nf, INSN_DREF },
+{"vlsseg3e32.v",  0, INSN_CLASS_V,  "Vd,0(s),tVm", MATCH_VLSSEG3E32V, MASK_VLSSEG3E32V, match_vd_neq_vm_with_nf, INSN_DREF },
+{"vssseg3e32.v",  0, INSN_CLASS_V,  "Vd,0(s),tVm", MATCH_VSSSEG3E32V, MASK_VSSSEG3E32V, match_vd_with_nf, INSN_DREF },
+{"vlsseg4e32.v",  0, INSN_CLASS_V,  "Vd,0(s),tVm", MATCH_VLSSEG4E32V, MASK_VLSSEG4E32V, match_vd_neq_vm_with_nf, INSN_DREF },
+{"vssseg4e32.v",  0, INSN_CLASS_V,  "Vd,0(s),tVm", MATCH_VSSSEG4E32V, MASK_VSSSEG4E32V, match_vd_with_nf, INSN_DREF },
+{"vlsseg5e32.v",  0, INSN_CLASS_V,  "Vd,0(s),tVm", MATCH_VLSSEG5E32V, MASK_VLSSEG5E32V, match_vd_neq_vm_with_nf, INSN_DREF },
+{"vssseg5e32.v",  0, INSN_CLASS_V,  "Vd,0(s),tVm", MATCH_VSSSEG5E32V, MASK_VSSSEG5E32V, match_vd_with_nf, INSN_DREF },
+{"vlsseg6e32.v",  0, INSN_CLASS_V,  "Vd,0(s),tVm", MATCH_VLSSEG6E32V, MASK_VLSSEG6E32V, match_vd_neq_vm_with_nf, INSN_DREF },
+{"vssseg6e32.v",  0, INSN_CLASS_V,  "Vd,0(s),tVm", MATCH_VSSSEG6E32V, MASK_VSSSEG6E32V, match_vd_with_nf, INSN_DREF },
+{"vlsseg7e32.v",  0, INSN_CLASS_V,  "Vd,0(s),tVm", MATCH_VLSSEG7E32V, MASK_VLSSEG7E32V, match_vd_neq_vm_with_nf, INSN_DREF },
+{"vssseg7e32.v",  0, INSN_CLASS_V,  "Vd,0(s),tVm", MATCH_VSSSEG7E32V, MASK_VSSSEG7E32V, match_vd_with_nf, INSN_DREF },
+{"vlsseg8e32.v",  0, INSN_CLASS_V,  "Vd,0(s),tVm", MATCH_VLSSEG8E32V, MASK_VLSSEG8E32V, match_vd_neq_vm_with_nf, INSN_DREF },
+{"vssseg8e32.v",  0, INSN_CLASS_V,  "Vd,0(s),tVm", MATCH_VSSSEG8E32V, MASK_VSSSEG8E32V, match_vd_with_nf, INSN_DREF },
 
-{"vlsseg2e64.v",  0, INSN_CLASS_V,  "Vd,0(s),tVm", MATCH_VLSSEG2E64V, MASK_VLSSEG2E64V, match_opcode, INSN_DREF|INSN_V_EEW64 },
-{"vssseg2e64.v",  0, INSN_CLASS_V,  "Vd,0(s),tVm", MATCH_VSSSEG2E64V, MASK_VSSSEG2E64V, match_opcode, INSN_DREF|INSN_V_EEW64 },
-{"vlsseg3e64.v",  0, INSN_CLASS_V,  "Vd,0(s),tVm", MATCH_VLSSEG3E64V, MASK_VLSSEG3E64V, match_opcode, INSN_DREF|INSN_V_EEW64 },
-{"vssseg3e64.v",  0, INSN_CLASS_V,  "Vd,0(s),tVm", MATCH_VSSSEG3E64V, MASK_VSSSEG3E64V, match_opcode, INSN_DREF|INSN_V_EEW64 },
-{"vlsseg4e64.v",  0, INSN_CLASS_V,  "Vd,0(s),tVm", MATCH_VLSSEG4E64V, MASK_VLSSEG4E64V, match_opcode, INSN_DREF|INSN_V_EEW64 },
-{"vssseg4e64.v",  0, INSN_CLASS_V,  "Vd,0(s),tVm", MATCH_VSSSEG4E64V, MASK_VSSSEG4E64V, match_opcode, INSN_DREF|INSN_V_EEW64 },
-{"vlsseg5e64.v",  0, INSN_CLASS_V,  "Vd,0(s),tVm", MATCH_VLSSEG5E64V, MASK_VLSSEG5E64V, match_opcode, INSN_DREF|INSN_V_EEW64 },
-{"vssseg5e64.v",  0, INSN_CLASS_V,  "Vd,0(s),tVm", MATCH_VSSSEG5E64V, MASK_VSSSEG5E64V, match_opcode, INSN_DREF|INSN_V_EEW64 },
-{"vlsseg6e64.v",  0, INSN_CLASS_V,  "Vd,0(s),tVm", MATCH_VLSSEG6E64V, MASK_VLSSEG6E64V, match_opcode, INSN_DREF|INSN_V_EEW64 },
-{"vssseg6e64.v",  0, INSN_CLASS_V,  "Vd,0(s),tVm", MATCH_VSSSEG6E64V, MASK_VSSSEG6E64V, match_opcode, INSN_DREF|INSN_V_EEW64 },
-{"vlsseg7e64.v",  0, INSN_CLASS_V,  "Vd,0(s),tVm", MATCH_VLSSEG7E64V, MASK_VLSSEG7E64V, match_opcode, INSN_DREF|INSN_V_EEW64 },
-{"vssseg7e64.v",  0, INSN_CLASS_V,  "Vd,0(s),tVm", MATCH_VSSSEG7E64V, MASK_VSSSEG7E64V, match_opcode, INSN_DREF|INSN_V_EEW64 },
-{"vlsseg8e64.v",  0, INSN_CLASS_V,  "Vd,0(s),tVm", MATCH_VLSSEG8E64V, MASK_VLSSEG8E64V, match_opcode, INSN_DREF|INSN_V_EEW64 },
-{"vssseg8e64.v",  0, INSN_CLASS_V,  "Vd,0(s),tVm", MATCH_VSSSEG8E64V, MASK_VSSSEG8E64V, match_opcode, INSN_DREF|INSN_V_EEW64 },
+{"vlsseg2e64.v",  0, INSN_CLASS_V,  "Vd,0(s),tVm", MATCH_VLSSEG2E64V, MASK_VLSSEG2E64V, match_vd_neq_vm_with_nf, INSN_DREF|INSN_V_EEW64 },
+{"vssseg2e64.v",  0, INSN_CLASS_V,  "Vd,0(s),tVm", MATCH_VSSSEG2E64V, MASK_VSSSEG2E64V, match_vd_with_nf, INSN_DREF|INSN_V_EEW64 },
+{"vlsseg3e64.v",  0, INSN_CLASS_V,  "Vd,0(s),tVm", MATCH_VLSSEG3E64V, MASK_VLSSEG3E64V, match_vd_neq_vm_with_nf, INSN_DREF|INSN_V_EEW64 },
+{"vssseg3e64.v",  0, INSN_CLASS_V,  "Vd,0(s),tVm", MATCH_VSSSEG3E64V, MASK_VSSSEG3E64V, match_vd_with_nf, INSN_DREF|INSN_V_EEW64 },
+{"vlsseg4e64.v",  0, INSN_CLASS_V,  "Vd,0(s),tVm", MATCH_VLSSEG4E64V, MASK_VLSSEG4E64V, match_vd_neq_vm_with_nf, INSN_DREF|INSN_V_EEW64 },
+{"vssseg4e64.v",  0, INSN_CLASS_V,  "Vd,0(s),tVm", MATCH_VSSSEG4E64V, MASK_VSSSEG4E64V, match_vd_with_nf, INSN_DREF|INSN_V_EEW64 },
+{"vlsseg5e64.v",  0, INSN_CLASS_V,  "Vd,0(s),tVm", MATCH_VLSSEG5E64V, MASK_VLSSEG5E64V, match_vd_neq_vm_with_nf, INSN_DREF|INSN_V_EEW64 },
+{"vssseg5e64.v",  0, INSN_CLASS_V,  "Vd,0(s),tVm", MATCH_VSSSEG5E64V, MASK_VSSSEG5E64V, match_vd_with_nf, INSN_DREF|INSN_V_EEW64 },
+{"vlsseg6e64.v",  0, INSN_CLASS_V,  "Vd,0(s),tVm", MATCH_VLSSEG6E64V, MASK_VLSSEG6E64V, match_vd_neq_vm_with_nf, INSN_DREF|INSN_V_EEW64 },
+{"vssseg6e64.v",  0, INSN_CLASS_V,  "Vd,0(s),tVm", MATCH_VSSSEG6E64V, MASK_VSSSEG6E64V, match_vd_with_nf, INSN_DREF|INSN_V_EEW64 },
+{"vlsseg7e64.v",  0, INSN_CLASS_V,  "Vd,0(s),tVm", MATCH_VLSSEG7E64V, MASK_VLSSEG7E64V, match_vd_neq_vm_with_nf, INSN_DREF|INSN_V_EEW64 },
+{"vssseg7e64.v",  0, INSN_CLASS_V,  "Vd,0(s),tVm", MATCH_VSSSEG7E64V, MASK_VSSSEG7E64V, match_vd_with_nf, INSN_DREF|INSN_V_EEW64 },
+{"vlsseg8e64.v",  0, INSN_CLASS_V,  "Vd,0(s),tVm", MATCH_VLSSEG8E64V, MASK_VLSSEG8E64V, match_vd_neq_vm_with_nf, INSN_DREF|INSN_V_EEW64 },
+{"vssseg8e64.v",  0, INSN_CLASS_V,  "Vd,0(s),tVm", MATCH_VSSSEG8E64V, MASK_VSSSEG8E64V, match_vd_with_nf, INSN_DREF|INSN_V_EEW64 },
 
-{"vloxseg2ei8.v",  0, INSN_CLASS_V,  "Vd,0(s),VtVm", MATCH_VLOXSEG2EI8V, MASK_VLOXSEG2EI8V, match_opcode, INSN_DREF },
-{"vsoxseg2ei8.v",  0, INSN_CLASS_V,  "Vd,0(s),VtVm", MATCH_VSOXSEG2EI8V, MASK_VSOXSEG2EI8V, match_opcode, INSN_DREF },
-{"vloxseg3ei8.v",  0, INSN_CLASS_V,  "Vd,0(s),VtVm", MATCH_VLOXSEG3EI8V, MASK_VLOXSEG3EI8V, match_opcode, INSN_DREF },
-{"vsoxseg3ei8.v",  0, INSN_CLASS_V,  "Vd,0(s),VtVm", MATCH_VSOXSEG3EI8V, MASK_VSOXSEG3EI8V, match_opcode, INSN_DREF },
-{"vloxseg4ei8.v",  0, INSN_CLASS_V,  "Vd,0(s),VtVm", MATCH_VLOXSEG4EI8V, MASK_VLOXSEG4EI8V, match_opcode, INSN_DREF },
-{"vsoxseg4ei8.v",  0, INSN_CLASS_V,  "Vd,0(s),VtVm", MATCH_VSOXSEG4EI8V, MASK_VSOXSEG4EI8V, match_opcode, INSN_DREF },
-{"vloxseg5ei8.v",  0, INSN_CLASS_V,  "Vd,0(s),VtVm", MATCH_VLOXSEG5EI8V, MASK_VLOXSEG5EI8V, match_opcode, INSN_DREF },
-{"vsoxseg5ei8.v",  0, INSN_CLASS_V,  "Vd,0(s),VtVm", MATCH_VSOXSEG5EI8V, MASK_VSOXSEG5EI8V, match_opcode, INSN_DREF },
-{"vloxseg6ei8.v",  0, INSN_CLASS_V,  "Vd,0(s),VtVm", MATCH_VLOXSEG6EI8V, MASK_VLOXSEG6EI8V, match_opcode, INSN_DREF },
-{"vsoxseg6ei8.v",  0, INSN_CLASS_V,  "Vd,0(s),VtVm", MATCH_VSOXSEG6EI8V, MASK_VSOXSEG6EI8V, match_opcode, INSN_DREF },
-{"vloxseg7ei8.v",  0, INSN_CLASS_V,  "Vd,0(s),VtVm", MATCH_VLOXSEG7EI8V, MASK_VLOXSEG7EI8V, match_opcode, INSN_DREF },
-{"vsoxseg7ei8.v",  0, INSN_CLASS_V,  "Vd,0(s),VtVm", MATCH_VSOXSEG7EI8V, MASK_VSOXSEG7EI8V, match_opcode, INSN_DREF },
-{"vloxseg8ei8.v",  0, INSN_CLASS_V,  "Vd,0(s),VtVm", MATCH_VLOXSEG8EI8V, MASK_VLOXSEG8EI8V, match_opcode, INSN_DREF },
-{"vsoxseg8ei8.v",  0, INSN_CLASS_V,  "Vd,0(s),VtVm", MATCH_VSOXSEG8EI8V, MASK_VSOXSEG8EI8V, match_opcode, INSN_DREF },
+{"vloxseg2ei8.v",  0, INSN_CLASS_V,  "Vd,0(s),VtVm", MATCH_VLOXSEG2EI8V, MASK_VLOXSEG2EI8V, match_vd_neq_vm_and_vd_neq_vs2_with_nf, INSN_DREF },
+{"vsoxseg2ei8.v",  0, INSN_CLASS_V,  "Vd,0(s),VtVm", MATCH_VSOXSEG2EI8V, MASK_VSOXSEG2EI8V, match_vd_with_nf, INSN_DREF },
+{"vloxseg3ei8.v",  0, INSN_CLASS_V,  "Vd,0(s),VtVm", MATCH_VLOXSEG3EI8V, MASK_VLOXSEG3EI8V, match_vd_neq_vm_and_vd_neq_vs2_with_nf, INSN_DREF },
+{"vsoxseg3ei8.v",  0, INSN_CLASS_V,  "Vd,0(s),VtVm", MATCH_VSOXSEG3EI8V, MASK_VSOXSEG3EI8V, match_vd_with_nf, INSN_DREF },
+{"vloxseg4ei8.v",  0, INSN_CLASS_V,  "Vd,0(s),VtVm", MATCH_VLOXSEG4EI8V, MASK_VLOXSEG4EI8V, match_vd_neq_vm_and_vd_neq_vs2_with_nf, INSN_DREF },
+{"vsoxseg4ei8.v",  0, INSN_CLASS_V,  "Vd,0(s),VtVm", MATCH_VSOXSEG4EI8V, MASK_VSOXSEG4EI8V, match_vd_with_nf, INSN_DREF },
+{"vloxseg5ei8.v",  0, INSN_CLASS_V,  "Vd,0(s),VtVm", MATCH_VLOXSEG5EI8V, MASK_VLOXSEG5EI8V, match_vd_neq_vm_and_vd_neq_vs2_with_nf, INSN_DREF },
+{"vsoxseg5ei8.v",  0, INSN_CLASS_V,  "Vd,0(s),VtVm", MATCH_VSOXSEG5EI8V, MASK_VSOXSEG5EI8V, match_vd_with_nf, INSN_DREF },
+{"vloxseg6ei8.v",  0, INSN_CLASS_V,  "Vd,0(s),VtVm", MATCH_VLOXSEG6EI8V, MASK_VLOXSEG6EI8V, match_vd_neq_vm_and_vd_neq_vs2_with_nf, INSN_DREF },
+{"vsoxseg6ei8.v",  0, INSN_CLASS_V,  "Vd,0(s),VtVm", MATCH_VSOXSEG6EI8V, MASK_VSOXSEG6EI8V, match_vd_with_nf, INSN_DREF },
+{"vloxseg7ei8.v",  0, INSN_CLASS_V,  "Vd,0(s),VtVm", MATCH_VLOXSEG7EI8V, MASK_VLOXSEG7EI8V, match_vd_neq_vm_and_vd_neq_vs2_with_nf, INSN_DREF },
+{"vsoxseg7ei8.v",  0, INSN_CLASS_V,  "Vd,0(s),VtVm", MATCH_VSOXSEG7EI8V, MASK_VSOXSEG7EI8V, match_vd_with_nf, INSN_DREF },
+{"vloxseg8ei8.v",  0, INSN_CLASS_V,  "Vd,0(s),VtVm", MATCH_VLOXSEG8EI8V, MASK_VLOXSEG8EI8V, match_vd_neq_vm_and_vd_neq_vs2_with_nf, INSN_DREF },
+{"vsoxseg8ei8.v",  0, INSN_CLASS_V,  "Vd,0(s),VtVm", MATCH_VSOXSEG8EI8V, MASK_VSOXSEG8EI8V, match_vd_with_nf, INSN_DREF },
 
-{"vloxseg2ei16.v",  0, INSN_CLASS_V,  "Vd,0(s),VtVm", MATCH_VLOXSEG2EI16V, MASK_VLOXSEG2EI16V, match_opcode, INSN_DREF },
-{"vsoxseg2ei16.v",  0, INSN_CLASS_V,  "Vd,0(s),VtVm", MATCH_VSOXSEG2EI16V, MASK_VSOXSEG2EI16V, match_opcode, INSN_DREF },
-{"vloxseg3ei16.v",  0, INSN_CLASS_V,  "Vd,0(s),VtVm", MATCH_VLOXSEG3EI16V, MASK_VLOXSEG3EI16V, match_opcode, INSN_DREF },
-{"vsoxseg3ei16.v",  0, INSN_CLASS_V,  "Vd,0(s),VtVm", MATCH_VSOXSEG3EI16V, MASK_VSOXSEG3EI16V, match_opcode, INSN_DREF },
-{"vloxseg4ei16.v",  0, INSN_CLASS_V,  "Vd,0(s),VtVm", MATCH_VLOXSEG4EI16V, MASK_VLOXSEG4EI16V, match_opcode, INSN_DREF },
-{"vsoxseg4ei16.v",  0, INSN_CLASS_V,  "Vd,0(s),VtVm", MATCH_VSOXSEG4EI16V, MASK_VSOXSEG4EI16V, match_opcode, INSN_DREF },
-{"vloxseg5ei16.v",  0, INSN_CLASS_V,  "Vd,0(s),VtVm", MATCH_VLOXSEG5EI16V, MASK_VLOXSEG5EI16V, match_opcode, INSN_DREF },
-{"vsoxseg5ei16.v",  0, INSN_CLASS_V,  "Vd,0(s),VtVm", MATCH_VSOXSEG5EI16V, MASK_VSOXSEG5EI16V, match_opcode, INSN_DREF },
-{"vloxseg6ei16.v",  0, INSN_CLASS_V,  "Vd,0(s),VtVm", MATCH_VLOXSEG6EI16V, MASK_VLOXSEG6EI16V, match_opcode, INSN_DREF },
-{"vsoxseg6ei16.v",  0, INSN_CLASS_V,  "Vd,0(s),VtVm", MATCH_VSOXSEG6EI16V, MASK_VSOXSEG6EI16V, match_opcode, INSN_DREF },
-{"vloxseg7ei16.v",  0, INSN_CLASS_V,  "Vd,0(s),VtVm", MATCH_VLOXSEG7EI16V, MASK_VLOXSEG7EI16V, match_opcode, INSN_DREF },
-{"vsoxseg7ei16.v",  0, INSN_CLASS_V,  "Vd,0(s),VtVm", MATCH_VSOXSEG7EI16V, MASK_VSOXSEG7EI16V, match_opcode, INSN_DREF },
-{"vloxseg8ei16.v",  0, INSN_CLASS_V,  "Vd,0(s),VtVm", MATCH_VLOXSEG8EI16V, MASK_VLOXSEG8EI16V, match_opcode, INSN_DREF },
-{"vsoxseg8ei16.v",  0, INSN_CLASS_V,  "Vd,0(s),VtVm", MATCH_VSOXSEG8EI16V, MASK_VSOXSEG8EI16V, match_opcode, INSN_DREF },
+{"vloxseg2ei16.v",  0, INSN_CLASS_V,  "Vd,0(s),VtVm", MATCH_VLOXSEG2EI16V, MASK_VLOXSEG2EI16V, match_vd_neq_vm_and_vd_neq_vs2_with_nf, INSN_DREF },
+{"vsoxseg2ei16.v",  0, INSN_CLASS_V,  "Vd,0(s),VtVm", MATCH_VSOXSEG2EI16V, MASK_VSOXSEG2EI16V, match_vd_with_nf, INSN_DREF },
+{"vloxseg3ei16.v",  0, INSN_CLASS_V,  "Vd,0(s),VtVm", MATCH_VLOXSEG3EI16V, MASK_VLOXSEG3EI16V, match_vd_neq_vm_and_vd_neq_vs2_with_nf, INSN_DREF },
+{"vsoxseg3ei16.v",  0, INSN_CLASS_V,  "Vd,0(s),VtVm", MATCH_VSOXSEG3EI16V, MASK_VSOXSEG3EI16V, match_vd_with_nf, INSN_DREF },
+{"vloxseg4ei16.v",  0, INSN_CLASS_V,  "Vd,0(s),VtVm", MATCH_VLOXSEG4EI16V, MASK_VLOXSEG4EI16V, match_vd_neq_vm_and_vd_neq_vs2_with_nf, INSN_DREF },
+{"vsoxseg4ei16.v",  0, INSN_CLASS_V,  "Vd,0(s),VtVm", MATCH_VSOXSEG4EI16V, MASK_VSOXSEG4EI16V, match_vd_with_nf, INSN_DREF },
+{"vloxseg5ei16.v",  0, INSN_CLASS_V,  "Vd,0(s),VtVm", MATCH_VLOXSEG5EI16V, MASK_VLOXSEG5EI16V, match_vd_neq_vm_and_vd_neq_vs2_with_nf, INSN_DREF },
+{"vsoxseg5ei16.v",  0, INSN_CLASS_V,  "Vd,0(s),VtVm", MATCH_VSOXSEG5EI16V, MASK_VSOXSEG5EI16V, match_vd_with_nf, INSN_DREF },
+{"vloxseg6ei16.v",  0, INSN_CLASS_V,  "Vd,0(s),VtVm", MATCH_VLOXSEG6EI16V, MASK_VLOXSEG6EI16V, match_vd_neq_vm_and_vd_neq_vs2_with_nf, INSN_DREF },
+{"vsoxseg6ei16.v",  0, INSN_CLASS_V,  "Vd,0(s),VtVm", MATCH_VSOXSEG6EI16V, MASK_VSOXSEG6EI16V, match_vd_with_nf, INSN_DREF },
+{"vloxseg7ei16.v",  0, INSN_CLASS_V,  "Vd,0(s),VtVm", MATCH_VLOXSEG7EI16V, MASK_VLOXSEG7EI16V, match_vd_neq_vm_and_vd_neq_vs2_with_nf, INSN_DREF },
+{"vsoxseg7ei16.v",  0, INSN_CLASS_V,  "Vd,0(s),VtVm", MATCH_VSOXSEG7EI16V, MASK_VSOXSEG7EI16V, match_vd_with_nf, INSN_DREF },
+{"vloxseg8ei16.v",  0, INSN_CLASS_V,  "Vd,0(s),VtVm", MATCH_VLOXSEG8EI16V, MASK_VLOXSEG8EI16V, match_vd_neq_vm_and_vd_neq_vs2_with_nf, INSN_DREF },
+{"vsoxseg8ei16.v",  0, INSN_CLASS_V,  "Vd,0(s),VtVm", MATCH_VSOXSEG8EI16V, MASK_VSOXSEG8EI16V, match_vd_with_nf, INSN_DREF },
 
-{"vloxseg2ei32.v",  0, INSN_CLASS_V,  "Vd,0(s),VtVm", MATCH_VLOXSEG2EI32V, MASK_VLOXSEG2EI32V, match_opcode, INSN_DREF },
-{"vsoxseg2ei32.v",  0, INSN_CLASS_V,  "Vd,0(s),VtVm", MATCH_VSOXSEG2EI32V, MASK_VSOXSEG2EI32V, match_opcode, INSN_DREF },
-{"vloxseg3ei32.v",  0, INSN_CLASS_V,  "Vd,0(s),VtVm", MATCH_VLOXSEG3EI32V, MASK_VLOXSEG3EI32V, match_opcode, INSN_DREF },
-{"vsoxseg3ei32.v",  0, INSN_CLASS_V,  "Vd,0(s),VtVm", MATCH_VSOXSEG3EI32V, MASK_VSOXSEG3EI32V, match_opcode, INSN_DREF },
-{"vloxseg4ei32.v",  0, INSN_CLASS_V,  "Vd,0(s),VtVm", MATCH_VLOXSEG4EI32V, MASK_VLOXSEG4EI32V, match_opcode, INSN_DREF },
-{"vsoxseg4ei32.v",  0, INSN_CLASS_V,  "Vd,0(s),VtVm", MATCH_VSOXSEG4EI32V, MASK_VSOXSEG4EI32V, match_opcode, INSN_DREF },
-{"vloxseg5ei32.v",  0, INSN_CLASS_V,  "Vd,0(s),VtVm", MATCH_VLOXSEG5EI32V, MASK_VLOXSEG5EI32V, match_opcode, INSN_DREF },
-{"vsoxseg5ei32.v",  0, INSN_CLASS_V,  "Vd,0(s),VtVm", MATCH_VSOXSEG5EI32V, MASK_VSOXSEG5EI32V, match_opcode, INSN_DREF },
-{"vloxseg6ei32.v",  0, INSN_CLASS_V,  "Vd,0(s),VtVm", MATCH_VLOXSEG6EI32V, MASK_VLOXSEG6EI32V, match_opcode, INSN_DREF },
-{"vsoxseg6ei32.v",  0, INSN_CLASS_V,  "Vd,0(s),VtVm", MATCH_VSOXSEG6EI32V, MASK_VSOXSEG6EI32V, match_opcode, INSN_DREF },
-{"vloxseg7ei32.v",  0, INSN_CLASS_V,  "Vd,0(s),VtVm", MATCH_VLOXSEG7EI32V, MASK_VLOXSEG7EI32V, match_opcode, INSN_DREF },
-{"vsoxseg7ei32.v",  0, INSN_CLASS_V,  "Vd,0(s),VtVm", MATCH_VSOXSEG7EI32V, MASK_VSOXSEG7EI32V, match_opcode, INSN_DREF },
-{"vloxseg8ei32.v",  0, INSN_CLASS_V,  "Vd,0(s),VtVm", MATCH_VLOXSEG8EI32V, MASK_VLOXSEG8EI32V, match_opcode, INSN_DREF },
-{"vsoxseg8ei32.v",  0, INSN_CLASS_V,  "Vd,0(s),VtVm", MATCH_VSOXSEG8EI32V, MASK_VSOXSEG8EI32V, match_opcode, INSN_DREF },
+{"vloxseg2ei32.v",  0, INSN_CLASS_V,  "Vd,0(s),VtVm", MATCH_VLOXSEG2EI32V, MASK_VLOXSEG2EI32V, match_vd_neq_vm_and_vd_neq_vs2_with_nf, INSN_DREF },
+{"vsoxseg2ei32.v",  0, INSN_CLASS_V,  "Vd,0(s),VtVm", MATCH_VSOXSEG2EI32V, MASK_VSOXSEG2EI32V, match_vd_with_nf, INSN_DREF },
+{"vloxseg3ei32.v",  0, INSN_CLASS_V,  "Vd,0(s),VtVm", MATCH_VLOXSEG3EI32V, MASK_VLOXSEG3EI32V, match_vd_neq_vm_and_vd_neq_vs2_with_nf, INSN_DREF },
+{"vsoxseg3ei32.v",  0, INSN_CLASS_V,  "Vd,0(s),VtVm", MATCH_VSOXSEG3EI32V, MASK_VSOXSEG3EI32V, match_vd_with_nf, INSN_DREF },
+{"vloxseg4ei32.v",  0, INSN_CLASS_V,  "Vd,0(s),VtVm", MATCH_VLOXSEG4EI32V, MASK_VLOXSEG4EI32V, match_vd_neq_vm_and_vd_neq_vs2_with_nf, INSN_DREF },
+{"vsoxseg4ei32.v",  0, INSN_CLASS_V,  "Vd,0(s),VtVm", MATCH_VSOXSEG4EI32V, MASK_VSOXSEG4EI32V, match_vd_with_nf, INSN_DREF },
+{"vloxseg5ei32.v",  0, INSN_CLASS_V,  "Vd,0(s),VtVm", MATCH_VLOXSEG5EI32V, MASK_VLOXSEG5EI32V, match_vd_neq_vm_and_vd_neq_vs2_with_nf, INSN_DREF },
+{"vsoxseg5ei32.v",  0, INSN_CLASS_V,  "Vd,0(s),VtVm", MATCH_VSOXSEG5EI32V, MASK_VSOXSEG5EI32V, match_vd_with_nf, INSN_DREF },
+{"vloxseg6ei32.v",  0, INSN_CLASS_V,  "Vd,0(s),VtVm", MATCH_VLOXSEG6EI32V, MASK_VLOXSEG6EI32V, match_vd_neq_vm_and_vd_neq_vs2_with_nf, INSN_DREF },
+{"vsoxseg6ei32.v",  0, INSN_CLASS_V,  "Vd,0(s),VtVm", MATCH_VSOXSEG6EI32V, MASK_VSOXSEG6EI32V, match_vd_with_nf, INSN_DREF },
+{"vloxseg7ei32.v",  0, INSN_CLASS_V,  "Vd,0(s),VtVm", MATCH_VLOXSEG7EI32V, MASK_VLOXSEG7EI32V, match_vd_neq_vm_and_vd_neq_vs2_with_nf, INSN_DREF },
+{"vsoxseg7ei32.v",  0, INSN_CLASS_V,  "Vd,0(s),VtVm", MATCH_VSOXSEG7EI32V, MASK_VSOXSEG7EI32V, match_vd_with_nf, INSN_DREF },
+{"vloxseg8ei32.v",  0, INSN_CLASS_V,  "Vd,0(s),VtVm", MATCH_VLOXSEG8EI32V, MASK_VLOXSEG8EI32V, match_vd_neq_vm_and_vd_neq_vs2_with_nf, INSN_DREF },
+{"vsoxseg8ei32.v",  0, INSN_CLASS_V,  "Vd,0(s),VtVm", MATCH_VSOXSEG8EI32V, MASK_VSOXSEG8EI32V, match_vd_with_nf, INSN_DREF },
 
-{"vloxseg2ei64.v",  0, INSN_CLASS_V,  "Vd,0(s),VtVm", MATCH_VLOXSEG2EI64V, MASK_VLOXSEG2EI64V, match_opcode, INSN_DREF|INSN_V_EEW64 },
-{"vsoxseg2ei64.v",  0, INSN_CLASS_V,  "Vd,0(s),VtVm", MATCH_VSOXSEG2EI64V, MASK_VSOXSEG2EI64V, match_opcode, INSN_DREF|INSN_V_EEW64 },
-{"vloxseg3ei64.v",  0, INSN_CLASS_V,  "Vd,0(s),VtVm", MATCH_VLOXSEG3EI64V, MASK_VLOXSEG3EI64V, match_opcode, INSN_DREF|INSN_V_EEW64 },
-{"vsoxseg3ei64.v",  0, INSN_CLASS_V,  "Vd,0(s),VtVm", MATCH_VSOXSEG3EI64V, MASK_VSOXSEG3EI64V, match_opcode, INSN_DREF|INSN_V_EEW64 },
-{"vloxseg4ei64.v",  0, INSN_CLASS_V,  "Vd,0(s),VtVm", MATCH_VLOXSEG4EI64V, MASK_VLOXSEG4EI64V, match_opcode, INSN_DREF|INSN_V_EEW64 },
-{"vsoxseg4ei64.v",  0, INSN_CLASS_V,  "Vd,0(s),VtVm", MATCH_VSOXSEG4EI64V, MASK_VSOXSEG4EI64V, match_opcode, INSN_DREF|INSN_V_EEW64 },
-{"vloxseg5ei64.v",  0, INSN_CLASS_V,  "Vd,0(s),VtVm", MATCH_VLOXSEG5EI64V, MASK_VLOXSEG5EI64V, match_opcode, INSN_DREF|INSN_V_EEW64 },
-{"vsoxseg5ei64.v",  0, INSN_CLASS_V,  "Vd,0(s),VtVm", MATCH_VSOXSEG5EI64V, MASK_VSOXSEG5EI64V, match_opcode, INSN_DREF|INSN_V_EEW64 },
-{"vloxseg6ei64.v",  0, INSN_CLASS_V,  "Vd,0(s),VtVm", MATCH_VLOXSEG6EI64V, MASK_VLOXSEG6EI64V, match_opcode, INSN_DREF|INSN_V_EEW64 },
-{"vsoxseg6ei64.v",  0, INSN_CLASS_V,  "Vd,0(s),VtVm", MATCH_VSOXSEG6EI64V, MASK_VSOXSEG6EI64V, match_opcode, INSN_DREF|INSN_V_EEW64 },
-{"vloxseg7ei64.v",  0, INSN_CLASS_V,  "Vd,0(s),VtVm", MATCH_VLOXSEG7EI64V, MASK_VLOXSEG7EI64V, match_opcode, INSN_DREF|INSN_V_EEW64 },
-{"vsoxseg7ei64.v",  0, INSN_CLASS_V,  "Vd,0(s),VtVm", MATCH_VSOXSEG7EI64V, MASK_VSOXSEG7EI64V, match_opcode, INSN_DREF|INSN_V_EEW64 },
-{"vloxseg8ei64.v",  0, INSN_CLASS_V,  "Vd,0(s),VtVm", MATCH_VLOXSEG8EI64V, MASK_VLOXSEG8EI64V, match_opcode, INSN_DREF|INSN_V_EEW64 },
-{"vsoxseg8ei64.v",  0, INSN_CLASS_V,  "Vd,0(s),VtVm", MATCH_VSOXSEG8EI64V, MASK_VSOXSEG8EI64V, match_opcode, INSN_DREF|INSN_V_EEW64 },
+{"vloxseg2ei64.v",  0, INSN_CLASS_V,  "Vd,0(s),VtVm", MATCH_VLOXSEG2EI64V, MASK_VLOXSEG2EI64V, match_vd_neq_vm_and_vd_neq_vs2_with_nf, INSN_DREF|INSN_V_EEW64 },
+{"vsoxseg2ei64.v",  0, INSN_CLASS_V,  "Vd,0(s),VtVm", MATCH_VSOXSEG2EI64V, MASK_VSOXSEG2EI64V, match_vd_with_nf, INSN_DREF|INSN_V_EEW64 },
+{"vloxseg3ei64.v",  0, INSN_CLASS_V,  "Vd,0(s),VtVm", MATCH_VLOXSEG3EI64V, MASK_VLOXSEG3EI64V, match_vd_neq_vm_and_vd_neq_vs2_with_nf, INSN_DREF|INSN_V_EEW64 },
+{"vsoxseg3ei64.v",  0, INSN_CLASS_V,  "Vd,0(s),VtVm", MATCH_VSOXSEG3EI64V, MASK_VSOXSEG3EI64V, match_vd_with_nf, INSN_DREF|INSN_V_EEW64 },
+{"vloxseg4ei64.v",  0, INSN_CLASS_V,  "Vd,0(s),VtVm", MATCH_VLOXSEG4EI64V, MASK_VLOXSEG4EI64V, match_vd_neq_vm_and_vd_neq_vs2_with_nf, INSN_DREF|INSN_V_EEW64 },
+{"vsoxseg4ei64.v",  0, INSN_CLASS_V,  "Vd,0(s),VtVm", MATCH_VSOXSEG4EI64V, MASK_VSOXSEG4EI64V, match_vd_with_nf, INSN_DREF|INSN_V_EEW64 },
+{"vloxseg5ei64.v",  0, INSN_CLASS_V,  "Vd,0(s),VtVm", MATCH_VLOXSEG5EI64V, MASK_VLOXSEG5EI64V, match_vd_neq_vm_and_vd_neq_vs2_with_nf, INSN_DREF|INSN_V_EEW64 },
+{"vsoxseg5ei64.v",  0, INSN_CLASS_V,  "Vd,0(s),VtVm", MATCH_VSOXSEG5EI64V, MASK_VSOXSEG5EI64V, match_vd_with_nf, INSN_DREF|INSN_V_EEW64 },
+{"vloxseg6ei64.v",  0, INSN_CLASS_V,  "Vd,0(s),VtVm", MATCH_VLOXSEG6EI64V, MASK_VLOXSEG6EI64V, match_vd_neq_vm_and_vd_neq_vs2_with_nf, INSN_DREF|INSN_V_EEW64 },
+{"vsoxseg6ei64.v",  0, INSN_CLASS_V,  "Vd,0(s),VtVm", MATCH_VSOXSEG6EI64V, MASK_VSOXSEG6EI64V, match_vd_with_nf, INSN_DREF|INSN_V_EEW64 },
+{"vloxseg7ei64.v",  0, INSN_CLASS_V,  "Vd,0(s),VtVm", MATCH_VLOXSEG7EI64V, MASK_VLOXSEG7EI64V, match_vd_neq_vm_and_vd_neq_vs2_with_nf, INSN_DREF|INSN_V_EEW64 },
+{"vsoxseg7ei64.v",  0, INSN_CLASS_V,  "Vd,0(s),VtVm", MATCH_VSOXSEG7EI64V, MASK_VSOXSEG7EI64V, match_vd_with_nf, INSN_DREF|INSN_V_EEW64 },
+{"vloxseg8ei64.v",  0, INSN_CLASS_V,  "Vd,0(s),VtVm", MATCH_VLOXSEG8EI64V, MASK_VLOXSEG8EI64V, match_vd_neq_vm_and_vd_neq_vs2_with_nf, INSN_DREF|INSN_V_EEW64 },
+{"vsoxseg8ei64.v",  0, INSN_CLASS_V,  "Vd,0(s),VtVm", MATCH_VSOXSEG8EI64V, MASK_VSOXSEG8EI64V, match_vd_with_nf, INSN_DREF|INSN_V_EEW64 },
 
-{"vluxseg2ei8.v",  0, INSN_CLASS_V,  "Vd,0(s),VtVm", MATCH_VLUXSEG2EI8V, MASK_VLUXSEG2EI8V, match_opcode, INSN_DREF },
-{"vsuxseg2ei8.v",  0, INSN_CLASS_V,  "Vd,0(s),VtVm", MATCH_VSUXSEG2EI8V, MASK_VSUXSEG2EI8V, match_opcode, INSN_DREF },
-{"vluxseg3ei8.v",  0, INSN_CLASS_V,  "Vd,0(s),VtVm", MATCH_VLUXSEG3EI8V, MASK_VLUXSEG3EI8V, match_opcode, INSN_DREF },
-{"vsuxseg3ei8.v",  0, INSN_CLASS_V,  "Vd,0(s),VtVm", MATCH_VSUXSEG3EI8V, MASK_VSUXSEG3EI8V, match_opcode, INSN_DREF },
-{"vluxseg4ei8.v",  0, INSN_CLASS_V,  "Vd,0(s),VtVm", MATCH_VLUXSEG4EI8V, MASK_VLUXSEG4EI8V, match_opcode, INSN_DREF },
-{"vsuxseg4ei8.v",  0, INSN_CLASS_V,  "Vd,0(s),VtVm", MATCH_VSUXSEG4EI8V, MASK_VSUXSEG4EI8V, match_opcode, INSN_DREF },
-{"vluxseg5ei8.v",  0, INSN_CLASS_V,  "Vd,0(s),VtVm", MATCH_VLUXSEG5EI8V, MASK_VLUXSEG5EI8V, match_opcode, INSN_DREF },
-{"vsuxseg5ei8.v",  0, INSN_CLASS_V,  "Vd,0(s),VtVm", MATCH_VSUXSEG5EI8V, MASK_VSUXSEG5EI8V, match_opcode, INSN_DREF },
-{"vluxseg6ei8.v",  0, INSN_CLASS_V,  "Vd,0(s),VtVm", MATCH_VLUXSEG6EI8V, MASK_VLUXSEG6EI8V, match_opcode, INSN_DREF },
-{"vsuxseg6ei8.v",  0, INSN_CLASS_V,  "Vd,0(s),VtVm", MATCH_VSUXSEG6EI8V, MASK_VSUXSEG6EI8V, match_opcode, INSN_DREF },
-{"vluxseg7ei8.v",  0, INSN_CLASS_V,  "Vd,0(s),VtVm", MATCH_VLUXSEG7EI8V, MASK_VLUXSEG7EI8V, match_opcode, INSN_DREF },
-{"vsuxseg7ei8.v",  0, INSN_CLASS_V,  "Vd,0(s),VtVm", MATCH_VSUXSEG7EI8V, MASK_VSUXSEG7EI8V, match_opcode, INSN_DREF },
-{"vluxseg8ei8.v",  0, INSN_CLASS_V,  "Vd,0(s),VtVm", MATCH_VLUXSEG8EI8V, MASK_VLUXSEG8EI8V, match_opcode, INSN_DREF },
-{"vsuxseg8ei8.v",  0, INSN_CLASS_V,  "Vd,0(s),VtVm", MATCH_VSUXSEG8EI8V, MASK_VSUXSEG8EI8V, match_opcode, INSN_DREF },
+{"vluxseg2ei8.v",  0, INSN_CLASS_V,  "Vd,0(s),VtVm", MATCH_VLUXSEG2EI8V, MASK_VLUXSEG2EI8V, match_vd_neq_vm_and_vd_neq_vs2_with_nf, INSN_DREF },
+{"vsuxseg2ei8.v",  0, INSN_CLASS_V,  "Vd,0(s),VtVm", MATCH_VSUXSEG2EI8V, MASK_VSUXSEG2EI8V, match_vd_with_nf, INSN_DREF },
+{"vluxseg3ei8.v",  0, INSN_CLASS_V,  "Vd,0(s),VtVm", MATCH_VLUXSEG3EI8V, MASK_VLUXSEG3EI8V, match_vd_neq_vm_and_vd_neq_vs2_with_nf, INSN_DREF },
+{"vsuxseg3ei8.v",  0, INSN_CLASS_V,  "Vd,0(s),VtVm", MATCH_VSUXSEG3EI8V, MASK_VSUXSEG3EI8V, match_vd_with_nf, INSN_DREF },
+{"vluxseg4ei8.v",  0, INSN_CLASS_V,  "Vd,0(s),VtVm", MATCH_VLUXSEG4EI8V, MASK_VLUXSEG4EI8V, match_vd_neq_vm_and_vd_neq_vs2_with_nf, INSN_DREF },
+{"vsuxseg4ei8.v",  0, INSN_CLASS_V,  "Vd,0(s),VtVm", MATCH_VSUXSEG4EI8V, MASK_VSUXSEG4EI8V, match_vd_with_nf, INSN_DREF },
+{"vluxseg5ei8.v",  0, INSN_CLASS_V,  "Vd,0(s),VtVm", MATCH_VLUXSEG5EI8V, MASK_VLUXSEG5EI8V, match_vd_neq_vm_and_vd_neq_vs2_with_nf, INSN_DREF },
+{"vsuxseg5ei8.v",  0, INSN_CLASS_V,  "Vd,0(s),VtVm", MATCH_VSUXSEG5EI8V, MASK_VSUXSEG5EI8V, match_vd_with_nf, INSN_DREF },
+{"vluxseg6ei8.v",  0, INSN_CLASS_V,  "Vd,0(s),VtVm", MATCH_VLUXSEG6EI8V, MASK_VLUXSEG6EI8V, match_vd_neq_vm_and_vd_neq_vs2_with_nf, INSN_DREF },
+{"vsuxseg6ei8.v",  0, INSN_CLASS_V,  "Vd,0(s),VtVm", MATCH_VSUXSEG6EI8V, MASK_VSUXSEG6EI8V, match_vd_with_nf, INSN_DREF },
+{"vluxseg7ei8.v",  0, INSN_CLASS_V,  "Vd,0(s),VtVm", MATCH_VLUXSEG7EI8V, MASK_VLUXSEG7EI8V, match_vd_neq_vm_and_vd_neq_vs2_with_nf, INSN_DREF },
+{"vsuxseg7ei8.v",  0, INSN_CLASS_V,  "Vd,0(s),VtVm", MATCH_VSUXSEG7EI8V, MASK_VSUXSEG7EI8V, match_vd_with_nf, INSN_DREF },
+{"vluxseg8ei8.v",  0, INSN_CLASS_V,  "Vd,0(s),VtVm", MATCH_VLUXSEG8EI8V, MASK_VLUXSEG8EI8V, match_vd_neq_vm_and_vd_neq_vs2_with_nf, INSN_DREF },
+{"vsuxseg8ei8.v",  0, INSN_CLASS_V,  "Vd,0(s),VtVm", MATCH_VSUXSEG8EI8V, MASK_VSUXSEG8EI8V, match_vd_with_nf, INSN_DREF },
 
-{"vluxseg2ei16.v",  0, INSN_CLASS_V,  "Vd,0(s),VtVm", MATCH_VLUXSEG2EI16V, MASK_VLUXSEG2EI16V, match_opcode, INSN_DREF },
-{"vsuxseg2ei16.v",  0, INSN_CLASS_V,  "Vd,0(s),VtVm", MATCH_VSUXSEG2EI16V, MASK_VSUXSEG2EI16V, match_opcode, INSN_DREF },
-{"vluxseg3ei16.v",  0, INSN_CLASS_V,  "Vd,0(s),VtVm", MATCH_VLUXSEG3EI16V, MASK_VLUXSEG3EI16V, match_opcode, INSN_DREF },
-{"vsuxseg3ei16.v",  0, INSN_CLASS_V,  "Vd,0(s),VtVm", MATCH_VSUXSEG3EI16V, MASK_VSUXSEG3EI16V, match_opcode, INSN_DREF },
-{"vluxseg4ei16.v",  0, INSN_CLASS_V,  "Vd,0(s),VtVm", MATCH_VLUXSEG4EI16V, MASK_VLUXSEG4EI16V, match_opcode, INSN_DREF },
-{"vsuxseg4ei16.v",  0, INSN_CLASS_V,  "Vd,0(s),VtVm", MATCH_VSUXSEG4EI16V, MASK_VSUXSEG4EI16V, match_opcode, INSN_DREF },
-{"vluxseg5ei16.v",  0, INSN_CLASS_V,  "Vd,0(s),VtVm", MATCH_VLUXSEG5EI16V, MASK_VLUXSEG5EI16V, match_opcode, INSN_DREF },
-{"vsuxseg5ei16.v",  0, INSN_CLASS_V,  "Vd,0(s),VtVm", MATCH_VSUXSEG5EI16V, MASK_VSUXSEG5EI16V, match_opcode, INSN_DREF },
-{"vluxseg6ei16.v",  0, INSN_CLASS_V,  "Vd,0(s),VtVm", MATCH_VLUXSEG6EI16V, MASK_VLUXSEG6EI16V, match_opcode, INSN_DREF },
-{"vsuxseg6ei16.v",  0, INSN_CLASS_V,  "Vd,0(s),VtVm", MATCH_VSUXSEG6EI16V, MASK_VSUXSEG6EI16V, match_opcode, INSN_DREF },
-{"vluxseg7ei16.v",  0, INSN_CLASS_V,  "Vd,0(s),VtVm", MATCH_VLUXSEG7EI16V, MASK_VLUXSEG7EI16V, match_opcode, INSN_DREF },
-{"vsuxseg7ei16.v",  0, INSN_CLASS_V,  "Vd,0(s),VtVm", MATCH_VSUXSEG7EI16V, MASK_VSUXSEG7EI16V, match_opcode, INSN_DREF },
-{"vluxseg8ei16.v",  0, INSN_CLASS_V,  "Vd,0(s),VtVm", MATCH_VLUXSEG8EI16V, MASK_VLUXSEG8EI16V, match_opcode, INSN_DREF },
-{"vsuxseg8ei16.v",  0, INSN_CLASS_V,  "Vd,0(s),VtVm", MATCH_VSUXSEG8EI16V, MASK_VSUXSEG8EI16V, match_opcode, INSN_DREF },
+{"vluxseg2ei16.v",  0, INSN_CLASS_V,  "Vd,0(s),VtVm", MATCH_VLUXSEG2EI16V, MASK_VLUXSEG2EI16V, match_vd_neq_vm_and_vd_neq_vs2_with_nf, INSN_DREF },
+{"vsuxseg2ei16.v",  0, INSN_CLASS_V,  "Vd,0(s),VtVm", MATCH_VSUXSEG2EI16V, MASK_VSUXSEG2EI16V, match_vd_with_nf, INSN_DREF },
+{"vluxseg3ei16.v",  0, INSN_CLASS_V,  "Vd,0(s),VtVm", MATCH_VLUXSEG3EI16V, MASK_VLUXSEG3EI16V, match_vd_neq_vm_and_vd_neq_vs2_with_nf, INSN_DREF },
+{"vsuxseg3ei16.v",  0, INSN_CLASS_V,  "Vd,0(s),VtVm", MATCH_VSUXSEG3EI16V, MASK_VSUXSEG3EI16V, match_vd_with_nf, INSN_DREF },
+{"vluxseg4ei16.v",  0, INSN_CLASS_V,  "Vd,0(s),VtVm", MATCH_VLUXSEG4EI16V, MASK_VLUXSEG4EI16V, match_vd_neq_vm_and_vd_neq_vs2_with_nf, INSN_DREF },
+{"vsuxseg4ei16.v",  0, INSN_CLASS_V,  "Vd,0(s),VtVm", MATCH_VSUXSEG4EI16V, MASK_VSUXSEG4EI16V, match_vd_with_nf, INSN_DREF },
+{"vluxseg5ei16.v",  0, INSN_CLASS_V,  "Vd,0(s),VtVm", MATCH_VLUXSEG5EI16V, MASK_VLUXSEG5EI16V, match_vd_neq_vm_and_vd_neq_vs2_with_nf, INSN_DREF },
+{"vsuxseg5ei16.v",  0, INSN_CLASS_V,  "Vd,0(s),VtVm", MATCH_VSUXSEG5EI16V, MASK_VSUXSEG5EI16V, match_vd_with_nf, INSN_DREF },
+{"vluxseg6ei16.v",  0, INSN_CLASS_V,  "Vd,0(s),VtVm", MATCH_VLUXSEG6EI16V, MASK_VLUXSEG6EI16V, match_vd_neq_vm_and_vd_neq_vs2_with_nf, INSN_DREF },
+{"vsuxseg6ei16.v",  0, INSN_CLASS_V,  "Vd,0(s),VtVm", MATCH_VSUXSEG6EI16V, MASK_VSUXSEG6EI16V, match_vd_with_nf, INSN_DREF },
+{"vluxseg7ei16.v",  0, INSN_CLASS_V,  "Vd,0(s),VtVm", MATCH_VLUXSEG7EI16V, MASK_VLUXSEG7EI16V, match_vd_neq_vm_and_vd_neq_vs2_with_nf, INSN_DREF },
+{"vsuxseg7ei16.v",  0, INSN_CLASS_V,  "Vd,0(s),VtVm", MATCH_VSUXSEG7EI16V, MASK_VSUXSEG7EI16V, match_vd_with_nf, INSN_DREF },
+{"vluxseg8ei16.v",  0, INSN_CLASS_V,  "Vd,0(s),VtVm", MATCH_VLUXSEG8EI16V, MASK_VLUXSEG8EI16V, match_vd_neq_vm_and_vd_neq_vs2_with_nf, INSN_DREF },
+{"vsuxseg8ei16.v",  0, INSN_CLASS_V,  "Vd,0(s),VtVm", MATCH_VSUXSEG8EI16V, MASK_VSUXSEG8EI16V, match_vd_with_nf, INSN_DREF },
 
-{"vluxseg2ei32.v",  0, INSN_CLASS_V,  "Vd,0(s),VtVm", MATCH_VLUXSEG2EI32V, MASK_VLUXSEG2EI32V, match_opcode, INSN_DREF },
-{"vsuxseg2ei32.v",  0, INSN_CLASS_V,  "Vd,0(s),VtVm", MATCH_VSUXSEG2EI32V, MASK_VSUXSEG2EI32V, match_opcode, INSN_DREF },
-{"vluxseg3ei32.v",  0, INSN_CLASS_V,  "Vd,0(s),VtVm", MATCH_VLUXSEG3EI32V, MASK_VLUXSEG3EI32V, match_opcode, INSN_DREF },
-{"vsuxseg3ei32.v",  0, INSN_CLASS_V,  "Vd,0(s),VtVm", MATCH_VSUXSEG3EI32V, MASK_VSUXSEG3EI32V, match_opcode, INSN_DREF },
-{"vluxseg4ei32.v",  0, INSN_CLASS_V,  "Vd,0(s),VtVm", MATCH_VLUXSEG4EI32V, MASK_VLUXSEG4EI32V, match_opcode, INSN_DREF },
-{"vsuxseg4ei32.v",  0, INSN_CLASS_V,  "Vd,0(s),VtVm", MATCH_VSUXSEG4EI32V, MASK_VSUXSEG4EI32V, match_opcode, INSN_DREF },
-{"vluxseg5ei32.v",  0, INSN_CLASS_V,  "Vd,0(s),VtVm", MATCH_VLUXSEG5EI32V, MASK_VLUXSEG5EI32V, match_opcode, INSN_DREF },
-{"vsuxseg5ei32.v",  0, INSN_CLASS_V,  "Vd,0(s),VtVm", MATCH_VSUXSEG5EI32V, MASK_VSUXSEG5EI32V, match_opcode, INSN_DREF },
-{"vluxseg6ei32.v",  0, INSN_CLASS_V,  "Vd,0(s),VtVm", MATCH_VLUXSEG6EI32V, MASK_VLUXSEG6EI32V, match_opcode, INSN_DREF },
-{"vsuxseg6ei32.v",  0, INSN_CLASS_V,  "Vd,0(s),VtVm", MATCH_VSUXSEG6EI32V, MASK_VSUXSEG6EI32V, match_opcode, INSN_DREF },
-{"vluxseg7ei32.v",  0, INSN_CLASS_V,  "Vd,0(s),VtVm", MATCH_VLUXSEG7EI32V, MASK_VLUXSEG7EI32V, match_opcode, INSN_DREF },
-{"vsuxseg7ei32.v",  0, INSN_CLASS_V,  "Vd,0(s),VtVm", MATCH_VSUXSEG7EI32V, MASK_VSUXSEG7EI32V, match_opcode, INSN_DREF },
-{"vluxseg8ei32.v",  0, INSN_CLASS_V,  "Vd,0(s),VtVm", MATCH_VLUXSEG8EI32V, MASK_VLUXSEG8EI32V, match_opcode, INSN_DREF },
-{"vsuxseg8ei32.v",  0, INSN_CLASS_V,  "Vd,0(s),VtVm", MATCH_VSUXSEG8EI32V, MASK_VSUXSEG8EI32V, match_opcode, INSN_DREF },
+{"vluxseg2ei32.v",  0, INSN_CLASS_V,  "Vd,0(s),VtVm", MATCH_VLUXSEG2EI32V, MASK_VLUXSEG2EI32V, match_vd_neq_vm_and_vd_neq_vs2_with_nf, INSN_DREF },
+{"vsuxseg2ei32.v",  0, INSN_CLASS_V,  "Vd,0(s),VtVm", MATCH_VSUXSEG2EI32V, MASK_VSUXSEG2EI32V, match_vd_with_nf, INSN_DREF },
+{"vluxseg3ei32.v",  0, INSN_CLASS_V,  "Vd,0(s),VtVm", MATCH_VLUXSEG3EI32V, MASK_VLUXSEG3EI32V, match_vd_neq_vm_and_vd_neq_vs2_with_nf, INSN_DREF },
+{"vsuxseg3ei32.v",  0, INSN_CLASS_V,  "Vd,0(s),VtVm", MATCH_VSUXSEG3EI32V, MASK_VSUXSEG3EI32V, match_vd_with_nf, INSN_DREF },
+{"vluxseg4ei32.v",  0, INSN_CLASS_V,  "Vd,0(s),VtVm", MATCH_VLUXSEG4EI32V, MASK_VLUXSEG4EI32V, match_vd_neq_vm_and_vd_neq_vs2_with_nf, INSN_DREF },
+{"vsuxseg4ei32.v",  0, INSN_CLASS_V,  "Vd,0(s),VtVm", MATCH_VSUXSEG4EI32V, MASK_VSUXSEG4EI32V, match_vd_with_nf, INSN_DREF },
+{"vluxseg5ei32.v",  0, INSN_CLASS_V,  "Vd,0(s),VtVm", MATCH_VLUXSEG5EI32V, MASK_VLUXSEG5EI32V, match_vd_neq_vm_and_vd_neq_vs2_with_nf, INSN_DREF },
+{"vsuxseg5ei32.v",  0, INSN_CLASS_V,  "Vd,0(s),VtVm", MATCH_VSUXSEG5EI32V, MASK_VSUXSEG5EI32V, match_vd_with_nf, INSN_DREF },
+{"vluxseg6ei32.v",  0, INSN_CLASS_V,  "Vd,0(s),VtVm", MATCH_VLUXSEG6EI32V, MASK_VLUXSEG6EI32V, match_vd_neq_vm_and_vd_neq_vs2_with_nf, INSN_DREF },
+{"vsuxseg6ei32.v",  0, INSN_CLASS_V,  "Vd,0(s),VtVm", MATCH_VSUXSEG6EI32V, MASK_VSUXSEG6EI32V, match_vd_with_nf, INSN_DREF },
+{"vluxseg7ei32.v",  0, INSN_CLASS_V,  "Vd,0(s),VtVm", MATCH_VLUXSEG7EI32V, MASK_VLUXSEG7EI32V, match_vd_neq_vm_and_vd_neq_vs2_with_nf, INSN_DREF },
+{"vsuxseg7ei32.v",  0, INSN_CLASS_V,  "Vd,0(s),VtVm", MATCH_VSUXSEG7EI32V, MASK_VSUXSEG7EI32V, match_vd_with_nf, INSN_DREF },
+{"vluxseg8ei32.v",  0, INSN_CLASS_V,  "Vd,0(s),VtVm", MATCH_VLUXSEG8EI32V, MASK_VLUXSEG8EI32V, match_vd_neq_vm_and_vd_neq_vs2_with_nf, INSN_DREF },
+{"vsuxseg8ei32.v",  0, INSN_CLASS_V,  "Vd,0(s),VtVm", MATCH_VSUXSEG8EI32V, MASK_VSUXSEG8EI32V, match_vd_with_nf, INSN_DREF },
 
-{"vluxseg2ei64.v",  0, INSN_CLASS_V,  "Vd,0(s),VtVm", MATCH_VLUXSEG2EI64V, MASK_VLUXSEG2EI64V, match_opcode, INSN_DREF|INSN_V_EEW64 },
-{"vsuxseg2ei64.v",  0, INSN_CLASS_V,  "Vd,0(s),VtVm", MATCH_VSUXSEG2EI64V, MASK_VSUXSEG2EI64V, match_opcode, INSN_DREF|INSN_V_EEW64 },
-{"vluxseg3ei64.v",  0, INSN_CLASS_V,  "Vd,0(s),VtVm", MATCH_VLUXSEG3EI64V, MASK_VLUXSEG3EI64V, match_opcode, INSN_DREF|INSN_V_EEW64 },
-{"vsuxseg3ei64.v",  0, INSN_CLASS_V,  "Vd,0(s),VtVm", MATCH_VSUXSEG3EI64V, MASK_VSUXSEG3EI64V, match_opcode, INSN_DREF|INSN_V_EEW64 },
-{"vluxseg4ei64.v",  0, INSN_CLASS_V,  "Vd,0(s),VtVm", MATCH_VLUXSEG4EI64V, MASK_VLUXSEG4EI64V, match_opcode, INSN_DREF|INSN_V_EEW64 },
-{"vsuxseg4ei64.v",  0, INSN_CLASS_V,  "Vd,0(s),VtVm", MATCH_VSUXSEG4EI64V, MASK_VSUXSEG4EI64V, match_opcode, INSN_DREF|INSN_V_EEW64 },
-{"vluxseg5ei64.v",  0, INSN_CLASS_V,  "Vd,0(s),VtVm", MATCH_VLUXSEG5EI64V, MASK_VLUXSEG5EI64V, match_opcode, INSN_DREF|INSN_V_EEW64 },
-{"vsuxseg5ei64.v",  0, INSN_CLASS_V,  "Vd,0(s),VtVm", MATCH_VSUXSEG5EI64V, MASK_VSUXSEG5EI64V, match_opcode, INSN_DREF|INSN_V_EEW64 },
-{"vluxseg6ei64.v",  0, INSN_CLASS_V,  "Vd,0(s),VtVm", MATCH_VLUXSEG6EI64V, MASK_VLUXSEG6EI64V, match_opcode, INSN_DREF|INSN_V_EEW64 },
-{"vsuxseg6ei64.v",  0, INSN_CLASS_V,  "Vd,0(s),VtVm", MATCH_VSUXSEG6EI64V, MASK_VSUXSEG6EI64V, match_opcode, INSN_DREF|INSN_V_EEW64 },
-{"vluxseg7ei64.v",  0, INSN_CLASS_V,  "Vd,0(s),VtVm", MATCH_VLUXSEG7EI64V, MASK_VLUXSEG7EI64V, match_opcode, INSN_DREF|INSN_V_EEW64 },
-{"vsuxseg7ei64.v",  0, INSN_CLASS_V,  "Vd,0(s),VtVm", MATCH_VSUXSEG7EI64V, MASK_VSUXSEG7EI64V, match_opcode, INSN_DREF|INSN_V_EEW64 },
-{"vluxseg8ei64.v",  0, INSN_CLASS_V,  "Vd,0(s),VtVm", MATCH_VLUXSEG8EI64V, MASK_VLUXSEG8EI64V, match_opcode, INSN_DREF|INSN_V_EEW64 },
-{"vsuxseg8ei64.v",  0, INSN_CLASS_V,  "Vd,0(s),VtVm", MATCH_VSUXSEG8EI64V, MASK_VSUXSEG8EI64V, match_opcode, INSN_DREF|INSN_V_EEW64 },
+{"vluxseg2ei64.v",  0, INSN_CLASS_V,  "Vd,0(s),VtVm", MATCH_VLUXSEG2EI64V, MASK_VLUXSEG2EI64V, match_vd_neq_vm_and_vd_neq_vs2_with_nf, INSN_DREF|INSN_V_EEW64 },
+{"vsuxseg2ei64.v",  0, INSN_CLASS_V,  "Vd,0(s),VtVm", MATCH_VSUXSEG2EI64V, MASK_VSUXSEG2EI64V, match_vd_with_nf, INSN_DREF|INSN_V_EEW64 },
+{"vluxseg3ei64.v",  0, INSN_CLASS_V,  "Vd,0(s),VtVm", MATCH_VLUXSEG3EI64V, MASK_VLUXSEG3EI64V, match_vd_neq_vm_and_vd_neq_vs2_with_nf, INSN_DREF|INSN_V_EEW64 },
+{"vsuxseg3ei64.v",  0, INSN_CLASS_V,  "Vd,0(s),VtVm", MATCH_VSUXSEG3EI64V, MASK_VSUXSEG3EI64V, match_vd_with_nf, INSN_DREF|INSN_V_EEW64 },
+{"vluxseg4ei64.v",  0, INSN_CLASS_V,  "Vd,0(s),VtVm", MATCH_VLUXSEG4EI64V, MASK_VLUXSEG4EI64V, match_vd_neq_vm_and_vd_neq_vs2_with_nf, INSN_DREF|INSN_V_EEW64 },
+{"vsuxseg4ei64.v",  0, INSN_CLASS_V,  "Vd,0(s),VtVm", MATCH_VSUXSEG4EI64V, MASK_VSUXSEG4EI64V, match_vd_with_nf, INSN_DREF|INSN_V_EEW64 },
+{"vluxseg5ei64.v",  0, INSN_CLASS_V,  "Vd,0(s),VtVm", MATCH_VLUXSEG5EI64V, MASK_VLUXSEG5EI64V, match_vd_neq_vm_and_vd_neq_vs2_with_nf, INSN_DREF|INSN_V_EEW64 },
+{"vsuxseg5ei64.v",  0, INSN_CLASS_V,  "Vd,0(s),VtVm", MATCH_VSUXSEG5EI64V, MASK_VSUXSEG5EI64V, match_vd_with_nf, INSN_DREF|INSN_V_EEW64 },
+{"vluxseg6ei64.v",  0, INSN_CLASS_V,  "Vd,0(s),VtVm", MATCH_VLUXSEG6EI64V, MASK_VLUXSEG6EI64V, match_vd_neq_vm_and_vd_neq_vs2_with_nf, INSN_DREF|INSN_V_EEW64 },
+{"vsuxseg6ei64.v",  0, INSN_CLASS_V,  "Vd,0(s),VtVm", MATCH_VSUXSEG6EI64V, MASK_VSUXSEG6EI64V, match_vd_with_nf, INSN_DREF|INSN_V_EEW64 },
+{"vluxseg7ei64.v",  0, INSN_CLASS_V,  "Vd,0(s),VtVm", MATCH_VLUXSEG7EI64V, MASK_VLUXSEG7EI64V, match_vd_neq_vm_and_vd_neq_vs2_with_nf, INSN_DREF|INSN_V_EEW64 },
+{"vsuxseg7ei64.v",  0, INSN_CLASS_V,  "Vd,0(s),VtVm", MATCH_VSUXSEG7EI64V, MASK_VSUXSEG7EI64V, match_vd_with_nf, INSN_DREF|INSN_V_EEW64 },
+{"vluxseg8ei64.v",  0, INSN_CLASS_V,  "Vd,0(s),VtVm", MATCH_VLUXSEG8EI64V, MASK_VLUXSEG8EI64V, match_vd_neq_vm_and_vd_neq_vs2_with_nf, INSN_DREF|INSN_V_EEW64 },
+{"vsuxseg8ei64.v",  0, INSN_CLASS_V,  "Vd,0(s),VtVm", MATCH_VSUXSEG8EI64V, MASK_VSUXSEG8EI64V, match_vd_with_nf, INSN_DREF|INSN_V_EEW64 },
 
-{"vlseg2e8ff.v",  0, INSN_CLASS_V,  "Vd,0(s)Vm", MATCH_VLSEG2E8FFV, MASK_VLSEG2E8FFV, match_opcode, INSN_DREF },
-{"vlseg3e8ff.v",  0, INSN_CLASS_V,  "Vd,0(s)Vm", MATCH_VLSEG3E8FFV, MASK_VLSEG3E8FFV, match_opcode, INSN_DREF },
-{"vlseg4e8ff.v",  0, INSN_CLASS_V,  "Vd,0(s)Vm", MATCH_VLSEG4E8FFV, MASK_VLSEG4E8FFV, match_opcode, INSN_DREF },
-{"vlseg5e8ff.v",  0, INSN_CLASS_V,  "Vd,0(s)Vm", MATCH_VLSEG5E8FFV, MASK_VLSEG5E8FFV, match_opcode, INSN_DREF },
-{"vlseg6e8ff.v",  0, INSN_CLASS_V,  "Vd,0(s)Vm", MATCH_VLSEG6E8FFV, MASK_VLSEG6E8FFV, match_opcode, INSN_DREF },
-{"vlseg7e8ff.v",  0, INSN_CLASS_V,  "Vd,0(s)Vm", MATCH_VLSEG7E8FFV, MASK_VLSEG7E8FFV, match_opcode, INSN_DREF },
-{"vlseg8e8ff.v",  0, INSN_CLASS_V,  "Vd,0(s)Vm", MATCH_VLSEG8E8FFV, MASK_VLSEG8E8FFV, match_opcode, INSN_DREF },
+{"vlseg2e8ff.v",  0, INSN_CLASS_V,  "Vd,0(s)Vm", MATCH_VLSEG2E8FFV, MASK_VLSEG2E8FFV, match_vd_neq_vm_with_nf, INSN_DREF },
+{"vlseg3e8ff.v",  0, INSN_CLASS_V,  "Vd,0(s)Vm", MATCH_VLSEG3E8FFV, MASK_VLSEG3E8FFV, match_vd_neq_vm_with_nf, INSN_DREF },
+{"vlseg4e8ff.v",  0, INSN_CLASS_V,  "Vd,0(s)Vm", MATCH_VLSEG4E8FFV, MASK_VLSEG4E8FFV, match_vd_neq_vm_with_nf, INSN_DREF },
+{"vlseg5e8ff.v",  0, INSN_CLASS_V,  "Vd,0(s)Vm", MATCH_VLSEG5E8FFV, MASK_VLSEG5E8FFV, match_vd_neq_vm_with_nf, INSN_DREF },
+{"vlseg6e8ff.v",  0, INSN_CLASS_V,  "Vd,0(s)Vm", MATCH_VLSEG6E8FFV, MASK_VLSEG6E8FFV, match_vd_neq_vm_with_nf, INSN_DREF },
+{"vlseg7e8ff.v",  0, INSN_CLASS_V,  "Vd,0(s)Vm", MATCH_VLSEG7E8FFV, MASK_VLSEG7E8FFV, match_vd_neq_vm_with_nf, INSN_DREF },
+{"vlseg8e8ff.v",  0, INSN_CLASS_V,  "Vd,0(s)Vm", MATCH_VLSEG8E8FFV, MASK_VLSEG8E8FFV, match_vd_neq_vm_with_nf, INSN_DREF },
 
-{"vlseg2e16ff.v",  0, INSN_CLASS_V,  "Vd,0(s)Vm", MATCH_VLSEG2E16FFV, MASK_VLSEG2E16FFV, match_opcode, INSN_DREF },
-{"vlseg3e16ff.v",  0, INSN_CLASS_V,  "Vd,0(s)Vm", MATCH_VLSEG3E16FFV, MASK_VLSEG3E16FFV, match_opcode, INSN_DREF },
-{"vlseg4e16ff.v",  0, INSN_CLASS_V,  "Vd,0(s)Vm", MATCH_VLSEG4E16FFV, MASK_VLSEG4E16FFV, match_opcode, INSN_DREF },
-{"vlseg5e16ff.v",  0, INSN_CLASS_V,  "Vd,0(s)Vm", MATCH_VLSEG5E16FFV, MASK_VLSEG5E16FFV, match_opcode, INSN_DREF },
-{"vlseg6e16ff.v",  0, INSN_CLASS_V,  "Vd,0(s)Vm", MATCH_VLSEG6E16FFV, MASK_VLSEG6E16FFV, match_opcode, INSN_DREF },
-{"vlseg7e16ff.v",  0, INSN_CLASS_V,  "Vd,0(s)Vm", MATCH_VLSEG7E16FFV, MASK_VLSEG7E16FFV, match_opcode, INSN_DREF },
-{"vlseg8e16ff.v",  0, INSN_CLASS_V,  "Vd,0(s)Vm", MATCH_VLSEG8E16FFV, MASK_VLSEG8E16FFV, match_opcode, INSN_DREF },
+{"vlseg2e16ff.v",  0, INSN_CLASS_V,  "Vd,0(s)Vm", MATCH_VLSEG2E16FFV, MASK_VLSEG2E16FFV, match_vd_neq_vm_with_nf, INSN_DREF },
+{"vlseg3e16ff.v",  0, INSN_CLASS_V,  "Vd,0(s)Vm", MATCH_VLSEG3E16FFV, MASK_VLSEG3E16FFV, match_vd_neq_vm_with_nf, INSN_DREF },
+{"vlseg4e16ff.v",  0, INSN_CLASS_V,  "Vd,0(s)Vm", MATCH_VLSEG4E16FFV, MASK_VLSEG4E16FFV, match_vd_neq_vm_with_nf, INSN_DREF },
+{"vlseg5e16ff.v",  0, INSN_CLASS_V,  "Vd,0(s)Vm", MATCH_VLSEG5E16FFV, MASK_VLSEG5E16FFV, match_vd_neq_vm_with_nf, INSN_DREF },
+{"vlseg6e16ff.v",  0, INSN_CLASS_V,  "Vd,0(s)Vm", MATCH_VLSEG6E16FFV, MASK_VLSEG6E16FFV, match_vd_neq_vm_with_nf, INSN_DREF },
+{"vlseg7e16ff.v",  0, INSN_CLASS_V,  "Vd,0(s)Vm", MATCH_VLSEG7E16FFV, MASK_VLSEG7E16FFV, match_vd_neq_vm_with_nf, INSN_DREF },
+{"vlseg8e16ff.v",  0, INSN_CLASS_V,  "Vd,0(s)Vm", MATCH_VLSEG8E16FFV, MASK_VLSEG8E16FFV, match_vd_neq_vm_with_nf, INSN_DREF },
 
-{"vlseg2e32ff.v",  0, INSN_CLASS_V,  "Vd,0(s)Vm", MATCH_VLSEG2E32FFV, MASK_VLSEG2E32FFV, match_opcode, INSN_DREF },
-{"vlseg3e32ff.v",  0, INSN_CLASS_V,  "Vd,0(s)Vm", MATCH_VLSEG3E32FFV, MASK_VLSEG3E32FFV, match_opcode, INSN_DREF },
-{"vlseg4e32ff.v",  0, INSN_CLASS_V,  "Vd,0(s)Vm", MATCH_VLSEG4E32FFV, MASK_VLSEG4E32FFV, match_opcode, INSN_DREF },
-{"vlseg5e32ff.v",  0, INSN_CLASS_V,  "Vd,0(s)Vm", MATCH_VLSEG5E32FFV, MASK_VLSEG5E32FFV, match_opcode, INSN_DREF },
-{"vlseg6e32ff.v",  0, INSN_CLASS_V,  "Vd,0(s)Vm", MATCH_VLSEG6E32FFV, MASK_VLSEG6E32FFV, match_opcode, INSN_DREF },
-{"vlseg7e32ff.v",  0, INSN_CLASS_V,  "Vd,0(s)Vm", MATCH_VLSEG7E32FFV, MASK_VLSEG7E32FFV, match_opcode, INSN_DREF },
-{"vlseg8e32ff.v",  0, INSN_CLASS_V,  "Vd,0(s)Vm", MATCH_VLSEG8E32FFV, MASK_VLSEG8E32FFV, match_opcode, INSN_DREF },
+{"vlseg2e32ff.v",  0, INSN_CLASS_V,  "Vd,0(s)Vm", MATCH_VLSEG2E32FFV, MASK_VLSEG2E32FFV, match_vd_neq_vm_with_nf, INSN_DREF },
+{"vlseg3e32ff.v",  0, INSN_CLASS_V,  "Vd,0(s)Vm", MATCH_VLSEG3E32FFV, MASK_VLSEG3E32FFV, match_vd_neq_vm_with_nf, INSN_DREF },
+{"vlseg4e32ff.v",  0, INSN_CLASS_V,  "Vd,0(s)Vm", MATCH_VLSEG4E32FFV, MASK_VLSEG4E32FFV, match_vd_neq_vm_with_nf, INSN_DREF },
+{"vlseg5e32ff.v",  0, INSN_CLASS_V,  "Vd,0(s)Vm", MATCH_VLSEG5E32FFV, MASK_VLSEG5E32FFV, match_vd_neq_vm_with_nf, INSN_DREF },
+{"vlseg6e32ff.v",  0, INSN_CLASS_V,  "Vd,0(s)Vm", MATCH_VLSEG6E32FFV, MASK_VLSEG6E32FFV, match_vd_neq_vm_with_nf, INSN_DREF },
+{"vlseg7e32ff.v",  0, INSN_CLASS_V,  "Vd,0(s)Vm", MATCH_VLSEG7E32FFV, MASK_VLSEG7E32FFV, match_vd_neq_vm_with_nf, INSN_DREF },
+{"vlseg8e32ff.v",  0, INSN_CLASS_V,  "Vd,0(s)Vm", MATCH_VLSEG8E32FFV, MASK_VLSEG8E32FFV, match_vd_neq_vm_with_nf, INSN_DREF },
 
-{"vlseg2e64ff.v",  0, INSN_CLASS_V,  "Vd,0(s)Vm", MATCH_VLSEG2E64FFV, MASK_VLSEG2E64FFV, match_opcode, INSN_DREF|INSN_V_EEW64 },
-{"vlseg3e64ff.v",  0, INSN_CLASS_V,  "Vd,0(s)Vm", MATCH_VLSEG3E64FFV, MASK_VLSEG3E64FFV, match_opcode, INSN_DREF|INSN_V_EEW64 },
-{"vlseg4e64ff.v",  0, INSN_CLASS_V,  "Vd,0(s)Vm", MATCH_VLSEG4E64FFV, MASK_VLSEG4E64FFV, match_opcode, INSN_DREF|INSN_V_EEW64 },
-{"vlseg5e64ff.v",  0, INSN_CLASS_V,  "Vd,0(s)Vm", MATCH_VLSEG5E64FFV, MASK_VLSEG5E64FFV, match_opcode, INSN_DREF|INSN_V_EEW64 },
-{"vlseg6e64ff.v",  0, INSN_CLASS_V,  "Vd,0(s)Vm", MATCH_VLSEG6E64FFV, MASK_VLSEG6E64FFV, match_opcode, INSN_DREF|INSN_V_EEW64 },
-{"vlseg7e64ff.v",  0, INSN_CLASS_V,  "Vd,0(s)Vm", MATCH_VLSEG7E64FFV, MASK_VLSEG7E64FFV, match_opcode, INSN_DREF|INSN_V_EEW64 },
-{"vlseg8e64ff.v",  0, INSN_CLASS_V,  "Vd,0(s)Vm", MATCH_VLSEG8E64FFV, MASK_VLSEG8E64FFV, match_opcode, INSN_DREF|INSN_V_EEW64 },
+{"vlseg2e64ff.v",  0, INSN_CLASS_V,  "Vd,0(s)Vm", MATCH_VLSEG2E64FFV, MASK_VLSEG2E64FFV, match_vd_neq_vm_with_nf, INSN_DREF|INSN_V_EEW64 },
+{"vlseg3e64ff.v",  0, INSN_CLASS_V,  "Vd,0(s)Vm", MATCH_VLSEG3E64FFV, MASK_VLSEG3E64FFV, match_vd_neq_vm_with_nf, INSN_DREF|INSN_V_EEW64 },
+{"vlseg4e64ff.v",  0, INSN_CLASS_V,  "Vd,0(s)Vm", MATCH_VLSEG4E64FFV, MASK_VLSEG4E64FFV, match_vd_neq_vm_with_nf, INSN_DREF|INSN_V_EEW64 },
+{"vlseg5e64ff.v",  0, INSN_CLASS_V,  "Vd,0(s)Vm", MATCH_VLSEG5E64FFV, MASK_VLSEG5E64FFV, match_vd_neq_vm_with_nf, INSN_DREF|INSN_V_EEW64 },
+{"vlseg6e64ff.v",  0, INSN_CLASS_V,  "Vd,0(s)Vm", MATCH_VLSEG6E64FFV, MASK_VLSEG6E64FFV, match_vd_neq_vm_with_nf, INSN_DREF|INSN_V_EEW64 },
+{"vlseg7e64ff.v",  0, INSN_CLASS_V,  "Vd,0(s)Vm", MATCH_VLSEG7E64FFV, MASK_VLSEG7E64FFV, match_vd_neq_vm_with_nf, INSN_DREF|INSN_V_EEW64 },
+{"vlseg8e64ff.v",  0, INSN_CLASS_V,  "Vd,0(s)Vm", MATCH_VLSEG8E64FFV, MASK_VLSEG8E64FFV, match_vd_neq_vm_with_nf, INSN_DREF|INSN_V_EEW64 },
 
 {"vl1r.v",      0, INSN_CLASS_V,  "Vd,0(s)", MATCH_VL1RE8V, MASK_VL1RE8V, match_opcode, INSN_DREF|INSN_ALIAS },
 {"vl1re8.v",    0, INSN_CLASS_V,  "Vd,0(s)", MATCH_VL1RE8V, MASK_VL1RE8V, match_opcode, INSN_DREF },
@@ -1873,98 +2243,98 @@ const struct riscv_opcode riscv_opcodes[] =
 {"vl1re32.v",   0, INSN_CLASS_V,  "Vd,0(s)", MATCH_VL1RE32V, MASK_VL1RE32V, match_opcode, INSN_DREF },
 {"vl1re64.v",   0, INSN_CLASS_V,  "Vd,0(s)", MATCH_VL1RE64V, MASK_VL1RE64V, match_opcode, INSN_DREF|INSN_V_EEW64 },
 
-{"vl2r.v",      0, INSN_CLASS_V,  "Vd,0(s)", MATCH_VL2RE8V, MASK_VL2RE8V, match_opcode, INSN_DREF|INSN_ALIAS },
-{"vl2re8.v",    0, INSN_CLASS_V,  "Vd,0(s)", MATCH_VL2RE8V, MASK_VL2RE8V, match_opcode, INSN_DREF },
-{"vl2re16.v",   0, INSN_CLASS_V,  "Vd,0(s)", MATCH_VL2RE16V, MASK_VL2RE16V, match_opcode, INSN_DREF },
-{"vl2re32.v",   0, INSN_CLASS_V,  "Vd,0(s)", MATCH_VL2RE32V, MASK_VL2RE32V, match_opcode, INSN_DREF },
-{"vl2re64.v",   0, INSN_CLASS_V,  "Vd,0(s)", MATCH_VL2RE64V, MASK_VL2RE64V, match_opcode, INSN_DREF|INSN_V_EEW64 },
+{"vl2r.v",      0, INSN_CLASS_V,  "Vd,0(s)", MATCH_VL2RE8V, MASK_VL2RE8V, match_vd_with_nf_align, INSN_DREF|INSN_ALIAS },
+{"vl2re8.v",    0, INSN_CLASS_V,  "Vd,0(s)", MATCH_VL2RE8V, MASK_VL2RE8V, match_vd_with_nf_align, INSN_DREF },
+{"vl2re16.v",   0, INSN_CLASS_V,  "Vd,0(s)", MATCH_VL2RE16V, MASK_VL2RE16V, match_vd_with_nf_align, INSN_DREF },
+{"vl2re32.v",   0, INSN_CLASS_V,  "Vd,0(s)", MATCH_VL2RE32V, MASK_VL2RE32V, match_vd_with_nf_align, INSN_DREF },
+{"vl2re64.v",   0, INSN_CLASS_V,  "Vd,0(s)", MATCH_VL2RE64V, MASK_VL2RE64V, match_vd_with_nf_align, INSN_DREF|INSN_V_EEW64 },
 
-{"vl4r.v",      0, INSN_CLASS_V,  "Vd,0(s)", MATCH_VL4RE8V, MASK_VL4RE8V, match_opcode, INSN_DREF|INSN_ALIAS },
-{"vl4re8.v",    0, INSN_CLASS_V,  "Vd,0(s)", MATCH_VL4RE8V, MASK_VL4RE8V, match_opcode, INSN_DREF },
-{"vl4re16.v",   0, INSN_CLASS_V,  "Vd,0(s)", MATCH_VL4RE16V, MASK_VL4RE16V, match_opcode, INSN_DREF },
-{"vl4re32.v",   0, INSN_CLASS_V,  "Vd,0(s)", MATCH_VL4RE32V, MASK_VL4RE32V, match_opcode, INSN_DREF },
-{"vl4re64.v",   0, INSN_CLASS_V,  "Vd,0(s)", MATCH_VL4RE64V, MASK_VL4RE64V, match_opcode, INSN_DREF|INSN_V_EEW64 },
+{"vl4r.v",      0, INSN_CLASS_V,  "Vd,0(s)", MATCH_VL4RE8V, MASK_VL4RE8V, match_vd_with_nf_align, INSN_DREF|INSN_ALIAS },
+{"vl4re8.v",    0, INSN_CLASS_V,  "Vd,0(s)", MATCH_VL4RE8V, MASK_VL4RE8V, match_vd_with_nf_align, INSN_DREF },
+{"vl4re16.v",   0, INSN_CLASS_V,  "Vd,0(s)", MATCH_VL4RE16V, MASK_VL4RE16V, match_vd_with_nf_align, INSN_DREF },
+{"vl4re32.v",   0, INSN_CLASS_V,  "Vd,0(s)", MATCH_VL4RE32V, MASK_VL4RE32V, match_vd_with_nf_align, INSN_DREF },
+{"vl4re64.v",   0, INSN_CLASS_V,  "Vd,0(s)", MATCH_VL4RE64V, MASK_VL4RE64V, match_vd_with_nf_align, INSN_DREF|INSN_V_EEW64 },
 
-{"vl8r.v",      0, INSN_CLASS_V,  "Vd,0(s)", MATCH_VL8RE8V, MASK_VL8RE8V, match_opcode, INSN_DREF|INSN_ALIAS },
-{"vl8re8.v",    0, INSN_CLASS_V,  "Vd,0(s)", MATCH_VL8RE8V, MASK_VL8RE8V, match_opcode, INSN_DREF },
-{"vl8re16.v",   0, INSN_CLASS_V,  "Vd,0(s)", MATCH_VL8RE16V, MASK_VL8RE16V, match_opcode, INSN_DREF },
-{"vl8re32.v",   0, INSN_CLASS_V,  "Vd,0(s)", MATCH_VL8RE32V, MASK_VL8RE32V, match_opcode, INSN_DREF },
-{"vl8re64.v",   0, INSN_CLASS_V,  "Vd,0(s)", MATCH_VL8RE64V, MASK_VL8RE64V, match_opcode, INSN_DREF|INSN_V_EEW64 },
+{"vl8r.v",      0, INSN_CLASS_V,  "Vd,0(s)", MATCH_VL8RE8V, MASK_VL8RE8V, match_vd_with_nf_align, INSN_DREF|INSN_ALIAS },
+{"vl8re8.v",    0, INSN_CLASS_V,  "Vd,0(s)", MATCH_VL8RE8V, MASK_VL8RE8V, match_vd_with_nf_align, INSN_DREF },
+{"vl8re16.v",   0, INSN_CLASS_V,  "Vd,0(s)", MATCH_VL8RE16V, MASK_VL8RE16V, match_vd_with_nf_align, INSN_DREF },
+{"vl8re32.v",   0, INSN_CLASS_V,  "Vd,0(s)", MATCH_VL8RE32V, MASK_VL8RE32V, match_vd_with_nf_align, INSN_DREF },
+{"vl8re64.v",   0, INSN_CLASS_V,  "Vd,0(s)", MATCH_VL8RE64V, MASK_VL8RE64V, match_vd_with_nf_align, INSN_DREF|INSN_V_EEW64 },
 
 {"vs1r.v",  0, INSN_CLASS_V,  "Vd,0(s)", MATCH_VS1RV, MASK_VS1RV, match_opcode, INSN_DREF },
-{"vs2r.v",  0, INSN_CLASS_V,  "Vd,0(s)", MATCH_VS2RV, MASK_VS2RV, match_opcode, INSN_DREF },
-{"vs4r.v",  0, INSN_CLASS_V,  "Vd,0(s)", MATCH_VS4RV, MASK_VS4RV, match_opcode, INSN_DREF },
-{"vs8r.v",  0, INSN_CLASS_V,  "Vd,0(s)", MATCH_VS8RV, MASK_VS8RV, match_opcode, INSN_DREF },
+{"vs2r.v",  0, INSN_CLASS_V,  "Vd,0(s)", MATCH_VS2RV, MASK_VS2RV, match_vd_with_nf, INSN_DREF },
+{"vs4r.v",  0, INSN_CLASS_V,  "Vd,0(s)", MATCH_VS4RV, MASK_VS4RV, match_vd_with_nf, INSN_DREF },
+{"vs8r.v",  0, INSN_CLASS_V,  "Vd,0(s)", MATCH_VS8RV, MASK_VS8RV, match_vd_with_nf, INSN_DREF },
 
-{"vneg.v",     0, INSN_CLASS_XTHEADVECTOR,  "Vd,VtVm",  MATCH_VRSUBVX, MASK_VRSUBVX | MASK_RS1, match_opcode, INSN_ALIAS },
-{"vneg.v",     0, INSN_CLASS_V,  "Vd,VtVm",  MATCH_VRSUBVX, MASK_VRSUBVX | MASK_RS1, match_opcode, INSN_ALIAS },
+{"vneg.v",     0, INSN_CLASS_XTHEADVECTOR,  "Vd,VtVm",  MATCH_VRSUBVX, MASK_VRSUBVX | MASK_RS1 , match_vd_neq_vm, INSN_ALIAS },
+{"vneg.v",     0, INSN_CLASS_V,  "Vd,VtVm",  MATCH_VRSUBVX, MASK_VRSUBVX | MASK_RS1 , match_vd_neq_vm, INSN_ALIAS },
 
-{"vadd.vv",    0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,VsVm", MATCH_VADDVV, MASK_VADDVV, match_opcode, INSN_ALIAS },
-{"vadd.vv",    0, INSN_CLASS_V,  "Vd,Vt,VsVm", MATCH_VADDVV, MASK_VADDVV, match_opcode, 0 },
-{"vadd.vx",    0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,sVm", MATCH_VADDVX, MASK_VADDVX, match_opcode, INSN_ALIAS },
-{"vadd.vx",    0, INSN_CLASS_V,  "Vd,Vt,sVm", MATCH_VADDVX, MASK_VADDVX, match_opcode, 0 },
-{"vadd.vi",    0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,ViVm", MATCH_VADDVI, MASK_VADDVI, match_opcode, INSN_ALIAS },
-{"vadd.vi",    0, INSN_CLASS_V,  "Vd,Vt,ViVm", MATCH_VADDVI, MASK_VADDVI, match_opcode, 0 },
-{"vsub.vv",    0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,VsVm", MATCH_VSUBVV, MASK_VSUBVV, match_opcode, INSN_ALIAS },
-{"vsub.vv",    0, INSN_CLASS_V,  "Vd,Vt,VsVm", MATCH_VSUBVV, MASK_VSUBVV, match_opcode, 0 },
-{"vsub.vx",    0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,sVm", MATCH_VSUBVX, MASK_VSUBVX, match_opcode, INSN_ALIAS },
-{"vsub.vx",    0, INSN_CLASS_V,  "Vd,Vt,sVm", MATCH_VSUBVX, MASK_VSUBVX, match_opcode, 0 },
-{"vrsub.vx",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,sVm", MATCH_VRSUBVX, MASK_VRSUBVX, match_opcode, INSN_ALIAS },
-{"vrsub.vx",   0, INSN_CLASS_V,  "Vd,Vt,sVm", MATCH_VRSUBVX, MASK_VRSUBVX, match_opcode, 0 },
-{"vrsub.vi",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,ViVm", MATCH_VRSUBVI, MASK_VRSUBVI, match_opcode, INSN_ALIAS },
-{"vrsub.vi",   0, INSN_CLASS_V,  "Vd,Vt,ViVm", MATCH_VRSUBVI, MASK_VRSUBVI, match_opcode, 0 },
+{"vadd.vv",    0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,VsVm", MATCH_VADDVV, MASK_VADDVV, match_vd_neq_vm, INSN_ALIAS },
+{"vadd.vv",    0, INSN_CLASS_V,  "Vd,Vt,VsVm", MATCH_VADDVV, MASK_VADDVV, match_vd_neq_vm, 0 },
+{"vadd.vx",    0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,sVm", MATCH_VADDVX, MASK_VADDVX, match_vd_neq_vm, INSN_ALIAS },
+{"vadd.vx",    0, INSN_CLASS_V,  "Vd,Vt,sVm", MATCH_VADDVX, MASK_VADDVX, match_vd_neq_vm, 0 },
+{"vadd.vi",    0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,ViVm", MATCH_VADDVI, MASK_VADDVI, match_vd_neq_vm, INSN_ALIAS },
+{"vadd.vi",    0, INSN_CLASS_V,  "Vd,Vt,ViVm", MATCH_VADDVI, MASK_VADDVI, match_vd_neq_vm, 0 },
+{"vsub.vv",    0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,VsVm", MATCH_VSUBVV, MASK_VSUBVV, match_vd_neq_vm, INSN_ALIAS },
+{"vsub.vv",    0, INSN_CLASS_V,  "Vd,Vt,VsVm", MATCH_VSUBVV, MASK_VSUBVV, match_vd_neq_vm, 0 },
+{"vsub.vx",    0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,sVm", MATCH_VSUBVX, MASK_VSUBVX, match_vd_neq_vm, INSN_ALIAS },
+{"vsub.vx",    0, INSN_CLASS_V,  "Vd,Vt,sVm", MATCH_VSUBVX, MASK_VSUBVX, match_vd_neq_vm, 0 },
+{"vrsub.vx",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,sVm", MATCH_VRSUBVX, MASK_VRSUBVX, match_vd_neq_vm, INSN_ALIAS },
+{"vrsub.vx",   0, INSN_CLASS_V,  "Vd,Vt,sVm", MATCH_VRSUBVX, MASK_VRSUBVX, match_vd_neq_vm, 0 },
+{"vrsub.vi",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,ViVm", MATCH_VRSUBVI, MASK_VRSUBVI, match_vd_neq_vm, INSN_ALIAS },
+{"vrsub.vi",   0, INSN_CLASS_V,  "Vd,Vt,ViVm", MATCH_VRSUBVI, MASK_VRSUBVI, match_vd_neq_vm, 0 },
 
-{"vwcvt.x.x.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,VtVm", MATCH_VWCVTXXV, MASK_VWCVTXXV, match_opcode, INSN_ALIAS },
-{"vwcvt.x.x.v",  0, INSN_CLASS_V,  "Vd,VtVm", MATCH_VWCVTXXV, MASK_VWCVTXXV, match_opcode, INSN_ALIAS },
-{"vwcvtu.x.x.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,VtVm", MATCH_VWCVTUXXV, MASK_VWCVTUXXV, match_opcode, INSN_ALIAS },
-{"vwcvtu.x.x.v", 0, INSN_CLASS_V,  "Vd,VtVm", MATCH_VWCVTUXXV, MASK_VWCVTUXXV, match_opcode, INSN_ALIAS },
+{"vwcvt.x.x.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,VtVm", MATCH_VWCVTXXV, MASK_VWCVTXXV, match_vd_neq_vm_and_vd_neq_vs2, INSN_ALIAS },
+{"vwcvt.x.x.v",  0, INSN_CLASS_V,  "Vd,VtVm", MATCH_VWCVTXXV, MASK_VWCVTXXV, match_vd_neq_vm_and_vd_neq_vs2, INSN_ALIAS },
+{"vwcvtu.x.x.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,VtVm", MATCH_VWCVTUXXV, MASK_VWCVTUXXV, match_vd_neq_vm_and_vd_neq_vs2, INSN_ALIAS },
+{"vwcvtu.x.x.v", 0, INSN_CLASS_V,  "Vd,VtVm", MATCH_VWCVTUXXV, MASK_VWCVTUXXV, match_vd_neq_vm_and_vd_neq_vs2, INSN_ALIAS },
 
-{"vwaddu.vv",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,VsVm", MATCH_VWADDUVV, MASK_VWADDUVV, match_opcode, INSN_ALIAS },
-{"vwaddu.vv",  0, INSN_CLASS_V,  "Vd,Vt,VsVm", MATCH_VWADDUVV, MASK_VWADDUVV, match_opcode, 0 },
-{"vwaddu.vx",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,sVm", MATCH_VWADDUVX, MASK_VWADDUVX, match_opcode, INSN_ALIAS },
-{"vwaddu.vx",  0, INSN_CLASS_V,  "Vd,Vt,sVm", MATCH_VWADDUVX, MASK_VWADDUVX, match_opcode, 0 },
-{"vwsubu.vv",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,VsVm", MATCH_VWSUBUVV, MASK_VWSUBUVV, match_opcode, INSN_ALIAS },
-{"vwsubu.vv",  0, INSN_CLASS_V,  "Vd,Vt,VsVm", MATCH_VWSUBUVV, MASK_VWSUBUVV, match_opcode, 0 },
-{"vwsubu.vx",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,sVm", MATCH_VWSUBUVX, MASK_VWSUBUVX, match_opcode, INSN_ALIAS },
-{"vwsubu.vx",  0, INSN_CLASS_V,  "Vd,Vt,sVm", MATCH_VWSUBUVX, MASK_VWSUBUVX, match_opcode, 0 },
-{"vwadd.vv",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,VsVm", MATCH_VWADDVV, MASK_VWADDVV, match_opcode, INSN_ALIAS },
-{"vwadd.vv",   0, INSN_CLASS_V,  "Vd,Vt,VsVm", MATCH_VWADDVV, MASK_VWADDVV, match_opcode, 0 },
-{"vwadd.vx",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,sVm", MATCH_VWADDVX, MASK_VWADDVX, match_opcode, INSN_ALIAS },
-{"vwadd.vx",   0, INSN_CLASS_V,  "Vd,Vt,sVm", MATCH_VWADDVX, MASK_VWADDVX, match_opcode, 0 },
-{"vwsub.vv",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,VsVm", MATCH_VWSUBVV, MASK_VWSUBVV, match_opcode, INSN_ALIAS },
-{"vwsub.vv",   0, INSN_CLASS_V,  "Vd,Vt,VsVm", MATCH_VWSUBVV, MASK_VWSUBVV, match_opcode, 0 },
-{"vwsub.vx",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,sVm", MATCH_VWSUBVX, MASK_VWSUBVX, match_opcode, INSN_ALIAS },
-{"vwsub.vx",   0, INSN_CLASS_V,  "Vd,Vt,sVm", MATCH_VWSUBVX, MASK_VWSUBVX, match_opcode, 0 },
-{"vwaddu.wv",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,VsVm", MATCH_VWADDUWV, MASK_VWADDUWV, match_opcode, INSN_ALIAS },
-{"vwaddu.wv",  0, INSN_CLASS_V,  "Vd,Vt,VsVm", MATCH_VWADDUWV, MASK_VWADDUWV, match_opcode, 0 },
-{"vwaddu.wx",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,sVm", MATCH_VWADDUWX, MASK_VWADDUWX, match_opcode, INSN_ALIAS },
-{"vwaddu.wx",  0, INSN_CLASS_V,  "Vd,Vt,sVm", MATCH_VWADDUWX, MASK_VWADDUWX, match_opcode, 0 },
-{"vwsubu.wv",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,VsVm", MATCH_VWSUBUWV, MASK_VWSUBUWV, match_opcode, INSN_ALIAS },
-{"vwsubu.wv",  0, INSN_CLASS_V,  "Vd,Vt,VsVm", MATCH_VWSUBUWV, MASK_VWSUBUWV, match_opcode, 0 },
-{"vwsubu.wx",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,sVm", MATCH_VWSUBUWX, MASK_VWSUBUWX, match_opcode, INSN_ALIAS },
-{"vwsubu.wx",  0, INSN_CLASS_V,  "Vd,Vt,sVm", MATCH_VWSUBUWX, MASK_VWSUBUWX, match_opcode, 0 },
-{"vwadd.wv",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,VsVm", MATCH_VWADDWV, MASK_VWADDWV, match_opcode, INSN_ALIAS },
-{"vwadd.wv",   0, INSN_CLASS_V,  "Vd,Vt,VsVm", MATCH_VWADDWV, MASK_VWADDWV, match_opcode, 0 },
-{"vwadd.wx",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,sVm", MATCH_VWADDWX, MASK_VWADDWX, match_opcode, INSN_ALIAS },
-{"vwadd.wx",   0, INSN_CLASS_V,  "Vd,Vt,sVm", MATCH_VWADDWX, MASK_VWADDWX, match_opcode, 0 },
-{"vwsub.wv",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,VsVm", MATCH_VWSUBWV, MASK_VWSUBWV, match_opcode, INSN_ALIAS },
-{"vwsub.wv",   0, INSN_CLASS_V,  "Vd,Vt,VsVm", MATCH_VWSUBWV, MASK_VWSUBWV, match_opcode, 0 },
-{"vwsub.wx",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,sVm", MATCH_VWSUBWX, MASK_VWSUBWX, match_opcode, INSN_ALIAS },
-{"vwsub.wx",   0, INSN_CLASS_V,  "Vd,Vt,sVm", MATCH_VWSUBWX, MASK_VWSUBWX, match_opcode, 0 },
+{"vwaddu.vv",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,VsVm", MATCH_VWADDUVV, MASK_VWADDUVV, match_vd_neq_vm_and_vd_neq_vs1_vs2, INSN_ALIAS },
+{"vwaddu.vv",  0, INSN_CLASS_V,  "Vd,Vt,VsVm", MATCH_VWADDUVV, MASK_VWADDUVV, match_vd_neq_vm_and_vd_neq_vs1_vs2, 0 },
+{"vwaddu.vx",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,sVm", MATCH_VWADDUVX, MASK_VWADDUVX, match_vd_neq_vm_and_vd_neq_vs2, INSN_ALIAS },
+{"vwaddu.vx",  0, INSN_CLASS_V,  "Vd,Vt,sVm", MATCH_VWADDUVX, MASK_VWADDUVX, match_vd_neq_vm_and_vd_neq_vs2, 0 },
+{"vwsubu.vv",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,VsVm", MATCH_VWSUBUVV, MASK_VWSUBUVV, match_vd_neq_vm_and_vd_neq_vs1_vs2, INSN_ALIAS },
+{"vwsubu.vv",  0, INSN_CLASS_V,  "Vd,Vt,VsVm", MATCH_VWSUBUVV, MASK_VWSUBUVV, match_vd_neq_vm_and_vd_neq_vs1_vs2, 0 },
+{"vwsubu.vx",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,sVm", MATCH_VWSUBUVX, MASK_VWSUBUVX, match_vd_neq_vm_and_vd_neq_vs2, INSN_ALIAS },
+{"vwsubu.vx",  0, INSN_CLASS_V,  "Vd,Vt,sVm", MATCH_VWSUBUVX, MASK_VWSUBUVX, match_vd_neq_vm_and_vd_neq_vs2, 0 },
+{"vwadd.vv",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,VsVm", MATCH_VWADDVV, MASK_VWADDVV, match_vd_neq_vm_and_vd_neq_vs1_vs2, INSN_ALIAS },
+{"vwadd.vv",   0, INSN_CLASS_V,  "Vd,Vt,VsVm", MATCH_VWADDVV, MASK_VWADDVV, match_vd_neq_vm_and_vd_neq_vs1_vs2, 0 },
+{"vwadd.vx",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,sVm", MATCH_VWADDVX, MASK_VWADDVX, match_vd_neq_vm_and_vd_neq_vs2, INSN_ALIAS },
+{"vwadd.vx",   0, INSN_CLASS_V,  "Vd,Vt,sVm", MATCH_VWADDVX, MASK_VWADDVX, match_vd_neq_vm_and_vd_neq_vs2, 0 },
+{"vwsub.vv",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,VsVm", MATCH_VWSUBVV, MASK_VWSUBVV, match_vd_neq_vm_and_vd_neq_vs1_vs2, INSN_ALIAS },
+{"vwsub.vv",   0, INSN_CLASS_V,  "Vd,Vt,VsVm", MATCH_VWSUBVV, MASK_VWSUBVV, match_vd_neq_vm_and_vd_neq_vs1_vs2, 0 },
+{"vwsub.vx",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,sVm", MATCH_VWSUBVX, MASK_VWSUBVX, match_vd_neq_vm_and_vd_neq_vs2, INSN_ALIAS },
+{"vwsub.vx",   0, INSN_CLASS_V,  "Vd,Vt,sVm", MATCH_VWSUBVX, MASK_VWSUBVX, match_vd_neq_vm_and_vd_neq_vs2, 0 },
+{"vwaddu.wv",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,VsVm", MATCH_VWADDUWV, MASK_VWADDUWV, match_vd_neq_vm_and_vd_neq_vs1, INSN_ALIAS },
+{"vwaddu.wv",  0, INSN_CLASS_V,  "Vd,Vt,VsVm", MATCH_VWADDUWV, MASK_VWADDUWV, match_vd_neq_vm_and_vd_neq_vs1, 0 },
+{"vwaddu.wx",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,sVm", MATCH_VWADDUWX, MASK_VWADDUWX, match_vd_neq_vm, INSN_ALIAS },
+{"vwaddu.wx",  0, INSN_CLASS_V,  "Vd,Vt,sVm", MATCH_VWADDUWX, MASK_VWADDUWX, match_vd_neq_vm, 0 },
+{"vwsubu.wv",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,VsVm", MATCH_VWSUBUWV, MASK_VWSUBUWV, match_vd_neq_vm_and_vd_neq_vs1, INSN_ALIAS },
+{"vwsubu.wv",  0, INSN_CLASS_V,  "Vd,Vt,VsVm", MATCH_VWSUBUWV, MASK_VWSUBUWV, match_vd_neq_vm_and_vd_neq_vs1, 0 },
+{"vwsubu.wx",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,sVm", MATCH_VWSUBUWX, MASK_VWSUBUWX, match_vd_neq_vm, INSN_ALIAS },
+{"vwsubu.wx",  0, INSN_CLASS_V,  "Vd,Vt,sVm", MATCH_VWSUBUWX, MASK_VWSUBUWX, match_vd_neq_vm, 0 },
+{"vwadd.wv",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,VsVm", MATCH_VWADDWV, MASK_VWADDWV, match_vd_neq_vm_and_vd_neq_vs1, INSN_ALIAS },
+{"vwadd.wv",   0, INSN_CLASS_V,  "Vd,Vt,VsVm", MATCH_VWADDWV, MASK_VWADDWV, match_vd_neq_vm_and_vd_neq_vs1, 0 },
+{"vwadd.wx",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,sVm", MATCH_VWADDWX, MASK_VWADDWX, match_vd_neq_vm, INSN_ALIAS },
+{"vwadd.wx",   0, INSN_CLASS_V,  "Vd,Vt,sVm", MATCH_VWADDWX, MASK_VWADDWX, match_vd_neq_vm, 0 },
+{"vwsub.wv",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,VsVm", MATCH_VWSUBWV, MASK_VWSUBWV, match_vd_neq_vm_and_vd_neq_vs1, INSN_ALIAS },
+{"vwsub.wv",   0, INSN_CLASS_V,  "Vd,Vt,VsVm", MATCH_VWSUBWV, MASK_VWSUBWV, match_vd_neq_vm_and_vd_neq_vs1, 0 },
+{"vwsub.wx",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,sVm", MATCH_VWSUBWX, MASK_VWSUBWX, match_vd_neq_vm, INSN_ALIAS },
+{"vwsub.wx",   0, INSN_CLASS_V,  "Vd,Vt,sVm", MATCH_VWSUBWX, MASK_VWSUBWX, match_vd_neq_vm, 0 },
 
-{"vzext.vf2",  0, INSN_CLASS_V,  "Vd,VtVm", MATCH_VZEXT_VF2, MASK_VZEXT_VF2, match_opcode, 0 },
-{"vsext.vf2",  0, INSN_CLASS_V,  "Vd,VtVm", MATCH_VSEXT_VF2, MASK_VSEXT_VF2, match_opcode, 0 },
-{"vzext.vf4",  0, INSN_CLASS_V,  "Vd,VtVm", MATCH_VZEXT_VF4, MASK_VZEXT_VF4, match_opcode, 0 },
-{"vsext.vf4",  0, INSN_CLASS_V,  "Vd,VtVm", MATCH_VSEXT_VF4, MASK_VSEXT_VF4, match_opcode, 0 },
-{"vzext.vf8",  0, INSN_CLASS_V,  "Vd,VtVm", MATCH_VZEXT_VF8, MASK_VZEXT_VF8, match_opcode, 0 },
-{"vsext.vf8",  0, INSN_CLASS_V,  "Vd,VtVm", MATCH_VSEXT_VF8, MASK_VSEXT_VF8, match_opcode, 0 },
+{"vzext.vf2",  0, INSN_CLASS_V,  "Vd,VtVm", MATCH_VZEXT_VF2, MASK_VZEXT_VF2, match_vd_neq_vm, 0 },
+{"vsext.vf2",  0, INSN_CLASS_V,  "Vd,VtVm", MATCH_VSEXT_VF2, MASK_VSEXT_VF2, match_vd_neq_vm, 0 },
+{"vzext.vf4",  0, INSN_CLASS_V,  "Vd,VtVm", MATCH_VZEXT_VF4, MASK_VZEXT_VF4, match_vd_neq_vm, 0 },
+{"vsext.vf4",  0, INSN_CLASS_V,  "Vd,VtVm", MATCH_VSEXT_VF4, MASK_VSEXT_VF4, match_vd_neq_vm, 0 },
+{"vzext.vf8",  0, INSN_CLASS_V,  "Vd,VtVm", MATCH_VZEXT_VF8, MASK_VZEXT_VF8, match_vd_neq_vm, 0 },
+{"vsext.vf8",  0, INSN_CLASS_V,  "Vd,VtVm", MATCH_VSEXT_VF8, MASK_VSEXT_VF8, match_vd_neq_vm, 0 },
 
-{"vadc.vvm",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,Vs,V0", MATCH_TH_VADCVVM, MASK_TH_VADCVVM, match_opcode, INSN_ALIAS },
-{"vadc.vvm",   0, INSN_CLASS_V,  "Vd,Vt,Vs,V0", MATCH_VADCVVM, MASK_VADCVVM, match_opcode, 0 },
-{"vadc.vxm",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,s,V0", MATCH_TH_VADCVXM, MASK_TH_VADCVXM, match_opcode, INSN_ALIAS },
-{"vadc.vxm",   0, INSN_CLASS_V,  "Vd,Vt,s,V0", MATCH_VADCVXM, MASK_VADCVXM, match_opcode, 0 },
-{"vadc.vim",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,Vi,V0", MATCH_TH_VADCVIM, MASK_TH_VADCVIM, match_opcode, INSN_ALIAS },
-{"vadc.vim",   0, INSN_CLASS_V,  "Vd,Vt,Vi,V0", MATCH_VADCVIM, MASK_VADCVIM, match_opcode, 0 },
+{"vadc.vvm",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,Vs,V0", MATCH_TH_VADCVVM, MASK_TH_VADCVVM, match_vd_neq_vm, INSN_ALIAS },
+{"vadc.vvm",   0, INSN_CLASS_V,  "Vd,Vt,Vs,V0", MATCH_VADCVVM, MASK_VADCVVM, match_vd_neq_vm, 0 },
+{"vadc.vxm",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,s,V0", MATCH_TH_VADCVXM, MASK_TH_VADCVXM, match_vd_neq_vm, INSN_ALIAS },
+{"vadc.vxm",   0, INSN_CLASS_V,  "Vd,Vt,s,V0", MATCH_VADCVXM, MASK_VADCVXM, match_vd_neq_vm, 0 },
+{"vadc.vim",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,Vi,V0", MATCH_TH_VADCVIM, MASK_TH_VADCVIM, match_vd_neq_vm, INSN_ALIAS },
+{"vadc.vim",   0, INSN_CLASS_V,  "Vd,Vt,Vi,V0", MATCH_VADCVIM, MASK_VADCVIM, match_vd_neq_vm, 0 },
 {"vmadc.vvm",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,Vs,V0", MATCH_VMADCVV, MASK_VMADCVV, match_opcode, INSN_ALIAS },
 {"vmadc.vvm",  0, INSN_CLASS_V,  "Vd,Vt,Vs,V0", MATCH_VMADCVVM, MASK_VMADCVVM, match_opcode, 0 },
 {"vmadc.vxm",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,s,V0", MATCH_VMADCVX, MASK_VMADCVX, match_opcode, INSN_ALIAS },
@@ -1974,10 +2344,10 @@ const struct riscv_opcode riscv_opcodes[] =
 {"vmadc.vv",   0, INSN_CLASS_V,  "Vd,Vt,Vs", MATCH_VMADCVV, MASK_VMADCVV, match_opcode, 0 },
 {"vmadc.vx",   0, INSN_CLASS_V,  "Vd,Vt,s", MATCH_VMADCVX, MASK_VMADCVX, match_opcode, 0 },
 {"vmadc.vi",   0, INSN_CLASS_V,  "Vd,Vt,Vi", MATCH_VMADCVI, MASK_VMADCVI, match_opcode, 0 },
-{"vsbc.vvm",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,Vs,V0", MATCH_TH_VSBCVVM, MASK_TH_VSBCVVM, match_opcode, INSN_ALIAS },
-{"vsbc.vvm",   0, INSN_CLASS_V,  "Vd,Vt,Vs,V0", MATCH_VSBCVVM, MASK_VSBCVVM, match_opcode, 0 },
-{"vsbc.vxm",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,s,V0", MATCH_TH_VSBCVXM, MASK_TH_VSBCVXM, match_opcode, INSN_ALIAS },
-{"vsbc.vxm",   0, INSN_CLASS_V,  "Vd,Vt,s,V0", MATCH_VSBCVXM, MASK_VSBCVXM, match_opcode, 0 },
+{"vsbc.vvm",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,Vs,V0", MATCH_TH_VSBCVVM, MASK_TH_VSBCVVM, match_vd_neq_vm, INSN_ALIAS },
+{"vsbc.vvm",   0, INSN_CLASS_V,  "Vd,Vt,Vs,V0", MATCH_VSBCVVM, MASK_VSBCVVM, match_vd_neq_vm, 0 },
+{"vsbc.vxm",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,s,V0", MATCH_TH_VSBCVXM, MASK_TH_VSBCVXM, match_vd_neq_vm, INSN_ALIAS },
+{"vsbc.vxm",   0, INSN_CLASS_V,  "Vd,Vt,s,V0", MATCH_VSBCVXM, MASK_VSBCVXM, match_vd_neq_vm, 0 },
 {"vmsbc.vvm",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,Vs,V0", MATCH_VMSBCVV, MASK_VMSBCVV, match_opcode, INSN_ALIAS },
 {"vmsbc.vvm",  0, INSN_CLASS_V,  "Vd,Vt,Vs,V0", MATCH_VMSBCVVM, MASK_VMSBCVVM, match_opcode, 0 },
 {"vmsbc.vxm",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,s,V0", MATCH_VMSBCVX, MASK_VMSBCVX, match_opcode, INSN_ALIAS },
@@ -1985,62 +2355,62 @@ const struct riscv_opcode riscv_opcodes[] =
 {"vmsbc.vv",   0, INSN_CLASS_V,  "Vd,Vt,Vs", MATCH_VMSBCVV, MASK_VMSBCVV, match_opcode, 0 },
 {"vmsbc.vx",   0, INSN_CLASS_V,  "Vd,Vt,s", MATCH_VMSBCVX, MASK_VMSBCVX, match_opcode, 0 },
 
-{"vnot.v",     0, INSN_CLASS_XTHEADVECTOR,  "Vd,VtVm", MATCH_VNOTV, MASK_VNOTV, match_opcode, INSN_ALIAS },
-{"vnot.v",     0, INSN_CLASS_V,  "Vd,VtVm", MATCH_VNOTV, MASK_VNOTV, match_opcode, INSN_ALIAS },
+{"vnot.v",     0, INSN_CLASS_XTHEADVECTOR,  "Vd,VtVm", MATCH_VNOTV, MASK_VNOTV, match_vd_neq_vm, INSN_ALIAS },
+{"vnot.v",     0, INSN_CLASS_V,  "Vd,VtVm", MATCH_VNOTV, MASK_VNOTV, match_vd_neq_vm, INSN_ALIAS },
 
-{"vand.vv",    0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,VsVm", MATCH_VANDVV, MASK_VANDVV, match_opcode, INSN_ALIAS },
-{"vand.vv",    0, INSN_CLASS_V,  "Vd,Vt,VsVm", MATCH_VANDVV, MASK_VANDVV, match_opcode, 0 },
-{"vand.vx",    0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,sVm", MATCH_VANDVX, MASK_VANDVX, match_opcode, INSN_ALIAS },
-{"vand.vx",    0, INSN_CLASS_V,  "Vd,Vt,sVm", MATCH_VANDVX, MASK_VANDVX, match_opcode, 0 },
-{"vand.vi",    0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,ViVm", MATCH_VANDVI, MASK_VANDVI, match_opcode, INSN_ALIAS },
-{"vand.vi",    0, INSN_CLASS_V,  "Vd,Vt,ViVm", MATCH_VANDVI, MASK_VANDVI, match_opcode, 0 },
-{"vor.vv",     0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,VsVm", MATCH_VORVV, MASK_VORVV, match_opcode, INSN_ALIAS },
-{"vor.vv",     0, INSN_CLASS_V,  "Vd,Vt,VsVm", MATCH_VORVV, MASK_VORVV, match_opcode, 0 },
-{"vor.vx",     0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,sVm", MATCH_VORVX, MASK_VORVX, match_opcode, INSN_ALIAS },
-{"vor.vx",     0, INSN_CLASS_V,  "Vd,Vt,sVm", MATCH_VORVX, MASK_VORVX, match_opcode, 0 },
-{"vor.vi",     0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,ViVm", MATCH_VORVI, MASK_VORVI, match_opcode, INSN_ALIAS },
-{"vor.vi",     0, INSN_CLASS_V,  "Vd,Vt,ViVm", MATCH_VORVI, MASK_VORVI, match_opcode, 0 },
-{"vxor.vv",    0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,VsVm", MATCH_VXORVV, MASK_VXORVV, match_opcode, INSN_ALIAS },
-{"vxor.vv",    0, INSN_CLASS_V,  "Vd,Vt,VsVm", MATCH_VXORVV, MASK_VXORVV, match_opcode, 0 },
-{"vxor.vx",    0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,sVm", MATCH_VXORVX, MASK_VXORVX, match_opcode, INSN_ALIAS },
-{"vxor.vx",    0, INSN_CLASS_V,  "Vd,Vt,sVm", MATCH_VXORVX, MASK_VXORVX, match_opcode, 0 },
-{"vxor.vi",    0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,ViVm", MATCH_VXORVI, MASK_VXORVI, match_opcode, INSN_ALIAS },
-{"vxor.vi",    0, INSN_CLASS_V,  "Vd,Vt,ViVm", MATCH_VXORVI, MASK_VXORVI, match_opcode, 0 },
+{"vand.vv",    0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,VsVm", MATCH_VANDVV, MASK_VANDVV, match_vd_neq_vm, INSN_ALIAS },
+{"vand.vv",    0, INSN_CLASS_V,  "Vd,Vt,VsVm", MATCH_VANDVV, MASK_VANDVV, match_vd_neq_vm, 0 },
+{"vand.vx",    0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,sVm", MATCH_VANDVX, MASK_VANDVX, match_vd_neq_vm, INSN_ALIAS },
+{"vand.vx",    0, INSN_CLASS_V,  "Vd,Vt,sVm", MATCH_VANDVX, MASK_VANDVX, match_vd_neq_vm, 0 },
+{"vand.vi",    0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,ViVm", MATCH_VANDVI, MASK_VANDVI, match_vd_neq_vm, INSN_ALIAS },
+{"vand.vi",    0, INSN_CLASS_V,  "Vd,Vt,ViVm", MATCH_VANDVI, MASK_VANDVI, match_vd_neq_vm, 0 },
+{"vor.vv",     0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,VsVm", MATCH_VORVV, MASK_VORVV, match_vd_neq_vm, INSN_ALIAS },
+{"vor.vv",     0, INSN_CLASS_V,  "Vd,Vt,VsVm", MATCH_VORVV, MASK_VORVV, match_vd_neq_vm, 0 },
+{"vor.vx",     0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,sVm", MATCH_VORVX, MASK_VORVX, match_vd_neq_vm, INSN_ALIAS },
+{"vor.vx",     0, INSN_CLASS_V,  "Vd,Vt,sVm", MATCH_VORVX, MASK_VORVX, match_vd_neq_vm, 0 },
+{"vor.vi",     0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,ViVm", MATCH_VORVI, MASK_VORVI, match_vd_neq_vm, INSN_ALIAS },
+{"vor.vi",     0, INSN_CLASS_V,  "Vd,Vt,ViVm", MATCH_VORVI, MASK_VORVI, match_vd_neq_vm, 0 },
+{"vxor.vv",    0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,VsVm", MATCH_VXORVV, MASK_VXORVV, match_vd_neq_vm, INSN_ALIAS },
+{"vxor.vv",    0, INSN_CLASS_V,  "Vd,Vt,VsVm", MATCH_VXORVV, MASK_VXORVV, match_vd_neq_vm, 0 },
+{"vxor.vx",    0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,sVm", MATCH_VXORVX, MASK_VXORVX, match_vd_neq_vm, INSN_ALIAS },
+{"vxor.vx",    0, INSN_CLASS_V,  "Vd,Vt,sVm", MATCH_VXORVX, MASK_VXORVX, match_vd_neq_vm, 0 },
+{"vxor.vi",    0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,ViVm", MATCH_VXORVI, MASK_VXORVI, match_vd_neq_vm, INSN_ALIAS },
+{"vxor.vi",    0, INSN_CLASS_V,  "Vd,Vt,ViVm", MATCH_VXORVI, MASK_VXORVI, match_vd_neq_vm, 0 },
 
-{"vsll.vv",    0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,VsVm", MATCH_VSLLVV, MASK_VSLLVV, match_opcode, INSN_ALIAS },
-{"vsll.vv",    0, INSN_CLASS_V,  "Vd,Vt,VsVm", MATCH_VSLLVV, MASK_VSLLVV, match_opcode, 0 },
-{"vsll.vx",    0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,sVm", MATCH_VSLLVX, MASK_VSLLVX, match_opcode, INSN_ALIAS },
-{"vsll.vx",    0, INSN_CLASS_V,  "Vd,Vt,sVm", MATCH_VSLLVX, MASK_VSLLVX, match_opcode, 0 },
-{"vsll.vi",    0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,VjVm", MATCH_VSLLVI, MASK_VSLLVI, match_opcode, INSN_ALIAS },
-{"vsll.vi",    0, INSN_CLASS_V,  "Vd,Vt,VjVm", MATCH_VSLLVI, MASK_VSLLVI, match_opcode, 0 },
-{"vsrl.vv",    0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,VsVm", MATCH_VSRLVV, MASK_VSRLVV, match_opcode, INSN_ALIAS },
-{"vsrl.vv",    0, INSN_CLASS_V,  "Vd,Vt,VsVm", MATCH_VSRLVV, MASK_VSRLVV, match_opcode, 0 },
-{"vsrl.vx",    0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,sVm", MATCH_VSRLVX, MASK_VSRLVX, match_opcode, INSN_ALIAS },
-{"vsrl.vx",    0, INSN_CLASS_V,  "Vd,Vt,sVm", MATCH_VSRLVX, MASK_VSRLVX, match_opcode, 0 },
-{"vsrl.vi",    0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,VjVm", MATCH_VSRLVI, MASK_VSRLVI, match_opcode, INSN_ALIAS },
-{"vsrl.vi",    0, INSN_CLASS_V,  "Vd,Vt,VjVm", MATCH_VSRLVI, MASK_VSRLVI, match_opcode, 0 },
-{"vsra.vv",    0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,VsVm", MATCH_VSRAVV, MASK_VSRAVV, match_opcode, INSN_ALIAS },
-{"vsra.vv",    0, INSN_CLASS_V,  "Vd,Vt,VsVm", MATCH_VSRAVV, MASK_VSRAVV, match_opcode, 0 },
-{"vsra.vx",    0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,sVm", MATCH_VSRAVX, MASK_VSRAVX, match_opcode, INSN_ALIAS },
-{"vsra.vx",    0, INSN_CLASS_V,  "Vd,Vt,sVm", MATCH_VSRAVX, MASK_VSRAVX, match_opcode, 0 },
-{"vsra.vi",    0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,VjVm", MATCH_VSRAVI, MASK_VSRAVI, match_opcode, INSN_ALIAS },
-{"vsra.vi",    0, INSN_CLASS_V,  "Vd,Vt,VjVm", MATCH_VSRAVI, MASK_VSRAVI, match_opcode, 0 },
+{"vsll.vv",    0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,VsVm", MATCH_VSLLVV, MASK_VSLLVV, match_vd_neq_vm, INSN_ALIAS },
+{"vsll.vv",    0, INSN_CLASS_V,  "Vd,Vt,VsVm", MATCH_VSLLVV, MASK_VSLLVV, match_vd_neq_vm, 0 },
+{"vsll.vx",    0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,sVm", MATCH_VSLLVX, MASK_VSLLVX, match_vd_neq_vm, INSN_ALIAS },
+{"vsll.vx",    0, INSN_CLASS_V,  "Vd,Vt,sVm", MATCH_VSLLVX, MASK_VSLLVX, match_vd_neq_vm, 0 },
+{"vsll.vi",    0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,VjVm", MATCH_VSLLVI, MASK_VSLLVI, match_vd_neq_vm, INSN_ALIAS },
+{"vsll.vi",    0, INSN_CLASS_V,  "Vd,Vt,VjVm", MATCH_VSLLVI, MASK_VSLLVI, match_vd_neq_vm, 0 },
+{"vsrl.vv",    0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,VsVm", MATCH_VSRLVV, MASK_VSRLVV, match_vd_neq_vm, INSN_ALIAS },
+{"vsrl.vv",    0, INSN_CLASS_V,  "Vd,Vt,VsVm", MATCH_VSRLVV, MASK_VSRLVV, match_vd_neq_vm, 0 },
+{"vsrl.vx",    0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,sVm", MATCH_VSRLVX, MASK_VSRLVX, match_vd_neq_vm, INSN_ALIAS },
+{"vsrl.vx",    0, INSN_CLASS_V,  "Vd,Vt,sVm", MATCH_VSRLVX, MASK_VSRLVX, match_vd_neq_vm, 0 },
+{"vsrl.vi",    0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,VjVm", MATCH_VSRLVI, MASK_VSRLVI, match_vd_neq_vm, INSN_ALIAS },
+{"vsrl.vi",    0, INSN_CLASS_V,  "Vd,Vt,VjVm", MATCH_VSRLVI, MASK_VSRLVI, match_vd_neq_vm, 0 },
+{"vsra.vv",    0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,VsVm", MATCH_VSRAVV, MASK_VSRAVV, match_vd_neq_vm, INSN_ALIAS },
+{"vsra.vv",    0, INSN_CLASS_V,  "Vd,Vt,VsVm", MATCH_VSRAVV, MASK_VSRAVV, match_vd_neq_vm, 0 },
+{"vsra.vx",    0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,sVm", MATCH_VSRAVX, MASK_VSRAVX, match_vd_neq_vm, INSN_ALIAS },
+{"vsra.vx",    0, INSN_CLASS_V,  "Vd,Vt,sVm", MATCH_VSRAVX, MASK_VSRAVX, match_vd_neq_vm, 0 },
+{"vsra.vi",    0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,VjVm", MATCH_VSRAVI, MASK_VSRAVI, match_vd_neq_vm, INSN_ALIAS },
+{"vsra.vi",    0, INSN_CLASS_V,  "Vd,Vt,VjVm", MATCH_VSRAVI, MASK_VSRAVI, match_vd_neq_vm, 0 },
 
-{"vncvt.x.x.v",0, INSN_CLASS_XTHEADVECTOR,  "Vd,VtVm", MATCH_VNCVTXXW, MASK_VNCVTXXW, match_opcode, INSN_ALIAS },
-{"vncvt.x.x.w",0, INSN_CLASS_V,  "Vd,VtVm", MATCH_VNCVTXXW, MASK_VNCVTXXW, match_opcode, INSN_ALIAS },
+{"vncvt.x.x.v",0, INSN_CLASS_XTHEADVECTOR,  "Vd,VtVm", MATCH_VNCVTXXW, MASK_VNCVTXXW, match_vd_neq_vm, INSN_ALIAS },
+{"vncvt.x.x.w",0, INSN_CLASS_V,  "Vd,VtVm", MATCH_VNCVTXXW, MASK_VNCVTXXW, match_vd_neq_vm, INSN_ALIAS },
 
-{"vnsrl.vv",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,VsVm", MATCH_VNSRLWV, MASK_VNSRLWV, match_opcode, INSN_ALIAS },
-{"vnsrl.wv",   0, INSN_CLASS_V,  "Vd,Vt,VsVm", MATCH_VNSRLWV, MASK_VNSRLWV, match_opcode, 0 },
-{"vnsrl.vx",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,sVm", MATCH_VNSRLWX, MASK_VNSRLWX, match_opcode, INSN_ALIAS },
-{"vnsrl.wx",   0, INSN_CLASS_V,  "Vd,Vt,sVm", MATCH_VNSRLWX, MASK_VNSRLWX, match_opcode, 0 },
-{"vnsrl.vi",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,VjVm", MATCH_VNSRLWI, MASK_VNSRLWI, match_opcode, INSN_ALIAS },
-{"vnsrl.wi",   0, INSN_CLASS_V,  "Vd,Vt,VjVm", MATCH_VNSRLWI, MASK_VNSRLWI, match_opcode, 0 },
-{"vnsra.vv",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,VsVm", MATCH_VNSRAWV, MASK_VNSRAWV, match_opcode, INSN_ALIAS },
-{"vnsra.wv",   0, INSN_CLASS_V,  "Vd,Vt,VsVm", MATCH_VNSRAWV, MASK_VNSRAWV, match_opcode, 0 },
-{"vnsra.vx",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,sVm", MATCH_VNSRAWX, MASK_VNSRAWX, match_opcode, INSN_ALIAS },
-{"vnsra.wx",   0, INSN_CLASS_V,  "Vd,Vt,sVm", MATCH_VNSRAWX, MASK_VNSRAWX, match_opcode, 0 },
-{"vnsra.vi",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,VjVm", MATCH_VNSRAWI, MASK_VNSRAWI, match_opcode, INSN_ALIAS },
-{"vnsra.wi",   0, INSN_CLASS_V,  "Vd,Vt,VjVm", MATCH_VNSRAWI, MASK_VNSRAWI, match_opcode, 0 },
+{"vnsrl.vv",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,VsVm", MATCH_VNSRLWV, MASK_VNSRLWV, match_vd_neq_vm, INSN_ALIAS },
+{"vnsrl.wv",   0, INSN_CLASS_V,  "Vd,Vt,VsVm", MATCH_VNSRLWV, MASK_VNSRLWV, match_vd_neq_vm, 0 },
+{"vnsrl.vx",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,sVm", MATCH_VNSRLWX, MASK_VNSRLWX, match_vd_neq_vm, INSN_ALIAS },
+{"vnsrl.wx",   0, INSN_CLASS_V,  "Vd,Vt,sVm", MATCH_VNSRLWX, MASK_VNSRLWX, match_vd_neq_vm, 0 },
+{"vnsrl.vi",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,VjVm", MATCH_VNSRLWI, MASK_VNSRLWI, match_vd_neq_vm, INSN_ALIAS },
+{"vnsrl.wi",   0, INSN_CLASS_V,  "Vd,Vt,VjVm", MATCH_VNSRLWI, MASK_VNSRLWI, match_vd_neq_vm, 0 },
+{"vnsra.vv",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,VsVm", MATCH_VNSRAWV, MASK_VNSRAWV, match_vd_neq_vm, INSN_ALIAS },
+{"vnsra.wv",   0, INSN_CLASS_V,  "Vd,Vt,VsVm", MATCH_VNSRAWV, MASK_VNSRAWV, match_vd_neq_vm, 0 },
+{"vnsra.vx",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,sVm", MATCH_VNSRAWX, MASK_VNSRAWX, match_vd_neq_vm, INSN_ALIAS },
+{"vnsra.wx",   0, INSN_CLASS_V,  "Vd,Vt,sVm", MATCH_VNSRAWX, MASK_VNSRAWX, match_vd_neq_vm, 0 },
+{"vnsra.vi",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,VjVm", MATCH_VNSRAWI, MASK_VNSRAWI, match_vd_neq_vm, INSN_ALIAS },
+{"vnsra.wi",   0, INSN_CLASS_V,  "Vd,Vt,VjVm", MATCH_VNSRAWI, MASK_VNSRAWI, match_vd_neq_vm, 0 },
 
 {"vmseq.vv",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,VsVm", MATCH_VMSEQVV, MASK_VMSEQVV, match_opcode, INSN_ALIAS },
 {"vmseq.vv",   0, INSN_CLASS_V,  "Vd,Vt,VsVm", MATCH_VMSEQVV, MASK_VMSEQVV, match_opcode, 0 },
@@ -2110,108 +2480,108 @@ const struct riscv_opcode riscv_opcodes[] =
 {"vmsgeu.vx",  0, INSN_CLASS_XTHEADVECTOR, "Vd,Vt,s,VM,VT", 1, (int) M_VMSGE, NULL, INSN_MACRO },
 {"vmsgeu.vx",  0, INSN_CLASS_V, "Vd,Vt,s,VM,VT", 1, (int) M_VMSGE, NULL, INSN_MACRO },
 
-{"vminu.vv",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,VsVm", MATCH_VMINUVV, MASK_VMINUVV, match_opcode, INSN_ALIAS},
-{"vminu.vv",   0, INSN_CLASS_V,  "Vd,Vt,VsVm", MATCH_VMINUVV, MASK_VMINUVV, match_opcode, 0},
-{"vminu.vx",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,sVm", MATCH_VMINUVX, MASK_VMINUVX, match_opcode, INSN_ALIAS},
-{"vminu.vx",   0, INSN_CLASS_V,  "Vd,Vt,sVm", MATCH_VMINUVX, MASK_VMINUVX, match_opcode, 0},
-{"vmin.vv",    0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,VsVm", MATCH_VMINVV, MASK_VMINVV, match_opcode, INSN_ALIAS},
-{"vmin.vv",    0, INSN_CLASS_V,  "Vd,Vt,VsVm", MATCH_VMINVV, MASK_VMINVV, match_opcode, 0},
-{"vmin.vx",    0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,sVm", MATCH_VMINVX, MASK_VMINVX, match_opcode, INSN_ALIAS},
-{"vmin.vx",    0, INSN_CLASS_V,  "Vd,Vt,sVm", MATCH_VMINVX, MASK_VMINVX, match_opcode, 0},
-{"vmaxu.vv",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,VsVm", MATCH_VMAXUVV, MASK_VMAXUVV, match_opcode, INSN_ALIAS},
-{"vmaxu.vv",   0, INSN_CLASS_V,  "Vd,Vt,VsVm", MATCH_VMAXUVV, MASK_VMAXUVV, match_opcode, 0},
-{"vmaxu.vx",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,sVm", MATCH_VMAXUVX, MASK_VMAXUVX, match_opcode, INSN_ALIAS},
-{"vmaxu.vx",   0, INSN_CLASS_V,  "Vd,Vt,sVm", MATCH_VMAXUVX, MASK_VMAXUVX, match_opcode, 0},
-{"vmax.vv",    0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,VsVm", MATCH_VMAXVV, MASK_VMAXVV, match_opcode, INSN_ALIAS},
-{"vmax.vv",    0, INSN_CLASS_V,  "Vd,Vt,VsVm", MATCH_VMAXVV, MASK_VMAXVV, match_opcode, 0},
-{"vmax.vx",    0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,sVm", MATCH_VMAXVX, MASK_VMAXVX, match_opcode, INSN_ALIAS},
-{"vmax.vx",    0, INSN_CLASS_V,  "Vd,Vt,sVm", MATCH_VMAXVX, MASK_VMAXVX, match_opcode, 0},
+{"vminu.vv",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,VsVm", MATCH_VMINUVV, MASK_VMINUVV, match_vd_neq_vm, INSN_ALIAS},
+{"vminu.vv",   0, INSN_CLASS_V,  "Vd,Vt,VsVm", MATCH_VMINUVV, MASK_VMINUVV, match_vd_neq_vm, 0},
+{"vminu.vx",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,sVm", MATCH_VMINUVX, MASK_VMINUVX, match_vd_neq_vm, INSN_ALIAS},
+{"vminu.vx",   0, INSN_CLASS_V,  "Vd,Vt,sVm", MATCH_VMINUVX, MASK_VMINUVX, match_vd_neq_vm, 0},
+{"vmin.vv",    0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,VsVm", MATCH_VMINVV, MASK_VMINVV, match_vd_neq_vm, INSN_ALIAS},
+{"vmin.vv",    0, INSN_CLASS_V,  "Vd,Vt,VsVm", MATCH_VMINVV, MASK_VMINVV, match_vd_neq_vm, 0},
+{"vmin.vx",    0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,sVm", MATCH_VMINVX, MASK_VMINVX, match_vd_neq_vm, INSN_ALIAS},
+{"vmin.vx",    0, INSN_CLASS_V,  "Vd,Vt,sVm", MATCH_VMINVX, MASK_VMINVX, match_vd_neq_vm, 0},
+{"vmaxu.vv",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,VsVm", MATCH_VMAXUVV, MASK_VMAXUVV, match_vd_neq_vm, INSN_ALIAS},
+{"vmaxu.vv",   0, INSN_CLASS_V,  "Vd,Vt,VsVm", MATCH_VMAXUVV, MASK_VMAXUVV, match_vd_neq_vm, 0},
+{"vmaxu.vx",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,sVm", MATCH_VMAXUVX, MASK_VMAXUVX, match_vd_neq_vm, INSN_ALIAS},
+{"vmaxu.vx",   0, INSN_CLASS_V,  "Vd,Vt,sVm", MATCH_VMAXUVX, MASK_VMAXUVX, match_vd_neq_vm, 0},
+{"vmax.vv",    0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,VsVm", MATCH_VMAXVV, MASK_VMAXVV, match_vd_neq_vm, INSN_ALIAS},
+{"vmax.vv",    0, INSN_CLASS_V,  "Vd,Vt,VsVm", MATCH_VMAXVV, MASK_VMAXVV, match_vd_neq_vm, 0},
+{"vmax.vx",    0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,sVm", MATCH_VMAXVX, MASK_VMAXVX, match_vd_neq_vm, INSN_ALIAS},
+{"vmax.vx",    0, INSN_CLASS_V,  "Vd,Vt,sVm", MATCH_VMAXVX, MASK_VMAXVX, match_vd_neq_vm, 0},
 
-{"vmul.vv",    0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,VsVm", MATCH_VMULVV, MASK_VMULVV, match_opcode, INSN_ALIAS },
-{"vmul.vv",    0, INSN_CLASS_V,  "Vd,Vt,VsVm", MATCH_VMULVV, MASK_VMULVV, match_opcode, 0 },
-{"vmul.vx",    0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,sVm", MATCH_VMULVX, MASK_VMULVX, match_opcode, INSN_ALIAS },
-{"vmul.vx",    0, INSN_CLASS_V,  "Vd,Vt,sVm", MATCH_VMULVX, MASK_VMULVX, match_opcode, 0 },
-{"vmulh.vv",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,VsVm", MATCH_VMULHVV, MASK_VMULHVV, match_opcode, INSN_ALIAS },
-{"vmulh.vv",   0, INSN_CLASS_V,  "Vd,Vt,VsVm", MATCH_VMULHVV, MASK_VMULHVV, match_opcode, 0 },
-{"vmulh.vx",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,sVm", MATCH_VMULHVX, MASK_VMULHVX, match_opcode, INSN_ALIAS },
-{"vmulh.vx",   0, INSN_CLASS_V,  "Vd,Vt,sVm", MATCH_VMULHVX, MASK_VMULHVX, match_opcode, 0 },
-{"vmulhu.vv",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,VsVm", MATCH_VMULHUVV, MASK_VMULHUVV, match_opcode, INSN_ALIAS },
-{"vmulhu.vv",  0, INSN_CLASS_V,  "Vd,Vt,VsVm", MATCH_VMULHUVV, MASK_VMULHUVV, match_opcode, 0 },
-{"vmulhu.vx",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,sVm", MATCH_VMULHUVX, MASK_VMULHUVX, match_opcode, INSN_ALIAS },
-{"vmulhu.vx",  0, INSN_CLASS_V,  "Vd,Vt,sVm", MATCH_VMULHUVX, MASK_VMULHUVX, match_opcode, 0 },
-{"vmulhsu.vv", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,VsVm", MATCH_VMULHSUVV, MASK_VMULHSUVV, match_opcode, INSN_ALIAS },
-{"vmulhsu.vv", 0, INSN_CLASS_V,  "Vd,Vt,VsVm", MATCH_VMULHSUVV, MASK_VMULHSUVV, match_opcode, 0 },
-{"vmulhsu.vx", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,sVm", MATCH_VMULHSUVX, MASK_VMULHSUVX, match_opcode, INSN_ALIAS },
-{"vmulhsu.vx", 0, INSN_CLASS_V,  "Vd,Vt,sVm", MATCH_VMULHSUVX, MASK_VMULHSUVX, match_opcode, 0 },
+{"vmul.vv",    0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,VsVm", MATCH_VMULVV, MASK_VMULVV, match_vd_neq_vm, INSN_ALIAS },
+{"vmul.vv",    0, INSN_CLASS_V,  "Vd,Vt,VsVm", MATCH_VMULVV, MASK_VMULVV, match_vd_neq_vm, 0 },
+{"vmul.vx",    0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,sVm", MATCH_VMULVX, MASK_VMULVX, match_vd_neq_vm, INSN_ALIAS },
+{"vmul.vx",    0, INSN_CLASS_V,  "Vd,Vt,sVm", MATCH_VMULVX, MASK_VMULVX, match_vd_neq_vm, 0 },
+{"vmulh.vv",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,VsVm", MATCH_VMULHVV, MASK_VMULHVV, match_vd_neq_vm, INSN_ALIAS },
+{"vmulh.vv",   0, INSN_CLASS_V,  "Vd,Vt,VsVm", MATCH_VMULHVV, MASK_VMULHVV, match_vd_neq_vm, 0 },
+{"vmulh.vx",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,sVm", MATCH_VMULHVX, MASK_VMULHVX, match_vd_neq_vm, INSN_ALIAS },
+{"vmulh.vx",   0, INSN_CLASS_V,  "Vd,Vt,sVm", MATCH_VMULHVX, MASK_VMULHVX, match_vd_neq_vm, 0 },
+{"vmulhu.vv",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,VsVm", MATCH_VMULHUVV, MASK_VMULHUVV, match_vd_neq_vm, INSN_ALIAS },
+{"vmulhu.vv",  0, INSN_CLASS_V,  "Vd,Vt,VsVm", MATCH_VMULHUVV, MASK_VMULHUVV, match_vd_neq_vm, 0 },
+{"vmulhu.vx",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,sVm", MATCH_VMULHUVX, MASK_VMULHUVX, match_vd_neq_vm, INSN_ALIAS },
+{"vmulhu.vx",  0, INSN_CLASS_V,  "Vd,Vt,sVm", MATCH_VMULHUVX, MASK_VMULHUVX, match_vd_neq_vm, 0 },
+{"vmulhsu.vv", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,VsVm", MATCH_VMULHSUVV, MASK_VMULHSUVV, match_vd_neq_vm, INSN_ALIAS },
+{"vmulhsu.vv", 0, INSN_CLASS_V,  "Vd,Vt,VsVm", MATCH_VMULHSUVV, MASK_VMULHSUVV, match_vd_neq_vm, 0 },
+{"vmulhsu.vx", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,sVm", MATCH_VMULHSUVX, MASK_VMULHSUVX, match_vd_neq_vm, INSN_ALIAS },
+{"vmulhsu.vx", 0, INSN_CLASS_V,  "Vd,Vt,sVm", MATCH_VMULHSUVX, MASK_VMULHSUVX, match_vd_neq_vm, 0 },
 
-{"vwmul.vv",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,VsVm", MATCH_VWMULVV, MASK_VWMULVV, match_opcode, INSN_ALIAS },
-{"vwmul.vv",   0, INSN_CLASS_V,  "Vd,Vt,VsVm", MATCH_VWMULVV, MASK_VWMULVV, match_opcode, 0 },
-{"vwmul.vx",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,sVm", MATCH_VWMULVX, MASK_VWMULVX, match_opcode, INSN_ALIAS },
-{"vwmul.vx",   0, INSN_CLASS_V,  "Vd,Vt,sVm", MATCH_VWMULVX, MASK_VWMULVX, match_opcode, 0 },
-{"vwmulu.vv",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,VsVm", MATCH_VWMULUVV, MASK_VWMULUVV, match_opcode, INSN_ALIAS },
-{"vwmulu.vv",  0, INSN_CLASS_V,  "Vd,Vt,VsVm", MATCH_VWMULUVV, MASK_VWMULUVV, match_opcode, 0 },
-{"vwmulu.vx",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,sVm", MATCH_VWMULUVX, MASK_VWMULUVX, match_opcode, INSN_ALIAS },
-{"vwmulu.vx",  0, INSN_CLASS_V,  "Vd,Vt,sVm", MATCH_VWMULUVX, MASK_VWMULUVX, match_opcode, 0 },
-{"vwmulsu.vv", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,VsVm", MATCH_VWMULSUVV, MASK_VWMULSUVV, match_opcode, INSN_ALIAS },
-{"vwmulsu.vv", 0, INSN_CLASS_V,  "Vd,Vt,VsVm", MATCH_VWMULSUVV, MASK_VWMULSUVV, match_opcode, 0 },
-{"vwmulsu.vx", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,sVm", MATCH_VWMULSUVX, MASK_VWMULSUVX, match_opcode, INSN_ALIAS },
-{"vwmulsu.vx", 0, INSN_CLASS_V,  "Vd,Vt,sVm", MATCH_VWMULSUVX, MASK_VWMULSUVX, match_opcode, 0 },
+{"vwmul.vv",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,VsVm", MATCH_VWMULVV, MASK_VWMULVV, match_vd_neq_vm_and_vd_neq_vs1_vs2, INSN_ALIAS },
+{"vwmul.vv",   0, INSN_CLASS_V,  "Vd,Vt,VsVm", MATCH_VWMULVV, MASK_VWMULVV, match_vd_neq_vm_and_vd_neq_vs1_vs2, 0 },
+{"vwmul.vx",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,sVm", MATCH_VWMULVX, MASK_VWMULVX, match_vd_neq_vm_and_vd_neq_vs2, INSN_ALIAS },
+{"vwmul.vx",   0, INSN_CLASS_V,  "Vd,Vt,sVm", MATCH_VWMULVX, MASK_VWMULVX, match_vd_neq_vm_and_vd_neq_vs2, 0 },
+{"vwmulu.vv",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,VsVm", MATCH_VWMULUVV, MASK_VWMULUVV, match_vd_neq_vm_and_vd_neq_vs1_vs2, INSN_ALIAS },
+{"vwmulu.vv",  0, INSN_CLASS_V,  "Vd,Vt,VsVm", MATCH_VWMULUVV, MASK_VWMULUVV, match_vd_neq_vm_and_vd_neq_vs1_vs2, 0 },
+{"vwmulu.vx",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,sVm", MATCH_VWMULUVX, MASK_VWMULUVX, match_vd_neq_vm_and_vd_neq_vs2, INSN_ALIAS },
+{"vwmulu.vx",  0, INSN_CLASS_V,  "Vd,Vt,sVm", MATCH_VWMULUVX, MASK_VWMULUVX, match_vd_neq_vm_and_vd_neq_vs2, 0 },
+{"vwmulsu.vv", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,VsVm", MATCH_VWMULSUVV, MASK_VWMULSUVV, match_vd_neq_vm_and_vd_neq_vs1_vs2, INSN_ALIAS },
+{"vwmulsu.vv", 0, INSN_CLASS_V,  "Vd,Vt,VsVm", MATCH_VWMULSUVV, MASK_VWMULSUVV, match_vd_neq_vm_and_vd_neq_vs1_vs2, 0 },
+{"vwmulsu.vx", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,sVm", MATCH_VWMULSUVX, MASK_VWMULSUVX, match_vd_neq_vm_and_vd_neq_vs2, INSN_ALIAS },
+{"vwmulsu.vx", 0, INSN_CLASS_V,  "Vd,Vt,sVm", MATCH_VWMULSUVX, MASK_VWMULSUVX, match_vd_neq_vm_and_vd_neq_vs2, 0 },
 
-{"vmacc.vv",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vs,VtVm", MATCH_VMACCVV, MASK_VMACCVV, match_opcode, INSN_ALIAS},
-{"vmacc.vv",   0, INSN_CLASS_V,  "Vd,Vs,VtVm", MATCH_VMACCVV, MASK_VMACCVV, match_opcode, 0},
-{"vmacc.vx",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,s,VtVm", MATCH_VMACCVX, MASK_VMACCVX, match_opcode, INSN_ALIAS},
-{"vmacc.vx",   0, INSN_CLASS_V,  "Vd,s,VtVm", MATCH_VMACCVX, MASK_VMACCVX, match_opcode, 0},
-{"vnmsac.vv",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vs,VtVm", MATCH_VNMSACVV, MASK_VNMSACVV, match_opcode, INSN_ALIAS},
-{"vnmsac.vv",  0, INSN_CLASS_V,  "Vd,Vs,VtVm", MATCH_VNMSACVV, MASK_VNMSACVV, match_opcode, 0},
-{"vnmsac.vx",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,s,VtVm", MATCH_VNMSACVX, MASK_VNMSACVX, match_opcode, INSN_ALIAS},
-{"vnmsac.vx",  0, INSN_CLASS_V,  "Vd,s,VtVm", MATCH_VNMSACVX, MASK_VNMSACVX, match_opcode, 0},
-{"vmadd.vv",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vs,VtVm", MATCH_VMADDVV, MASK_VMADDVV, match_opcode, INSN_ALIAS},
-{"vmadd.vv",   0, INSN_CLASS_V,  "Vd,Vs,VtVm", MATCH_VMADDVV, MASK_VMADDVV, match_opcode, 0},
-{"vmadd.vx",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,s,VtVm", MATCH_VMADDVX, MASK_VMADDVX, match_opcode, INSN_ALIAS},
-{"vmadd.vx",   0, INSN_CLASS_V,  "Vd,s,VtVm", MATCH_VMADDVX, MASK_VMADDVX, match_opcode, 0},
-{"vnmsub.vv",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vs,VtVm", MATCH_VNMSUBVV, MASK_VNMSUBVV, match_opcode, INSN_ALIAS},
-{"vnmsub.vv",  0, INSN_CLASS_V,  "Vd,Vs,VtVm", MATCH_VNMSUBVV, MASK_VNMSUBVV, match_opcode, 0},
-{"vnmsub.vx",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,s,VtVm", MATCH_VNMSUBVX, MASK_VNMSUBVX, match_opcode, INSN_ALIAS},
-{"vnmsub.vx",  0, INSN_CLASS_V,  "Vd,s,VtVm", MATCH_VNMSUBVX, MASK_VNMSUBVX, match_opcode, 0},
+{"vmacc.vv",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vs,VtVm", MATCH_VMACCVV, MASK_VMACCVV, match_vd_neq_vm, INSN_ALIAS},
+{"vmacc.vv",   0, INSN_CLASS_V,  "Vd,Vs,VtVm", MATCH_VMACCVV, MASK_VMACCVV, match_vd_neq_vm, 0},
+{"vmacc.vx",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,s,VtVm", MATCH_VMACCVX, MASK_VMACCVX, match_vd_neq_vm, INSN_ALIAS},
+{"vmacc.vx",   0, INSN_CLASS_V,  "Vd,s,VtVm", MATCH_VMACCVX, MASK_VMACCVX, match_vd_neq_vm, 0},
+{"vnmsac.vv",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vs,VtVm", MATCH_VNMSACVV, MASK_VNMSACVV, match_vd_neq_vm, INSN_ALIAS},
+{"vnmsac.vv",  0, INSN_CLASS_V,  "Vd,Vs,VtVm", MATCH_VNMSACVV, MASK_VNMSACVV, match_vd_neq_vm, 0},
+{"vnmsac.vx",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,s,VtVm", MATCH_VNMSACVX, MASK_VNMSACVX, match_vd_neq_vm, INSN_ALIAS},
+{"vnmsac.vx",  0, INSN_CLASS_V,  "Vd,s,VtVm", MATCH_VNMSACVX, MASK_VNMSACVX, match_vd_neq_vm, 0},
+{"vmadd.vv",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vs,VtVm", MATCH_VMADDVV, MASK_VMADDVV, match_vd_neq_vm, INSN_ALIAS},
+{"vmadd.vv",   0, INSN_CLASS_V,  "Vd,Vs,VtVm", MATCH_VMADDVV, MASK_VMADDVV, match_vd_neq_vm, 0},
+{"vmadd.vx",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,s,VtVm", MATCH_VMADDVX, MASK_VMADDVX, match_vd_neq_vm, INSN_ALIAS},
+{"vmadd.vx",   0, INSN_CLASS_V,  "Vd,s,VtVm", MATCH_VMADDVX, MASK_VMADDVX, match_vd_neq_vm, 0},
+{"vnmsub.vv",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vs,VtVm", MATCH_VNMSUBVV, MASK_VNMSUBVV, match_vd_neq_vm, INSN_ALIAS},
+{"vnmsub.vv",  0, INSN_CLASS_V,  "Vd,Vs,VtVm", MATCH_VNMSUBVV, MASK_VNMSUBVV, match_vd_neq_vm, 0},
+{"vnmsub.vx",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,s,VtVm", MATCH_VNMSUBVX, MASK_VNMSUBVX, match_vd_neq_vm, INSN_ALIAS},
+{"vnmsub.vx",  0, INSN_CLASS_V,  "Vd,s,VtVm", MATCH_VNMSUBVX, MASK_VNMSUBVX, match_vd_neq_vm, 0},
 
-{"vwmaccu.vv",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vs,VtVm", MATCH_VWMACCUVV, MASK_VWMACCUVV, match_opcode, INSN_ALIAS},
-{"vwmaccu.vv",  0, INSN_CLASS_V,  "Vd,Vs,VtVm", MATCH_VWMACCUVV, MASK_VWMACCUVV, match_opcode, 0},
-{"vwmaccu.vx",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,s,VtVm", MATCH_VWMACCUVX, MASK_VWMACCUVX, match_opcode, INSN_ALIAS},
-{"vwmaccu.vx",  0, INSN_CLASS_V,  "Vd,s,VtVm", MATCH_VWMACCUVX, MASK_VWMACCUVX, match_opcode, 0},
-{"vwmacc.vv",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vs,VtVm", MATCH_VWMACCVV, MASK_VWMACCVV, match_opcode, INSN_ALIAS},
-{"vwmacc.vv",   0, INSN_CLASS_V,  "Vd,Vs,VtVm", MATCH_VWMACCVV, MASK_VWMACCVV, match_opcode, 0},
-{"vwmacc.vx",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,s,VtVm", MATCH_VWMACCVX, MASK_VWMACCVX, match_opcode, INSN_ALIAS},
-{"vwmacc.vx",   0, INSN_CLASS_V,  "Vd,s,VtVm", MATCH_VWMACCVX, MASK_VWMACCVX, match_opcode, 0},
-{"vwmaccsu.vv", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vs,VtVm", MATCH_TH_VWMACCSUVV, MASK_TH_VWMACCSUVV, match_opcode, INSN_ALIAS},
-{"vwmaccsu.vv", 0, INSN_CLASS_V,  "Vd,Vs,VtVm", MATCH_VWMACCSUVV, MASK_VWMACCSUVV, match_opcode, 0},
-{"vwmaccsu.vx", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,s,VtVm", MATCH_VWMACCUSVX, MASK_VWMACCUSVX, match_opcode, INSN_ALIAS},
-{"vwmaccsu.vx", 0, INSN_CLASS_V,  "Vd,s,VtVm", MATCH_VWMACCSUVX, MASK_VWMACCSUVX, match_opcode, 0},
-{"vwmaccus.vx", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,s,VtVm", MATCH_VWMACCSUVX, MASK_VWMACCSUVX, match_opcode, INSN_ALIAS},
-{"vwmaccus.vx", 0, INSN_CLASS_V,  "Vd,s,VtVm", MATCH_VWMACCUSVX, MASK_VWMACCUSVX, match_opcode, 0},
+{"vwmaccu.vv",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vs,VtVm", MATCH_VWMACCUVV, MASK_VWMACCUVV, match_vd_neq_vm_and_vd_neq_vs1_vs2, INSN_ALIAS},
+{"vwmaccu.vv",  0, INSN_CLASS_V,  "Vd,Vs,VtVm", MATCH_VWMACCUVV, MASK_VWMACCUVV, match_vd_neq_vm_and_vd_neq_vs1_vs2, 0},
+{"vwmaccu.vx",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,s,VtVm", MATCH_VWMACCUVX, MASK_VWMACCUVX, match_vd_neq_vm_and_vd_neq_vs2, INSN_ALIAS},
+{"vwmaccu.vx",  0, INSN_CLASS_V,  "Vd,s,VtVm", MATCH_VWMACCUVX, MASK_VWMACCUVX, match_vd_neq_vm_and_vd_neq_vs2, 0},
+{"vwmacc.vv",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vs,VtVm", MATCH_VWMACCVV, MASK_VWMACCVV, match_vd_neq_vm_and_vd_neq_vs1_vs2, INSN_ALIAS},
+{"vwmacc.vv",   0, INSN_CLASS_V,  "Vd,Vs,VtVm", MATCH_VWMACCVV, MASK_VWMACCVV, match_vd_neq_vm_and_vd_neq_vs1_vs2, 0},
+{"vwmacc.vx",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,s,VtVm", MATCH_VWMACCVX, MASK_VWMACCVX, match_vd_neq_vm_and_vd_neq_vs2, INSN_ALIAS},
+{"vwmacc.vx",   0, INSN_CLASS_V,  "Vd,s,VtVm", MATCH_VWMACCVX, MASK_VWMACCVX, match_vd_neq_vm_and_vd_neq_vs2, 0},
+{"vwmaccsu.vv", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vs,VtVm", MATCH_TH_VWMACCSUVV, MASK_TH_VWMACCSUVV, match_vd_neq_vm_and_vd_neq_vs1_vs2, INSN_ALIAS},
+{"vwmaccsu.vv", 0, INSN_CLASS_V,  "Vd,Vs,VtVm", MATCH_VWMACCSUVV, MASK_VWMACCSUVV, match_vd_neq_vm_and_vd_neq_vs1_vs2, 0},
+{"vwmaccsu.vx", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,s,VtVm", MATCH_VWMACCUSVX, MASK_VWMACCUSVX, match_vd_neq_vm_and_vd_neq_vs2, INSN_ALIAS},
+{"vwmaccsu.vx", 0, INSN_CLASS_V,  "Vd,s,VtVm", MATCH_VWMACCSUVX, MASK_VWMACCSUVX, match_vd_neq_vm_and_vd_neq_vs2, 0},
+{"vwmaccus.vx", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,s,VtVm", MATCH_VWMACCSUVX, MASK_VWMACCSUVX, match_vd_neq_vm_and_vd_neq_vs2, INSN_ALIAS},
+{"vwmaccus.vx", 0, INSN_CLASS_V,  "Vd,s,VtVm", MATCH_VWMACCUSVX, MASK_VWMACCUSVX, match_vd_neq_vm_and_vd_neq_vs2, 0},
 
-{"vdivu.vv",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,VsVm", MATCH_VDIVUVV, MASK_VDIVUVV, match_opcode, INSN_ALIAS },
-{"vdivu.vv",   0, INSN_CLASS_V,  "Vd,Vt,VsVm", MATCH_VDIVUVV, MASK_VDIVUVV, match_opcode, 0 },
-{"vdivu.vx",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,sVm", MATCH_VDIVUVX, MASK_VDIVUVX, match_opcode, INSN_ALIAS },
-{"vdivu.vx",   0, INSN_CLASS_V,  "Vd,Vt,sVm", MATCH_VDIVUVX, MASK_VDIVUVX, match_opcode, 0 },
-{"vdiv.vv",    0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,VsVm", MATCH_VDIVVV, MASK_VDIVVV, match_opcode, INSN_ALIAS },
-{"vdiv.vv",    0, INSN_CLASS_V,  "Vd,Vt,VsVm", MATCH_VDIVVV, MASK_VDIVVV, match_opcode, 0 },
-{"vdiv.vx",    0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,sVm", MATCH_VDIVVX, MASK_VDIVVX, match_opcode, INSN_ALIAS },
-{"vdiv.vx",    0, INSN_CLASS_V,  "Vd,Vt,sVm", MATCH_VDIVVX, MASK_VDIVVX, match_opcode, 0 },
-{"vremu.vv",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,VsVm", MATCH_VREMUVV, MASK_VREMUVV, match_opcode, INSN_ALIAS },
-{"vremu.vv",   0, INSN_CLASS_V,  "Vd,Vt,VsVm", MATCH_VREMUVV, MASK_VREMUVV, match_opcode, 0 },
-{"vremu.vx",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,sVm", MATCH_VREMUVX, MASK_VREMUVX, match_opcode, INSN_ALIAS },
-{"vremu.vx",   0, INSN_CLASS_V,  "Vd,Vt,sVm", MATCH_VREMUVX, MASK_VREMUVX, match_opcode, 0 },
-{"vrem.vv",    0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,VsVm", MATCH_VREMVV, MASK_VREMVV, match_opcode, INSN_ALIAS },
-{"vrem.vv",    0, INSN_CLASS_V,  "Vd,Vt,VsVm", MATCH_VREMVV, MASK_VREMVV, match_opcode, 0 },
-{"vrem.vx",    0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,sVm", MATCH_VREMVX, MASK_VREMVX, match_opcode, INSN_ALIAS },
-{"vrem.vx",    0, INSN_CLASS_V,  "Vd,Vt,sVm", MATCH_VREMVX, MASK_VREMVX, match_opcode, 0 },
+{"vdivu.vv",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,VsVm", MATCH_VDIVUVV, MASK_VDIVUVV, match_vd_neq_vm, INSN_ALIAS },
+{"vdivu.vv",   0, INSN_CLASS_V,  "Vd,Vt,VsVm", MATCH_VDIVUVV, MASK_VDIVUVV, match_vd_neq_vm, 0 },
+{"vdivu.vx",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,sVm", MATCH_VDIVUVX, MASK_VDIVUVX, match_vd_neq_vm, INSN_ALIAS },
+{"vdivu.vx",   0, INSN_CLASS_V,  "Vd,Vt,sVm", MATCH_VDIVUVX, MASK_VDIVUVX, match_vd_neq_vm, 0 },
+{"vdiv.vv",    0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,VsVm", MATCH_VDIVVV, MASK_VDIVVV, match_vd_neq_vm, INSN_ALIAS },
+{"vdiv.vv",    0, INSN_CLASS_V,  "Vd,Vt,VsVm", MATCH_VDIVVV, MASK_VDIVVV, match_vd_neq_vm, 0 },
+{"vdiv.vx",    0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,sVm", MATCH_VDIVVX, MASK_VDIVVX, match_vd_neq_vm, INSN_ALIAS },
+{"vdiv.vx",    0, INSN_CLASS_V,  "Vd,Vt,sVm", MATCH_VDIVVX, MASK_VDIVVX, match_vd_neq_vm, 0 },
+{"vremu.vv",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,VsVm", MATCH_VREMUVV, MASK_VREMUVV, match_vd_neq_vm, INSN_ALIAS },
+{"vremu.vv",   0, INSN_CLASS_V,  "Vd,Vt,VsVm", MATCH_VREMUVV, MASK_VREMUVV, match_vd_neq_vm, 0 },
+{"vremu.vx",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,sVm", MATCH_VREMUVX, MASK_VREMUVX, match_vd_neq_vm, INSN_ALIAS },
+{"vremu.vx",   0, INSN_CLASS_V,  "Vd,Vt,sVm", MATCH_VREMUVX, MASK_VREMUVX, match_vd_neq_vm, 0 },
+{"vrem.vv",    0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,VsVm", MATCH_VREMVV, MASK_VREMVV, match_vd_neq_vm, INSN_ALIAS },
+{"vrem.vv",    0, INSN_CLASS_V,  "Vd,Vt,VsVm", MATCH_VREMVV, MASK_VREMVV, match_vd_neq_vm, 0 },
+{"vrem.vx",    0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,sVm", MATCH_VREMVX, MASK_VREMVX, match_vd_neq_vm, INSN_ALIAS },
+{"vrem.vx",    0, INSN_CLASS_V,  "Vd,Vt,sVm", MATCH_VREMVX, MASK_VREMVX, match_vd_neq_vm, 0 },
 
-{"vmerge.vvm", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,Vs,V0", MATCH_VMERGEVVM, MASK_VMERGEVVM, match_opcode, INSN_ALIAS },
-{"vmerge.vvm", 0, INSN_CLASS_V,  "Vd,Vt,Vs,V0", MATCH_VMERGEVVM, MASK_VMERGEVVM, match_opcode, 0 },
-{"vmerge.vxm", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,s,V0", MATCH_VMERGEVXM, MASK_VMERGEVXM, match_opcode, INSN_ALIAS },
-{"vmerge.vxm", 0, INSN_CLASS_V,  "Vd,Vt,s,V0", MATCH_VMERGEVXM, MASK_VMERGEVXM, match_opcode, 0 },
-{"vmerge.vim", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,Vi,V0", MATCH_VMERGEVIM, MASK_VMERGEVIM, match_opcode, INSN_ALIAS },
-{"vmerge.vim", 0, INSN_CLASS_V,  "Vd,Vt,Vi,V0", MATCH_VMERGEVIM, MASK_VMERGEVIM, match_opcode, 0 },
+{"vmerge.vvm", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,Vs,V0", MATCH_VMERGEVVM, MASK_VMERGEVVM, match_vd_neq_vm, INSN_ALIAS },
+{"vmerge.vvm", 0, INSN_CLASS_V,  "Vd,Vt,Vs,V0", MATCH_VMERGEVVM, MASK_VMERGEVVM, match_vd_neq_vm, 0 },
+{"vmerge.vxm", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,s,V0", MATCH_VMERGEVXM, MASK_VMERGEVXM, match_vd_neq_vm, INSN_ALIAS },
+{"vmerge.vxm", 0, INSN_CLASS_V,  "Vd,Vt,s,V0", MATCH_VMERGEVXM, MASK_VMERGEVXM, match_vd_neq_vm, 0 },
+{"vmerge.vim", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,Vi,V0", MATCH_VMERGEVIM, MASK_VMERGEVIM, match_vd_neq_vm, INSN_ALIAS },
+{"vmerge.vim", 0, INSN_CLASS_V,  "Vd,Vt,Vi,V0", MATCH_VMERGEVIM, MASK_VMERGEVIM, match_vd_neq_vm, 0 },
 
 {"vmv.v.v",    0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vs", MATCH_VMVVV, MASK_VMVVV, match_opcode, INSN_ALIAS },
 {"vmv.v.v",    0, INSN_CLASS_V,  "Vd,Vs", MATCH_VMVVV, MASK_VMVVV, match_opcode, 0 },
@@ -2220,200 +2590,200 @@ const struct riscv_opcode riscv_opcodes[] =
 {"vmv.v.i",    0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vi", MATCH_VMVVI, MASK_VMVVI, match_opcode, INSN_ALIAS },
 {"vmv.v.i",    0, INSN_CLASS_V,  "Vd,Vi", MATCH_VMVVI, MASK_VMVVI, match_opcode, 0 },
 
-{"vsaddu.vv",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,VsVm", MATCH_VSADDUVV, MASK_VSADDUVV, match_opcode, INSN_ALIAS },
-{"vsaddu.vv",  0, INSN_CLASS_V,  "Vd,Vt,VsVm", MATCH_VSADDUVV, MASK_VSADDUVV, match_opcode, 0 },
-{"vsaddu.vx",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,sVm", MATCH_VSADDUVX, MASK_VSADDUVX, match_opcode, INSN_ALIAS },
-{"vsaddu.vx",  0, INSN_CLASS_V,  "Vd,Vt,sVm", MATCH_VSADDUVX, MASK_VSADDUVX, match_opcode, 0 },
-{"vsaddu.vi",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,ViVm", MATCH_VSADDUVI, MASK_VSADDUVI, match_opcode, INSN_ALIAS },
-{"vsaddu.vi",  0, INSN_CLASS_V,  "Vd,Vt,ViVm", MATCH_VSADDUVI, MASK_VSADDUVI, match_opcode, 0 },
-{"vsadd.vv",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,VsVm", MATCH_VSADDVV, MASK_VSADDVV, match_opcode, INSN_ALIAS },
-{"vsadd.vv",   0, INSN_CLASS_V,  "Vd,Vt,VsVm", MATCH_VSADDVV, MASK_VSADDVV, match_opcode, 0 },
-{"vsadd.vx",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,sVm", MATCH_VSADDVX, MASK_VSADDVX, match_opcode, INSN_ALIAS },
-{"vsadd.vx",   0, INSN_CLASS_V,  "Vd,Vt,sVm", MATCH_VSADDVX, MASK_VSADDVX, match_opcode, 0 },
-{"vsadd.vi",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,ViVm", MATCH_VSADDVI, MASK_VSADDVI, match_opcode, INSN_ALIAS },
-{"vsadd.vi",   0, INSN_CLASS_V,  "Vd,Vt,ViVm", MATCH_VSADDVI, MASK_VSADDVI, match_opcode, 0 },
-{"vssubu.vv",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,VsVm", MATCH_VSSUBUVV, MASK_VSSUBUVV, match_opcode, INSN_ALIAS },
-{"vssubu.vv",  0, INSN_CLASS_V,  "Vd,Vt,VsVm", MATCH_VSSUBUVV, MASK_VSSUBUVV, match_opcode, 0 },
-{"vssubu.vx",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,sVm", MATCH_VSSUBUVX, MASK_VSSUBUVX, match_opcode, INSN_ALIAS },
-{"vssubu.vx",  0, INSN_CLASS_V,  "Vd,Vt,sVm", MATCH_VSSUBUVX, MASK_VSSUBUVX, match_opcode, 0 },
-{"vssub.vv",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,VsVm", MATCH_VSSUBVV, MASK_VSSUBVV, match_opcode, INSN_ALIAS },
-{"vssub.vv",   0, INSN_CLASS_V,  "Vd,Vt,VsVm", MATCH_VSSUBVV, MASK_VSSUBVV, match_opcode, 0 },
-{"vssub.vx",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,sVm", MATCH_VSSUBVX, MASK_VSSUBVX, match_opcode, INSN_ALIAS },
-{"vssub.vx",   0, INSN_CLASS_V,  "Vd,Vt,sVm", MATCH_VSSUBVX, MASK_VSSUBVX, match_opcode, 0 },
+{"vsaddu.vv",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,VsVm", MATCH_VSADDUVV, MASK_VSADDUVV, match_vd_neq_vm, INSN_ALIAS },
+{"vsaddu.vv",  0, INSN_CLASS_V,  "Vd,Vt,VsVm", MATCH_VSADDUVV, MASK_VSADDUVV, match_vd_neq_vm, 0 },
+{"vsaddu.vx",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,sVm", MATCH_VSADDUVX, MASK_VSADDUVX, match_vd_neq_vm, INSN_ALIAS },
+{"vsaddu.vx",  0, INSN_CLASS_V,  "Vd,Vt,sVm", MATCH_VSADDUVX, MASK_VSADDUVX, match_vd_neq_vm, 0 },
+{"vsaddu.vi",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,ViVm", MATCH_VSADDUVI, MASK_VSADDUVI, match_vd_neq_vm, INSN_ALIAS },
+{"vsaddu.vi",  0, INSN_CLASS_V,  "Vd,Vt,ViVm", MATCH_VSADDUVI, MASK_VSADDUVI, match_vd_neq_vm, 0 },
+{"vsadd.vv",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,VsVm", MATCH_VSADDVV, MASK_VSADDVV, match_vd_neq_vm, INSN_ALIAS },
+{"vsadd.vv",   0, INSN_CLASS_V,  "Vd,Vt,VsVm", MATCH_VSADDVV, MASK_VSADDVV, match_vd_neq_vm, 0 },
+{"vsadd.vx",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,sVm", MATCH_VSADDVX, MASK_VSADDVX, match_vd_neq_vm, INSN_ALIAS },
+{"vsadd.vx",   0, INSN_CLASS_V,  "Vd,Vt,sVm", MATCH_VSADDVX, MASK_VSADDVX, match_vd_neq_vm, 0 },
+{"vsadd.vi",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,ViVm", MATCH_VSADDVI, MASK_VSADDVI, match_vd_neq_vm, INSN_ALIAS },
+{"vsadd.vi",   0, INSN_CLASS_V,  "Vd,Vt,ViVm", MATCH_VSADDVI, MASK_VSADDVI, match_vd_neq_vm, 0 },
+{"vssubu.vv",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,VsVm", MATCH_VSSUBUVV, MASK_VSSUBUVV, match_vd_neq_vm, INSN_ALIAS },
+{"vssubu.vv",  0, INSN_CLASS_V,  "Vd,Vt,VsVm", MATCH_VSSUBUVV, MASK_VSSUBUVV, match_vd_neq_vm, 0 },
+{"vssubu.vx",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,sVm", MATCH_VSSUBUVX, MASK_VSSUBUVX, match_vd_neq_vm, INSN_ALIAS },
+{"vssubu.vx",  0, INSN_CLASS_V,  "Vd,Vt,sVm", MATCH_VSSUBUVX, MASK_VSSUBUVX, match_vd_neq_vm, 0 },
+{"vssub.vv",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,VsVm", MATCH_VSSUBVV, MASK_VSSUBVV, match_vd_neq_vm, INSN_ALIAS },
+{"vssub.vv",   0, INSN_CLASS_V,  "Vd,Vt,VsVm", MATCH_VSSUBVV, MASK_VSSUBVV, match_vd_neq_vm, 0 },
+{"vssub.vx",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,sVm", MATCH_VSSUBVX, MASK_VSSUBVX, match_vd_neq_vm, INSN_ALIAS },
+{"vssub.vx",   0, INSN_CLASS_V,  "Vd,Vt,sVm", MATCH_VSSUBVX, MASK_VSSUBVX, match_vd_neq_vm, 0 },
 
-{"vaaddu.vv",  0, INSN_CLASS_V,  "Vd,Vt,VsVm", MATCH_VAADDUVV, MASK_VAADDUVV, match_opcode, 0 },
-{"vaaddu.vx",  0, INSN_CLASS_V,  "Vd,Vt,sVm", MATCH_VAADDUVX, MASK_VAADDUVX, match_opcode, 0 },
-{"vaadd.vv",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,VsVm", MATCH_TH_VAADDVV, MASK_TH_VAADDVV, match_opcode, INSN_ALIAS },
-{"vaadd.vv",   0, INSN_CLASS_V,  "Vd,Vt,VsVm", MATCH_VAADDVV, MASK_VAADDVV, match_opcode, 0 },
-{"vaadd.vx",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,sVm", MATCH_TH_VAADDVX, MASK_TH_VAADDVX, match_opcode, INSN_ALIAS },
-{"vaadd.vx",   0, INSN_CLASS_V,  "Vd,Vt,sVm", MATCH_VAADDVX, MASK_VAADDVX, match_opcode, 0 },
-{"vasubu.vv",  0, INSN_CLASS_V,  "Vd,Vt,VsVm", MATCH_VASUBUVV, MASK_VASUBUVV, match_opcode, 0 },
-{"vasubu.vx",  0, INSN_CLASS_V,  "Vd,Vt,sVm", MATCH_VASUBUVX, MASK_VASUBUVX, match_opcode, 0 },
-{"vasub.vv",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,VsVm", MATCH_TH_VASUBVV, MASK_TH_VASUBVV, match_opcode, INSN_ALIAS },
-{"vasub.vv",   0, INSN_CLASS_V,  "Vd,Vt,VsVm", MATCH_VASUBVV, MASK_VASUBVV, match_opcode, 0 },
-{"vasub.vx",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,sVm", MATCH_TH_VASUBVX, MASK_TH_VASUBVX, match_opcode, INSN_ALIAS },
-{"vasub.vx",   0, INSN_CLASS_V,  "Vd,Vt,sVm", MATCH_VASUBVX, MASK_VASUBVX, match_opcode, 0 },
+{"vaaddu.vv",  0, INSN_CLASS_V,  "Vd,Vt,VsVm", MATCH_VAADDUVV, MASK_VAADDUVV, match_vd_neq_vm, 0 },
+{"vaaddu.vx",  0, INSN_CLASS_V,  "Vd,Vt,sVm", MATCH_VAADDUVX, MASK_VAADDUVX, match_vd_neq_vm, 0 },
+{"vaadd.vv",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,VsVm", MATCH_TH_VAADDVV, MASK_TH_VAADDVV, match_vd_neq_vm, INSN_ALIAS },
+{"vaadd.vv",   0, INSN_CLASS_V,  "Vd,Vt,VsVm", MATCH_VAADDVV, MASK_VAADDVV, match_vd_neq_vm, 0 },
+{"vaadd.vx",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,sVm", MATCH_TH_VAADDVX, MASK_TH_VAADDVX, match_vd_neq_vm, INSN_ALIAS },
+{"vaadd.vx",   0, INSN_CLASS_V,  "Vd,Vt,sVm", MATCH_VAADDVX, MASK_VAADDVX, match_vd_neq_vm, 0 },
+{"vasubu.vv",  0, INSN_CLASS_V,  "Vd,Vt,VsVm", MATCH_VASUBUVV, MASK_VASUBUVV, match_vd_neq_vm, 0 },
+{"vasubu.vx",  0, INSN_CLASS_V,  "Vd,Vt,sVm", MATCH_VASUBUVX, MASK_VASUBUVX, match_vd_neq_vm, 0 },
+{"vasub.vv",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,VsVm", MATCH_TH_VASUBVV, MASK_TH_VASUBVV, match_vd_neq_vm, INSN_ALIAS },
+{"vasub.vv",   0, INSN_CLASS_V,  "Vd,Vt,VsVm", MATCH_VASUBVV, MASK_VASUBVV, match_vd_neq_vm, 0 },
+{"vasub.vx",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,sVm", MATCH_TH_VASUBVX, MASK_TH_VASUBVX, match_vd_neq_vm, INSN_ALIAS },
+{"vasub.vx",   0, INSN_CLASS_V,  "Vd,Vt,sVm", MATCH_VASUBVX, MASK_VASUBVX, match_vd_neq_vm, 0 },
 
-{"vsmul.vv",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,VsVm", MATCH_VSMULVV, MASK_VSMULVV, match_opcode, INSN_ALIAS },
-{"vsmul.vv",   0, INSN_CLASS_V,  "Vd,Vt,VsVm", MATCH_VSMULVV, MASK_VSMULVV, match_opcode, 0 },
-{"vsmul.vx",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,sVm", MATCH_VSMULVX, MASK_VSMULVX, match_opcode, INSN_ALIAS },
-{"vsmul.vx",   0, INSN_CLASS_V,  "Vd,Vt,sVm", MATCH_VSMULVX, MASK_VSMULVX, match_opcode, 0 },
+{"vsmul.vv",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,VsVm", MATCH_VSMULVV, MASK_VSMULVV, match_vd_neq_vm, INSN_ALIAS },
+{"vsmul.vv",   0, INSN_CLASS_V,  "Vd,Vt,VsVm", MATCH_VSMULVV, MASK_VSMULVV, match_vd_neq_vm, 0 },
+{"vsmul.vx",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,sVm", MATCH_VSMULVX, MASK_VSMULVX, match_vd_neq_vm, INSN_ALIAS },
+{"vsmul.vx",   0, INSN_CLASS_V,  "Vd,Vt,sVm", MATCH_VSMULVX, MASK_VSMULVX, match_vd_neq_vm, 0 },
 
-{"vssrl.vv",    0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,VsVm", MATCH_VSSRLVV, MASK_VSSRLVV, match_opcode, INSN_ALIAS },
-{"vssrl.vv",    0, INSN_CLASS_V,  "Vd,Vt,VsVm", MATCH_VSSRLVV, MASK_VSSRLVV, match_opcode, 0 },
-{"vssrl.vx",    0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,sVm", MATCH_VSSRLVX, MASK_VSSRLVX, match_opcode, INSN_ALIAS },
-{"vssrl.vx",    0, INSN_CLASS_V,  "Vd,Vt,sVm", MATCH_VSSRLVX, MASK_VSSRLVX, match_opcode, 0 },
-{"vssrl.vi",    0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,VjVm", MATCH_VSSRLVI, MASK_VSSRLVI, match_opcode, INSN_ALIAS },
-{"vssrl.vi",    0, INSN_CLASS_V,  "Vd,Vt,VjVm", MATCH_VSSRLVI, MASK_VSSRLVI, match_opcode, 0 },
-{"vssra.vv",    0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,VsVm", MATCH_VSSRAVV, MASK_VSSRAVV, match_opcode, INSN_ALIAS },
-{"vssra.vv",    0, INSN_CLASS_V,  "Vd,Vt,VsVm", MATCH_VSSRAVV, MASK_VSSRAVV, match_opcode, 0 },
-{"vssra.vx",    0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,sVm", MATCH_VSSRAVX, MASK_VSSRAVX, match_opcode, INSN_ALIAS },
-{"vssra.vx",    0, INSN_CLASS_V,  "Vd,Vt,sVm", MATCH_VSSRAVX, MASK_VSSRAVX, match_opcode, 0 },
-{"vssra.vi",    0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,VjVm", MATCH_VSSRAVI, MASK_VSSRAVI, match_opcode, INSN_ALIAS },
-{"vssra.vi",    0, INSN_CLASS_V,  "Vd,Vt,VjVm", MATCH_VSSRAVI, MASK_VSSRAVI, match_opcode, 0 },
+{"vssrl.vv",    0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,VsVm", MATCH_VSSRLVV, MASK_VSSRLVV, match_vd_neq_vm, INSN_ALIAS },
+{"vssrl.vv",    0, INSN_CLASS_V,  "Vd,Vt,VsVm", MATCH_VSSRLVV, MASK_VSSRLVV, match_vd_neq_vm, 0 },
+{"vssrl.vx",    0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,sVm", MATCH_VSSRLVX, MASK_VSSRLVX, match_vd_neq_vm, INSN_ALIAS },
+{"vssrl.vx",    0, INSN_CLASS_V,  "Vd,Vt,sVm", MATCH_VSSRLVX, MASK_VSSRLVX, match_vd_neq_vm, 0 },
+{"vssrl.vi",    0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,VjVm", MATCH_VSSRLVI, MASK_VSSRLVI, match_vd_neq_vm, INSN_ALIAS },
+{"vssrl.vi",    0, INSN_CLASS_V,  "Vd,Vt,VjVm", MATCH_VSSRLVI, MASK_VSSRLVI, match_vd_neq_vm, 0 },
+{"vssra.vv",    0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,VsVm", MATCH_VSSRAVV, MASK_VSSRAVV, match_vd_neq_vm, INSN_ALIAS },
+{"vssra.vv",    0, INSN_CLASS_V,  "Vd,Vt,VsVm", MATCH_VSSRAVV, MASK_VSSRAVV, match_vd_neq_vm, 0 },
+{"vssra.vx",    0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,sVm", MATCH_VSSRAVX, MASK_VSSRAVX, match_vd_neq_vm, INSN_ALIAS },
+{"vssra.vx",    0, INSN_CLASS_V,  "Vd,Vt,sVm", MATCH_VSSRAVX, MASK_VSSRAVX, match_vd_neq_vm, 0 },
+{"vssra.vi",    0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,VjVm", MATCH_VSSRAVI, MASK_VSSRAVI, match_vd_neq_vm, INSN_ALIAS },
+{"vssra.vi",    0, INSN_CLASS_V,  "Vd,Vt,VjVm", MATCH_VSSRAVI, MASK_VSSRAVI, match_vd_neq_vm, 0 },
 
-{"vnclipu.vv",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,VsVm", MATCH_VNCLIPUWV, MASK_VNCLIPUWV, match_opcode, INSN_ALIAS },
-{"vnclipu.wv",   0, INSN_CLASS_V,  "Vd,Vt,VsVm", MATCH_VNCLIPUWV, MASK_VNCLIPUWV, match_opcode, 0 },
-{"vnclipu.vx",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,sVm", MATCH_VNCLIPUWX, MASK_VNCLIPUWX, match_opcode, INSN_ALIAS },
-{"vnclipu.wx",   0, INSN_CLASS_V,  "Vd,Vt,sVm", MATCH_VNCLIPUWX, MASK_VNCLIPUWX, match_opcode, 0 },
-{"vnclipu.vi",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,VjVm", MATCH_VNCLIPUWI, MASK_VNCLIPUWI, match_opcode, INSN_ALIAS },
-{"vnclipu.wi",   0, INSN_CLASS_V,  "Vd,Vt,VjVm", MATCH_VNCLIPUWI, MASK_VNCLIPUWI, match_opcode, 0 },
-{"vnclip.vv",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,VsVm", MATCH_VNCLIPWV, MASK_VNCLIPWV, match_opcode, INSN_ALIAS },
-{"vnclip.wv",   0, INSN_CLASS_V,  "Vd,Vt,VsVm", MATCH_VNCLIPWV, MASK_VNCLIPWV, match_opcode, 0 },
-{"vnclip.vx",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,sVm", MATCH_VNCLIPWX, MASK_VNCLIPWX, match_opcode, INSN_ALIAS },
-{"vnclip.wx",   0, INSN_CLASS_V,  "Vd,Vt,sVm", MATCH_VNCLIPWX, MASK_VNCLIPWX, match_opcode, 0 },
-{"vnclip.vi",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,VjVm", MATCH_VNCLIPWI, MASK_VNCLIPWI, match_opcode, INSN_ALIAS },
-{"vnclip.wi",   0, INSN_CLASS_V,  "Vd,Vt,VjVm", MATCH_VNCLIPWI, MASK_VNCLIPWI, match_opcode, 0 },
+{"vnclipu.vv",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,VsVm", MATCH_VNCLIPUWV, MASK_VNCLIPUWV, match_vd_neq_vm, INSN_ALIAS },
+{"vnclipu.wv",   0, INSN_CLASS_V,  "Vd,Vt,VsVm", MATCH_VNCLIPUWV, MASK_VNCLIPUWV, match_vd_neq_vm, 0 },
+{"vnclipu.vx",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,sVm", MATCH_VNCLIPUWX, MASK_VNCLIPUWX, match_vd_neq_vm, INSN_ALIAS },
+{"vnclipu.wx",   0, INSN_CLASS_V,  "Vd,Vt,sVm", MATCH_VNCLIPUWX, MASK_VNCLIPUWX, match_vd_neq_vm, 0 },
+{"vnclipu.vi",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,VjVm", MATCH_VNCLIPUWI, MASK_VNCLIPUWI, match_vd_neq_vm, INSN_ALIAS },
+{"vnclipu.wi",   0, INSN_CLASS_V,  "Vd,Vt,VjVm", MATCH_VNCLIPUWI, MASK_VNCLIPUWI, match_vd_neq_vm, 0 },
+{"vnclip.vv",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,VsVm", MATCH_VNCLIPWV, MASK_VNCLIPWV, match_vd_neq_vm, INSN_ALIAS },
+{"vnclip.wv",   0, INSN_CLASS_V,  "Vd,Vt,VsVm", MATCH_VNCLIPWV, MASK_VNCLIPWV, match_vd_neq_vm, 0 },
+{"vnclip.vx",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,sVm", MATCH_VNCLIPWX, MASK_VNCLIPWX, match_vd_neq_vm, INSN_ALIAS },
+{"vnclip.wx",   0, INSN_CLASS_V,  "Vd,Vt,sVm", MATCH_VNCLIPWX, MASK_VNCLIPWX, match_vd_neq_vm, 0 },
+{"vnclip.vi",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,VjVm", MATCH_VNCLIPWI, MASK_VNCLIPWI, match_vd_neq_vm, INSN_ALIAS },
+{"vnclip.wi",   0, INSN_CLASS_V,  "Vd,Vt,VjVm", MATCH_VNCLIPWI, MASK_VNCLIPWI, match_vd_neq_vm, 0 },
 
-{"vfadd.vv",   0, INSN_CLASS_XTHEADVECTOR, "Vd,Vt,VsVm", MATCH_VFADDVV, MASK_VFADDVV, match_opcode, INSN_ALIAS},
-{"vfadd.vv",   0, INSN_CLASS_ZVEF, "Vd,Vt,VsVm", MATCH_VFADDVV, MASK_VFADDVV, match_opcode, 0},
-{"vfadd.vf",   0, INSN_CLASS_XTHEADVECTOR, "Vd,Vt,SVm", MATCH_VFADDVF, MASK_VFADDVF, match_opcode, INSN_ALIAS},
-{"vfadd.vf",   0, INSN_CLASS_ZVEF, "Vd,Vt,SVm", MATCH_VFADDVF, MASK_VFADDVF, match_opcode, 0},
-{"vfsub.vv",   0, INSN_CLASS_XTHEADVECTOR, "Vd,Vt,VsVm", MATCH_VFSUBVV, MASK_VFSUBVV, match_opcode, INSN_ALIAS},
-{"vfsub.vv",   0, INSN_CLASS_ZVEF, "Vd,Vt,VsVm", MATCH_VFSUBVV, MASK_VFSUBVV, match_opcode, 0},
-{"vfsub.vf",   0, INSN_CLASS_XTHEADVECTOR, "Vd,Vt,SVm", MATCH_VFSUBVF, MASK_VFSUBVF, match_opcode, INSN_ALIAS},
-{"vfsub.vf",   0, INSN_CLASS_ZVEF, "Vd,Vt,SVm", MATCH_VFSUBVF, MASK_VFSUBVF, match_opcode, 0},
-{"vfrsub.vf",  0, INSN_CLASS_XTHEADVECTOR, "Vd,Vt,SVm", MATCH_VFRSUBVF, MASK_VFRSUBVF, match_opcode, INSN_ALIAS},
-{"vfrsub.vf",  0, INSN_CLASS_ZVEF, "Vd,Vt,SVm", MATCH_VFRSUBVF, MASK_VFRSUBVF, match_opcode, 0},
+{"vfadd.vv",   0, INSN_CLASS_XTHEADVECTOR, "Vd,Vt,VsVm", MATCH_VFADDVV, MASK_VFADDVV, match_vd_neq_vm, INSN_ALIAS},
+{"vfadd.vv",   0, INSN_CLASS_ZVEF, "Vd,Vt,VsVm", MATCH_VFADDVV, MASK_VFADDVV, match_vd_neq_vm, 0},
+{"vfadd.vf",   0, INSN_CLASS_XTHEADVECTOR, "Vd,Vt,SVm", MATCH_VFADDVF, MASK_VFADDVF, match_vd_neq_vm, INSN_ALIAS},
+{"vfadd.vf",   0, INSN_CLASS_ZVEF, "Vd,Vt,SVm", MATCH_VFADDVF, MASK_VFADDVF, match_vd_neq_vm, 0},
+{"vfsub.vv",   0, INSN_CLASS_XTHEADVECTOR, "Vd,Vt,VsVm", MATCH_VFSUBVV, MASK_VFSUBVV, match_vd_neq_vm, INSN_ALIAS},
+{"vfsub.vv",   0, INSN_CLASS_ZVEF, "Vd,Vt,VsVm", MATCH_VFSUBVV, MASK_VFSUBVV, match_vd_neq_vm, 0},
+{"vfsub.vf",   0, INSN_CLASS_XTHEADVECTOR, "Vd,Vt,SVm", MATCH_VFSUBVF, MASK_VFSUBVF, match_vd_neq_vm, INSN_ALIAS},
+{"vfsub.vf",   0, INSN_CLASS_ZVEF, "Vd,Vt,SVm", MATCH_VFSUBVF, MASK_VFSUBVF, match_vd_neq_vm, 0},
+{"vfrsub.vf",  0, INSN_CLASS_XTHEADVECTOR, "Vd,Vt,SVm", MATCH_VFRSUBVF, MASK_VFRSUBVF, match_vd_neq_vm, INSN_ALIAS},
+{"vfrsub.vf",  0, INSN_CLASS_ZVEF, "Vd,Vt,SVm", MATCH_VFRSUBVF, MASK_VFRSUBVF, match_vd_neq_vm, 0},
 
-{"vfwadd.vv",   0, INSN_CLASS_XTHEADVECTOR, "Vd,Vt,VsVm", MATCH_VFWADDVV, MASK_VFWADDVV, match_opcode, INSN_ALIAS},
-{"vfwadd.vv",   0, INSN_CLASS_ZVEF, "Vd,Vt,VsVm", MATCH_VFWADDVV, MASK_VFWADDVV, match_opcode, 0},
-{"vfwadd.vf",   0, INSN_CLASS_XTHEADVECTOR, "Vd,Vt,SVm", MATCH_VFWADDVF, MASK_VFWADDVF, match_opcode, INSN_ALIAS},
-{"vfwadd.vf",   0, INSN_CLASS_ZVEF, "Vd,Vt,SVm", MATCH_VFWADDVF, MASK_VFWADDVF, match_opcode, 0},
-{"vfwsub.vv",   0, INSN_CLASS_XTHEADVECTOR, "Vd,Vt,VsVm", MATCH_VFWSUBVV, MASK_VFWSUBVV, match_opcode, INSN_ALIAS},
-{"vfwsub.vv",   0, INSN_CLASS_ZVEF, "Vd,Vt,VsVm", MATCH_VFWSUBVV, MASK_VFWSUBVV, match_opcode, 0},
-{"vfwsub.vf",   0, INSN_CLASS_XTHEADVECTOR, "Vd,Vt,SVm", MATCH_VFWSUBVF, MASK_VFWSUBVF, match_opcode, INSN_ALIAS},
-{"vfwsub.vf",   0, INSN_CLASS_ZVEF, "Vd,Vt,SVm", MATCH_VFWSUBVF, MASK_VFWSUBVF, match_opcode, 0},
-{"vfwadd.wv",   0, INSN_CLASS_XTHEADVECTOR, "Vd,Vt,VsVm", MATCH_VFWADDWV, MASK_VFWADDWV, match_opcode, INSN_ALIAS},
-{"vfwadd.wv",   0, INSN_CLASS_ZVEF, "Vd,Vt,VsVm", MATCH_VFWADDWV, MASK_VFWADDWV, match_opcode, 0},
-{"vfwadd.wf",   0, INSN_CLASS_XTHEADVECTOR, "Vd,Vt,SVm", MATCH_VFWADDWF, MASK_VFWADDWF, match_opcode, INSN_ALIAS },
-{"vfwadd.wf",   0, INSN_CLASS_ZVEF, "Vd,Vt,SVm", MATCH_VFWADDWF, MASK_VFWADDWF, match_opcode, 0},
-{"vfwsub.wv",   0, INSN_CLASS_XTHEADVECTOR, "Vd,Vt,VsVm", MATCH_VFWSUBWV, MASK_VFWSUBWV, match_opcode, INSN_ALIAS},
-{"vfwsub.wv",   0, INSN_CLASS_ZVEF, "Vd,Vt,VsVm", MATCH_VFWSUBWV, MASK_VFWSUBWV, match_opcode, 0},
-{"vfwsub.wf",   0, INSN_CLASS_XTHEADVECTOR, "Vd,Vt,SVm", MATCH_VFWSUBWF, MASK_VFWSUBWF, match_opcode, INSN_ALIAS },
-{"vfwsub.wf",   0, INSN_CLASS_ZVEF, "Vd,Vt,SVm", MATCH_VFWSUBWF, MASK_VFWSUBWF, match_opcode, 0},
+{"vfwadd.vv",   0, INSN_CLASS_XTHEADVECTOR, "Vd,Vt,VsVm", MATCH_VFWADDVV, MASK_VFWADDVV, match_vd_neq_vm_and_vd_neq_vs1_vs2, INSN_ALIAS},
+{"vfwadd.vv",   0, INSN_CLASS_ZVEF, "Vd,Vt,VsVm", MATCH_VFWADDVV, MASK_VFWADDVV, match_vd_neq_vm_and_vd_neq_vs1_vs2, 0},
+{"vfwadd.vf",   0, INSN_CLASS_XTHEADVECTOR, "Vd,Vt,SVm", MATCH_VFWADDVF, MASK_VFWADDVF, match_vd_neq_vm_and_vd_neq_vs2, INSN_ALIAS},
+{"vfwadd.vf",   0, INSN_CLASS_ZVEF, "Vd,Vt,SVm", MATCH_VFWADDVF, MASK_VFWADDVF, match_vd_neq_vm_and_vd_neq_vs2, 0},
+{"vfwsub.vv",   0, INSN_CLASS_XTHEADVECTOR, "Vd,Vt,VsVm", MATCH_VFWSUBVV, MASK_VFWSUBVV, match_vd_neq_vm_and_vd_neq_vs1_vs2, INSN_ALIAS},
+{"vfwsub.vv",   0, INSN_CLASS_ZVEF, "Vd,Vt,VsVm", MATCH_VFWSUBVV, MASK_VFWSUBVV, match_vd_neq_vm_and_vd_neq_vs1_vs2, 0},
+{"vfwsub.vf",   0, INSN_CLASS_XTHEADVECTOR, "Vd,Vt,SVm", MATCH_VFWSUBVF, MASK_VFWSUBVF, match_vd_neq_vm_and_vd_neq_vs2, INSN_ALIAS},
+{"vfwsub.vf",   0, INSN_CLASS_ZVEF, "Vd,Vt,SVm", MATCH_VFWSUBVF, MASK_VFWSUBVF, match_vd_neq_vm_and_vd_neq_vs2, 0},
+{"vfwadd.wv",   0, INSN_CLASS_XTHEADVECTOR, "Vd,Vt,VsVm", MATCH_VFWADDWV, MASK_VFWADDWV, match_vd_neq_vm_and_vd_neq_vs1, INSN_ALIAS},
+{"vfwadd.wv",   0, INSN_CLASS_ZVEF, "Vd,Vt,VsVm", MATCH_VFWADDWV, MASK_VFWADDWV, match_vd_neq_vm_and_vd_neq_vs1, 0},
+{"vfwadd.wf",   0, INSN_CLASS_XTHEADVECTOR, "Vd,Vt,SVm", MATCH_VFWADDWF, MASK_VFWADDWF, match_vd_neq_vm, INSN_ALIAS },
+{"vfwadd.wf",   0, INSN_CLASS_ZVEF, "Vd,Vt,SVm", MATCH_VFWADDWF, MASK_VFWADDWF, match_vd_neq_vm, 0},
+{"vfwsub.wv",   0, INSN_CLASS_XTHEADVECTOR, "Vd,Vt,VsVm", MATCH_VFWSUBWV, MASK_VFWSUBWV, match_vd_neq_vm_and_vd_neq_vs1, INSN_ALIAS},
+{"vfwsub.wv",   0, INSN_CLASS_ZVEF, "Vd,Vt,VsVm", MATCH_VFWSUBWV, MASK_VFWSUBWV, match_vd_neq_vm_and_vd_neq_vs1, 0},
+{"vfwsub.wf",   0, INSN_CLASS_XTHEADVECTOR, "Vd,Vt,SVm", MATCH_VFWSUBWF, MASK_VFWSUBWF, match_vd_neq_vm, INSN_ALIAS },
+{"vfwsub.wf",   0, INSN_CLASS_ZVEF, "Vd,Vt,SVm", MATCH_VFWSUBWF, MASK_VFWSUBWF, match_vd_neq_vm, 0},
 
-{"vfmul.vv",   0, INSN_CLASS_XTHEADVECTOR, "Vd,Vt,VsVm", MATCH_VFMULVV, MASK_VFMULVV, match_opcode, INSN_ALIAS},
-{"vfmul.vv",   0, INSN_CLASS_ZVEF, "Vd,Vt,VsVm", MATCH_VFMULVV, MASK_VFMULVV, match_opcode, 0},
-{"vfmul.vf",   0, INSN_CLASS_XTHEADVECTOR, "Vd,Vt,SVm", MATCH_VFMULVF, MASK_VFMULVF, match_opcode, INSN_ALIAS},
-{"vfmul.vf",   0, INSN_CLASS_ZVEF, "Vd,Vt,SVm", MATCH_VFMULVF, MASK_VFMULVF, match_opcode, 0},
-{"vfdiv.vv",   0, INSN_CLASS_XTHEADVECTOR, "Vd,Vt,VsVm", MATCH_VFDIVVV, MASK_VFDIVVV, match_opcode, INSN_ALIAS},
-{"vfdiv.vv",   0, INSN_CLASS_ZVEF, "Vd,Vt,VsVm", MATCH_VFDIVVV, MASK_VFDIVVV, match_opcode, 0},
-{"vfdiv.vf",   0, INSN_CLASS_XTHEADVECTOR, "Vd,Vt,SVm", MATCH_VFDIVVF, MASK_VFDIVVF, match_opcode, INSN_ALIAS},
-{"vfdiv.vf",   0, INSN_CLASS_ZVEF, "Vd,Vt,SVm", MATCH_VFDIVVF, MASK_VFDIVVF, match_opcode, 0},
-{"vfrdiv.vf",  0, INSN_CLASS_XTHEADVECTOR, "Vd,Vt,SVm", MATCH_VFRDIVVF, MASK_VFRDIVVF, match_opcode, INSN_ALIAS},
-{"vfrdiv.vf",  0, INSN_CLASS_ZVEF, "Vd,Vt,SVm", MATCH_VFRDIVVF, MASK_VFRDIVVF, match_opcode, 0},
+{"vfmul.vv",   0, INSN_CLASS_XTHEADVECTOR, "Vd,Vt,VsVm", MATCH_VFMULVV, MASK_VFMULVV, match_vd_neq_vm, INSN_ALIAS},
+{"vfmul.vv",   0, INSN_CLASS_ZVEF, "Vd,Vt,VsVm", MATCH_VFMULVV, MASK_VFMULVV, match_vd_neq_vm, 0},
+{"vfmul.vf",   0, INSN_CLASS_XTHEADVECTOR, "Vd,Vt,SVm", MATCH_VFMULVF, MASK_VFMULVF, match_vd_neq_vm, INSN_ALIAS},
+{"vfmul.vf",   0, INSN_CLASS_ZVEF, "Vd,Vt,SVm", MATCH_VFMULVF, MASK_VFMULVF, match_vd_neq_vm, 0},
+{"vfdiv.vv",   0, INSN_CLASS_XTHEADVECTOR, "Vd,Vt,VsVm", MATCH_VFDIVVV, MASK_VFDIVVV, match_vd_neq_vm, INSN_ALIAS},
+{"vfdiv.vv",   0, INSN_CLASS_ZVEF, "Vd,Vt,VsVm", MATCH_VFDIVVV, MASK_VFDIVVV, match_vd_neq_vm, 0},
+{"vfdiv.vf",   0, INSN_CLASS_XTHEADVECTOR, "Vd,Vt,SVm", MATCH_VFDIVVF, MASK_VFDIVVF, match_vd_neq_vm, INSN_ALIAS},
+{"vfdiv.vf",   0, INSN_CLASS_ZVEF, "Vd,Vt,SVm", MATCH_VFDIVVF, MASK_VFDIVVF, match_vd_neq_vm, 0},
+{"vfrdiv.vf",  0, INSN_CLASS_XTHEADVECTOR, "Vd,Vt,SVm", MATCH_VFRDIVVF, MASK_VFRDIVVF, match_vd_neq_vm, INSN_ALIAS},
+{"vfrdiv.vf",  0, INSN_CLASS_ZVEF, "Vd,Vt,SVm", MATCH_VFRDIVVF, MASK_VFRDIVVF, match_vd_neq_vm, 0},
 
-{"vfwmul.vv",  0, INSN_CLASS_XTHEADVECTOR, "Vd,Vt,VsVm", MATCH_VFWMULVV, MASK_VFWMULVV, match_opcode, INSN_ALIAS},
-{"vfwmul.vv",  0, INSN_CLASS_ZVEF, "Vd,Vt,VsVm", MATCH_VFWMULVV, MASK_VFWMULVV, match_opcode, 0},
-{"vfwmul.vf",  0, INSN_CLASS_XTHEADVECTOR, "Vd,Vt,SVm", MATCH_VFWMULVF, MASK_VFWMULVF, match_opcode, INSN_ALIAS},
-{"vfwmul.vf",  0, INSN_CLASS_ZVEF, "Vd,Vt,SVm", MATCH_VFWMULVF, MASK_VFWMULVF, match_opcode, 0},
+{"vfwmul.vv",  0, INSN_CLASS_XTHEADVECTOR, "Vd,Vt,VsVm", MATCH_VFWMULVV, MASK_VFWMULVV, match_vd_neq_vm_and_vd_neq_vs1_vs2, INSN_ALIAS},
+{"vfwmul.vv",  0, INSN_CLASS_ZVEF, "Vd,Vt,VsVm", MATCH_VFWMULVV, MASK_VFWMULVV, match_vd_neq_vm_and_vd_neq_vs1_vs2, 0},
+{"vfwmul.vf",  0, INSN_CLASS_XTHEADVECTOR, "Vd,Vt,SVm", MATCH_VFWMULVF, MASK_VFWMULVF, match_vd_neq_vm_and_vd_neq_vs2, INSN_ALIAS},
+{"vfwmul.vf",  0, INSN_CLASS_ZVEF, "Vd,Vt,SVm", MATCH_VFWMULVF, MASK_VFWMULVF, match_vd_neq_vm_and_vd_neq_vs2, 0},
 
-{"vfmadd.vv",  0, INSN_CLASS_XTHEADVECTOR, "Vd,Vs,VtVm", MATCH_VFMADDVV, MASK_VFMADDVV, match_opcode, INSN_ALIAS},
-{"vfmadd.vv",  0, INSN_CLASS_ZVEF, "Vd,Vs,VtVm", MATCH_VFMADDVV, MASK_VFMADDVV, match_opcode, 0},
-{"vfmadd.vf",  0, INSN_CLASS_XTHEADVECTOR, "Vd,S,VtVm", MATCH_VFMADDVF, MASK_VFMADDVF, match_opcode, INSN_ALIAS},
-{"vfmadd.vf",  0, INSN_CLASS_ZVEF, "Vd,S,VtVm", MATCH_VFMADDVF, MASK_VFMADDVF, match_opcode, 0},
-{"vfnmadd.vv", 0, INSN_CLASS_XTHEADVECTOR, "Vd,Vs,VtVm", MATCH_VFNMADDVV, MASK_VFNMADDVV, match_opcode, INSN_ALIAS},
-{"vfnmadd.vv", 0, INSN_CLASS_ZVEF, "Vd,Vs,VtVm", MATCH_VFNMADDVV, MASK_VFNMADDVV, match_opcode, 0},
-{"vfnmadd.vf", 0, INSN_CLASS_XTHEADVECTOR, "Vd,S,VtVm", MATCH_VFNMADDVF, MASK_VFNMADDVF, match_opcode, INSN_ALIAS},
-{"vfnmadd.vf", 0, INSN_CLASS_ZVEF, "Vd,S,VtVm", MATCH_VFNMADDVF, MASK_VFNMADDVF, match_opcode, 0},
-{"vfmsub.vv",  0, INSN_CLASS_XTHEADVECTOR, "Vd,Vs,VtVm", MATCH_VFMSUBVV, MASK_VFMSUBVV, match_opcode, INSN_ALIAS},
-{"vfmsub.vv",  0, INSN_CLASS_ZVEF, "Vd,Vs,VtVm", MATCH_VFMSUBVV, MASK_VFMSUBVV, match_opcode, 0},
-{"vfmsub.vf",  0, INSN_CLASS_XTHEADVECTOR, "Vd,S,VtVm", MATCH_VFMSUBVF, MASK_VFMSUBVF, match_opcode, INSN_ALIAS},
-{"vfmsub.vf",  0, INSN_CLASS_ZVEF, "Vd,S,VtVm", MATCH_VFMSUBVF, MASK_VFMSUBVF, match_opcode, 0},
-{"vfnmsub.vv", 0, INSN_CLASS_XTHEADVECTOR, "Vd,Vs,VtVm", MATCH_VFNMSUBVV, MASK_VFNMSUBVV, match_opcode, INSN_ALIAS},
-{"vfnmsub.vv", 0, INSN_CLASS_ZVEF, "Vd,Vs,VtVm", MATCH_VFNMSUBVV, MASK_VFNMSUBVV, match_opcode, 0},
-{"vfnmsub.vf", 0, INSN_CLASS_XTHEADVECTOR, "Vd,S,VtVm", MATCH_VFNMSUBVF, MASK_VFNMSUBVF, match_opcode, INSN_ALIAS},
-{"vfnmsub.vf", 0, INSN_CLASS_ZVEF, "Vd,S,VtVm", MATCH_VFNMSUBVF, MASK_VFNMSUBVF, match_opcode, 0},
-{"vfmacc.vv",  0, INSN_CLASS_XTHEADVECTOR, "Vd,Vs,VtVm", MATCH_VFMACCVV, MASK_VFMACCVV, match_opcode, INSN_ALIAS},
-{"vfmacc.vv",  0, INSN_CLASS_ZVEF, "Vd,Vs,VtVm", MATCH_VFMACCVV, MASK_VFMACCVV, match_opcode, 0},
-{"vfmacc.vf",  0, INSN_CLASS_XTHEADVECTOR, "Vd,S,VtVm", MATCH_VFMACCVF, MASK_VFMACCVF, match_opcode, INSN_ALIAS},
-{"vfmacc.vf",  0, INSN_CLASS_ZVEF, "Vd,S,VtVm", MATCH_VFMACCVF, MASK_VFMACCVF, match_opcode, 0},
-{"vfnmacc.vv", 0, INSN_CLASS_XTHEADVECTOR, "Vd,Vs,VtVm", MATCH_VFNMACCVV, MASK_VFNMACCVV, match_opcode, INSN_ALIAS},
-{"vfnmacc.vv", 0, INSN_CLASS_ZVEF, "Vd,Vs,VtVm", MATCH_VFNMACCVV, MASK_VFNMACCVV, match_opcode, 0},
-{"vfnmacc.vf", 0, INSN_CLASS_XTHEADVECTOR, "Vd,S,VtVm", MATCH_VFNMACCVF, MASK_VFNMACCVF, match_opcode, INSN_ALIAS},
-{"vfnmacc.vf", 0, INSN_CLASS_ZVEF, "Vd,S,VtVm", MATCH_VFNMACCVF, MASK_VFNMACCVF, match_opcode, 0},
-{"vfmsac.vv",  0, INSN_CLASS_XTHEADVECTOR, "Vd,Vs,VtVm", MATCH_VFMSACVV, MASK_VFMSACVV, match_opcode, INSN_ALIAS},
-{"vfmsac.vv",  0, INSN_CLASS_ZVEF, "Vd,Vs,VtVm", MATCH_VFMSACVV, MASK_VFMSACVV, match_opcode, 0},
-{"vfmsac.vf",  0, INSN_CLASS_XTHEADVECTOR, "Vd,S,VtVm", MATCH_VFMSACVF, MASK_VFMSACVF, match_opcode, INSN_ALIAS},
-{"vfmsac.vf",  0, INSN_CLASS_ZVEF, "Vd,S,VtVm", MATCH_VFMSACVF, MASK_VFMSACVF, match_opcode, 0},
-{"vfnmsac.vv", 0, INSN_CLASS_XTHEADVECTOR, "Vd,Vs,VtVm", MATCH_VFNMSACVV, MASK_VFNMSACVV, match_opcode, INSN_ALIAS},
-{"vfnmsac.vv", 0, INSN_CLASS_ZVEF, "Vd,Vs,VtVm", MATCH_VFNMSACVV, MASK_VFNMSACVV, match_opcode, 0},
-{"vfnmsac.vf", 0, INSN_CLASS_XTHEADVECTOR, "Vd,S,VtVm", MATCH_VFNMSACVF, MASK_VFNMSACVF, match_opcode, INSN_ALIAS},
-{"vfnmsac.vf", 0, INSN_CLASS_ZVEF, "Vd,S,VtVm", MATCH_VFNMSACVF, MASK_VFNMSACVF, match_opcode, 0},
+{"vfmadd.vv",  0, INSN_CLASS_XTHEADVECTOR, "Vd,Vs,VtVm", MATCH_VFMADDVV, MASK_VFMADDVV, match_vd_neq_vm, INSN_ALIAS},
+{"vfmadd.vv",  0, INSN_CLASS_ZVEF, "Vd,Vs,VtVm", MATCH_VFMADDVV, MASK_VFMADDVV, match_vd_neq_vm, 0},
+{"vfmadd.vf",  0, INSN_CLASS_XTHEADVECTOR, "Vd,S,VtVm", MATCH_VFMADDVF, MASK_VFMADDVF, match_vd_neq_vm, INSN_ALIAS},
+{"vfmadd.vf",  0, INSN_CLASS_ZVEF, "Vd,S,VtVm", MATCH_VFMADDVF, MASK_VFMADDVF, match_vd_neq_vm, 0},
+{"vfnmadd.vv", 0, INSN_CLASS_XTHEADVECTOR, "Vd,Vs,VtVm", MATCH_VFNMADDVV, MASK_VFNMADDVV, match_vd_neq_vm, INSN_ALIAS},
+{"vfnmadd.vv", 0, INSN_CLASS_ZVEF, "Vd,Vs,VtVm", MATCH_VFNMADDVV, MASK_VFNMADDVV, match_vd_neq_vm, 0},
+{"vfnmadd.vf", 0, INSN_CLASS_XTHEADVECTOR, "Vd,S,VtVm", MATCH_VFNMADDVF, MASK_VFNMADDVF, match_vd_neq_vm, INSN_ALIAS},
+{"vfnmadd.vf", 0, INSN_CLASS_ZVEF, "Vd,S,VtVm", MATCH_VFNMADDVF, MASK_VFNMADDVF, match_vd_neq_vm, 0},
+{"vfmsub.vv",  0, INSN_CLASS_XTHEADVECTOR, "Vd,Vs,VtVm", MATCH_VFMSUBVV, MASK_VFMSUBVV, match_vd_neq_vm, INSN_ALIAS},
+{"vfmsub.vv",  0, INSN_CLASS_ZVEF, "Vd,Vs,VtVm", MATCH_VFMSUBVV, MASK_VFMSUBVV, match_vd_neq_vm, 0},
+{"vfmsub.vf",  0, INSN_CLASS_XTHEADVECTOR, "Vd,S,VtVm", MATCH_VFMSUBVF, MASK_VFMSUBVF, match_vd_neq_vm, INSN_ALIAS},
+{"vfmsub.vf",  0, INSN_CLASS_ZVEF, "Vd,S,VtVm", MATCH_VFMSUBVF, MASK_VFMSUBVF, match_vd_neq_vm, 0},
+{"vfnmsub.vv", 0, INSN_CLASS_XTHEADVECTOR, "Vd,Vs,VtVm", MATCH_VFNMSUBVV, MASK_VFNMSUBVV, match_vd_neq_vm, INSN_ALIAS},
+{"vfnmsub.vv", 0, INSN_CLASS_ZVEF, "Vd,Vs,VtVm", MATCH_VFNMSUBVV, MASK_VFNMSUBVV, match_vd_neq_vm, 0},
+{"vfnmsub.vf", 0, INSN_CLASS_XTHEADVECTOR, "Vd,S,VtVm", MATCH_VFNMSUBVF, MASK_VFNMSUBVF, match_vd_neq_vm, INSN_ALIAS},
+{"vfnmsub.vf", 0, INSN_CLASS_ZVEF, "Vd,S,VtVm", MATCH_VFNMSUBVF, MASK_VFNMSUBVF, match_vd_neq_vm, 0},
+{"vfmacc.vv",  0, INSN_CLASS_XTHEADVECTOR, "Vd,Vs,VtVm", MATCH_VFMACCVV, MASK_VFMACCVV, match_vd_neq_vm, INSN_ALIAS},
+{"vfmacc.vv",  0, INSN_CLASS_ZVEF, "Vd,Vs,VtVm", MATCH_VFMACCVV, MASK_VFMACCVV, match_vd_neq_vm, 0},
+{"vfmacc.vf",  0, INSN_CLASS_XTHEADVECTOR, "Vd,S,VtVm", MATCH_VFMACCVF, MASK_VFMACCVF, match_vd_neq_vm, INSN_ALIAS},
+{"vfmacc.vf",  0, INSN_CLASS_ZVEF, "Vd,S,VtVm", MATCH_VFMACCVF, MASK_VFMACCVF, match_vd_neq_vm, 0},
+{"vfnmacc.vv", 0, INSN_CLASS_XTHEADVECTOR, "Vd,Vs,VtVm", MATCH_VFNMACCVV, MASK_VFNMACCVV, match_vd_neq_vm, INSN_ALIAS},
+{"vfnmacc.vv", 0, INSN_CLASS_ZVEF, "Vd,Vs,VtVm", MATCH_VFNMACCVV, MASK_VFNMACCVV, match_vd_neq_vm, 0},
+{"vfnmacc.vf", 0, INSN_CLASS_XTHEADVECTOR, "Vd,S,VtVm", MATCH_VFNMACCVF, MASK_VFNMACCVF, match_vd_neq_vm, INSN_ALIAS},
+{"vfnmacc.vf", 0, INSN_CLASS_ZVEF, "Vd,S,VtVm", MATCH_VFNMACCVF, MASK_VFNMACCVF, match_vd_neq_vm, 0},
+{"vfmsac.vv",  0, INSN_CLASS_XTHEADVECTOR, "Vd,Vs,VtVm", MATCH_VFMSACVV, MASK_VFMSACVV, match_vd_neq_vm, INSN_ALIAS},
+{"vfmsac.vv",  0, INSN_CLASS_ZVEF, "Vd,Vs,VtVm", MATCH_VFMSACVV, MASK_VFMSACVV, match_vd_neq_vm, 0},
+{"vfmsac.vf",  0, INSN_CLASS_XTHEADVECTOR, "Vd,S,VtVm", MATCH_VFMSACVF, MASK_VFMSACVF, match_vd_neq_vm, INSN_ALIAS},
+{"vfmsac.vf",  0, INSN_CLASS_ZVEF, "Vd,S,VtVm", MATCH_VFMSACVF, MASK_VFMSACVF, match_vd_neq_vm, 0},
+{"vfnmsac.vv", 0, INSN_CLASS_XTHEADVECTOR, "Vd,Vs,VtVm", MATCH_VFNMSACVV, MASK_VFNMSACVV, match_vd_neq_vm, INSN_ALIAS},
+{"vfnmsac.vv", 0, INSN_CLASS_ZVEF, "Vd,Vs,VtVm", MATCH_VFNMSACVV, MASK_VFNMSACVV, match_vd_neq_vm, 0},
+{"vfnmsac.vf", 0, INSN_CLASS_XTHEADVECTOR, "Vd,S,VtVm", MATCH_VFNMSACVF, MASK_VFNMSACVF, match_vd_neq_vm, INSN_ALIAS},
+{"vfnmsac.vf", 0, INSN_CLASS_ZVEF, "Vd,S,VtVm", MATCH_VFNMSACVF, MASK_VFNMSACVF, match_vd_neq_vm, 0},
 
-{"vfwmacc.vv",  0, INSN_CLASS_XTHEADVECTOR, "Vd,Vs,VtVm", MATCH_VFWMACCVV, MASK_VFWMACCVV, match_opcode, INSN_ALIAS},
-{"vfwmacc.vv",  0, INSN_CLASS_ZVEF, "Vd,Vs,VtVm", MATCH_VFWMACCVV, MASK_VFWMACCVV, match_opcode, 0},
-{"vfwmacc.vf",  0, INSN_CLASS_XTHEADVECTOR, "Vd,S,VtVm", MATCH_VFWMACCVF, MASK_VFWMACCVF, match_opcode, INSN_ALIAS},
-{"vfwmacc.vf",  0, INSN_CLASS_ZVEF, "Vd,S,VtVm", MATCH_VFWMACCVF, MASK_VFWMACCVF, match_opcode, 0},
-{"vfwnmacc.vv", 0, INSN_CLASS_XTHEADVECTOR, "Vd,Vs,VtVm", MATCH_VFWNMACCVV, MASK_VFWNMACCVV, match_opcode, INSN_ALIAS},
-{"vfwnmacc.vv", 0, INSN_CLASS_ZVEF, "Vd,Vs,VtVm", MATCH_VFWNMACCVV, MASK_VFWNMACCVV, match_opcode, 0},
-{"vfwnmacc.vf", 0, INSN_CLASS_XTHEADVECTOR, "Vd,S,VtVm", MATCH_VFWNMACCVF, MASK_VFWNMACCVF, match_opcode, INSN_ALIAS},
-{"vfwnmacc.vf", 0, INSN_CLASS_ZVEF, "Vd,S,VtVm", MATCH_VFWNMACCVF, MASK_VFWNMACCVF, match_opcode, 0},
-{"vfwmsac.vv",  0, INSN_CLASS_XTHEADVECTOR, "Vd,Vs,VtVm", MATCH_VFWMSACVV, MASK_VFWMSACVV, match_opcode, INSN_ALIAS},
-{"vfwmsac.vv",  0, INSN_CLASS_ZVEF, "Vd,Vs,VtVm", MATCH_VFWMSACVV, MASK_VFWMSACVV, match_opcode, 0},
-{"vfwmsac.vf",  0, INSN_CLASS_XTHEADVECTOR, "Vd,S,VtVm", MATCH_VFWMSACVF, MASK_VFWMSACVF, match_opcode, INSN_ALIAS},
-{"vfwmsac.vf",  0, INSN_CLASS_ZVEF, "Vd,S,VtVm", MATCH_VFWMSACVF, MASK_VFWMSACVF, match_opcode, 0},
-{"vfwnmsac.vv", 0, INSN_CLASS_XTHEADVECTOR, "Vd,Vs,VtVm", MATCH_VFWNMSACVV, MASK_VFWNMSACVV, match_opcode, INSN_ALIAS},
-{"vfwnmsac.vv", 0, INSN_CLASS_ZVEF, "Vd,Vs,VtVm", MATCH_VFWNMSACVV, MASK_VFWNMSACVV, match_opcode, 0},
-{"vfwnmsac.vf", 0, INSN_CLASS_XTHEADVECTOR, "Vd,S,VtVm", MATCH_VFWNMSACVF, MASK_VFWNMSACVF, match_opcode, INSN_ALIAS},
-{"vfwnmsac.vf", 0, INSN_CLASS_ZVEF, "Vd,S,VtVm", MATCH_VFWNMSACVF, MASK_VFWNMSACVF, match_opcode, 0},
+{"vfwmacc.vv",  0, INSN_CLASS_XTHEADVECTOR, "Vd,Vs,VtVm", MATCH_VFWMACCVV, MASK_VFWMACCVV, match_vd_neq_vm_and_vd_neq_vs1_vs2, INSN_ALIAS},
+{"vfwmacc.vv",  0, INSN_CLASS_ZVEF, "Vd,Vs,VtVm", MATCH_VFWMACCVV, MASK_VFWMACCVV, match_vd_neq_vm_and_vd_neq_vs1_vs2, 0},
+{"vfwmacc.vf",  0, INSN_CLASS_XTHEADVECTOR, "Vd,S,VtVm", MATCH_VFWMACCVF, MASK_VFWMACCVF, match_vd_neq_vm_and_vd_neq_vs2, INSN_ALIAS},
+{"vfwmacc.vf",  0, INSN_CLASS_ZVEF, "Vd,S,VtVm", MATCH_VFWMACCVF, MASK_VFWMACCVF, match_vd_neq_vm_and_vd_neq_vs2, 0},
+{"vfwnmacc.vv", 0, INSN_CLASS_XTHEADVECTOR, "Vd,Vs,VtVm", MATCH_VFWNMACCVV, MASK_VFWNMACCVV, match_vd_neq_vm_and_vd_neq_vs1_vs2, INSN_ALIAS},
+{"vfwnmacc.vv", 0, INSN_CLASS_ZVEF, "Vd,Vs,VtVm", MATCH_VFWNMACCVV, MASK_VFWNMACCVV, match_vd_neq_vm_and_vd_neq_vs1_vs2, 0},
+{"vfwnmacc.vf", 0, INSN_CLASS_XTHEADVECTOR, "Vd,S,VtVm", MATCH_VFWNMACCVF, MASK_VFWNMACCVF, match_vd_neq_vm_and_vd_neq_vs2, INSN_ALIAS},
+{"vfwnmacc.vf", 0, INSN_CLASS_ZVEF, "Vd,S,VtVm", MATCH_VFWNMACCVF, MASK_VFWNMACCVF, match_vd_neq_vm_and_vd_neq_vs2, 0},
+{"vfwmsac.vv",  0, INSN_CLASS_XTHEADVECTOR, "Vd,Vs,VtVm", MATCH_VFWMSACVV, MASK_VFWMSACVV, match_vd_neq_vm_and_vd_neq_vs1_vs2, INSN_ALIAS},
+{"vfwmsac.vv",  0, INSN_CLASS_ZVEF, "Vd,Vs,VtVm", MATCH_VFWMSACVV, MASK_VFWMSACVV, match_vd_neq_vm_and_vd_neq_vs1_vs2, 0},
+{"vfwmsac.vf",  0, INSN_CLASS_XTHEADVECTOR, "Vd,S,VtVm", MATCH_VFWMSACVF, MASK_VFWMSACVF, match_vd_neq_vm_and_vd_neq_vs2, INSN_ALIAS},
+{"vfwmsac.vf",  0, INSN_CLASS_ZVEF, "Vd,S,VtVm", MATCH_VFWMSACVF, MASK_VFWMSACVF, match_vd_neq_vm_and_vd_neq_vs2, 0},
+{"vfwnmsac.vv", 0, INSN_CLASS_XTHEADVECTOR, "Vd,Vs,VtVm", MATCH_VFWNMSACVV, MASK_VFWNMSACVV, match_vd_neq_vm_and_vd_neq_vs1_vs2, INSN_ALIAS},
+{"vfwnmsac.vv", 0, INSN_CLASS_ZVEF, "Vd,Vs,VtVm", MATCH_VFWNMSACVV, MASK_VFWNMSACVV, match_vd_neq_vm_and_vd_neq_vs1_vs2, 0},
+{"vfwnmsac.vf", 0, INSN_CLASS_XTHEADVECTOR, "Vd,S,VtVm", MATCH_VFWNMSACVF, MASK_VFWNMSACVF, match_vd_neq_vm_and_vd_neq_vs2, INSN_ALIAS},
+{"vfwnmsac.vf", 0, INSN_CLASS_ZVEF, "Vd,S,VtVm", MATCH_VFWNMSACVF, MASK_VFWNMSACVF, match_vd_neq_vm_and_vd_neq_vs2, 0},
 
-{"vfsqrt.v",   0, INSN_CLASS_XTHEADVECTOR, "Vd,VtVm", MATCH_TH_VFSQRTV, MASK_TH_VFSQRTV, match_opcode, INSN_ALIAS},
-{"vfsqrt.v",   0, INSN_CLASS_ZVEF, "Vd,VtVm", MATCH_VFSQRTV, MASK_VFSQRTV, match_opcode, 0},
-{"vfrsqrt7.v", 0, INSN_CLASS_ZVEF, "Vd,VtVm", MATCH_VFRSQRT7V, MASK_VFRSQRT7V, match_opcode, 0},
-{"vfrsqrte7.v",0, INSN_CLASS_ZVEF, "Vd,VtVm", MATCH_VFRSQRT7V, MASK_VFRSQRT7V, match_opcode, 0},
-{"vfrec7.v",   0, INSN_CLASS_ZVEF, "Vd,VtVm", MATCH_VFREC7V, MASK_VFREC7V, match_opcode, 0},
-{"vfrece7.v",  0, INSN_CLASS_ZVEF, "Vd,VtVm", MATCH_VFREC7V, MASK_VFREC7V, match_opcode, 0},
-{"vfclass.v",  0, INSN_CLASS_XTHEADVECTOR, "Vd,VtVm", MATCH_TH_VFCLASSV, MASK_TH_VFCLASSV, match_opcode, INSN_ALIAS},
-{"vfclass.v",  0, INSN_CLASS_ZVEF, "Vd,VtVm", MATCH_VFCLASSV, MASK_VFCLASSV, match_opcode, 0},
+{"vfsqrt.v",   0, INSN_CLASS_XTHEADVECTOR, "Vd,VtVm", MATCH_TH_VFSQRTV, MASK_TH_VFSQRTV, match_vd_neq_vm, INSN_ALIAS},
+{"vfsqrt.v",   0, INSN_CLASS_ZVEF, "Vd,VtVm", MATCH_VFSQRTV, MASK_VFSQRTV, match_vd_neq_vm, 0},
+{"vfrsqrt7.v", 0, INSN_CLASS_ZVEF, "Vd,VtVm", MATCH_VFRSQRT7V, MASK_VFRSQRT7V, match_vd_neq_vm, 0},
+{"vfrsqrte7.v",0, INSN_CLASS_ZVEF, "Vd,VtVm", MATCH_VFRSQRT7V, MASK_VFRSQRT7V, match_vd_neq_vm, 0},
+{"vfrec7.v",   0, INSN_CLASS_ZVEF, "Vd,VtVm", MATCH_VFREC7V, MASK_VFREC7V, match_vd_neq_vm, 0},
+{"vfrece7.v",  0, INSN_CLASS_ZVEF, "Vd,VtVm", MATCH_VFREC7V, MASK_VFREC7V, match_vd_neq_vm, 0},
+{"vfclass.v",  0, INSN_CLASS_XTHEADVECTOR, "Vd,VtVm", MATCH_TH_VFCLASSV, MASK_TH_VFCLASSV, match_vd_neq_vm, INSN_ALIAS},
+{"vfclass.v",  0, INSN_CLASS_ZVEF, "Vd,VtVm", MATCH_VFCLASSV, MASK_VFCLASSV, match_vd_neq_vm, 0},
 
-{"vfmin.vv",   0, INSN_CLASS_XTHEADVECTOR, "Vd,Vt,VsVm", MATCH_VFMINVV, MASK_VFMINVV, match_opcode, INSN_ALIAS},
-{"vfmin.vv",   0, INSN_CLASS_ZVEF, "Vd,Vt,VsVm", MATCH_VFMINVV, MASK_VFMINVV, match_opcode, 0},
-{"vfmin.vf",   0, INSN_CLASS_XTHEADVECTOR, "Vd,Vt,SVm", MATCH_VFMINVF, MASK_VFMINVF, match_opcode, INSN_ALIAS},
-{"vfmin.vf",   0, INSN_CLASS_ZVEF, "Vd,Vt,SVm", MATCH_VFMINVF, MASK_VFMINVF, match_opcode, 0},
-{"vfmax.vv",   0, INSN_CLASS_XTHEADVECTOR, "Vd,Vt,VsVm", MATCH_VFMAXVV, MASK_VFMAXVV, match_opcode, INSN_ALIAS},
-{"vfmax.vv",   0, INSN_CLASS_ZVEF, "Vd,Vt,VsVm", MATCH_VFMAXVV, MASK_VFMAXVV, match_opcode, 0},
-{"vfmax.vf",   0, INSN_CLASS_XTHEADVECTOR, "Vd,Vt,SVm", MATCH_VFMAXVF, MASK_VFMAXVF, match_opcode, INSN_ALIAS},
-{"vfmax.vf",   0, INSN_CLASS_ZVEF, "Vd,Vt,SVm", MATCH_VFMAXVF, MASK_VFMAXVF, match_opcode, 0},
+{"vfmin.vv",   0, INSN_CLASS_XTHEADVECTOR, "Vd,Vt,VsVm", MATCH_VFMINVV, MASK_VFMINVV, match_vd_neq_vm, INSN_ALIAS},
+{"vfmin.vv",   0, INSN_CLASS_ZVEF, "Vd,Vt,VsVm", MATCH_VFMINVV, MASK_VFMINVV, match_vd_neq_vm, 0},
+{"vfmin.vf",   0, INSN_CLASS_XTHEADVECTOR, "Vd,Vt,SVm", MATCH_VFMINVF, MASK_VFMINVF, match_vd_neq_vm, INSN_ALIAS},
+{"vfmin.vf",   0, INSN_CLASS_ZVEF, "Vd,Vt,SVm", MATCH_VFMINVF, MASK_VFMINVF, match_vd_neq_vm, 0},
+{"vfmax.vv",   0, INSN_CLASS_XTHEADVECTOR, "Vd,Vt,VsVm", MATCH_VFMAXVV, MASK_VFMAXVV, match_vd_neq_vm, INSN_ALIAS},
+{"vfmax.vv",   0, INSN_CLASS_ZVEF, "Vd,Vt,VsVm", MATCH_VFMAXVV, MASK_VFMAXVV, match_vd_neq_vm, 0},
+{"vfmax.vf",   0, INSN_CLASS_XTHEADVECTOR, "Vd,Vt,SVm", MATCH_VFMAXVF, MASK_VFMAXVF, match_vd_neq_vm, INSN_ALIAS},
+{"vfmax.vf",   0, INSN_CLASS_ZVEF, "Vd,Vt,SVm", MATCH_VFMAXVF, MASK_VFMAXVF, match_vd_neq_vm, 0},
 
-{"vfneg.v",    0, INSN_CLASS_XTHEADVECTOR, "Vd,VuVm", MATCH_VFSGNJNVV, MASK_VFSGNJNVV, match_vs1_eq_vs2, INSN_ALIAS },
-{"vfneg.v",    0, INSN_CLASS_ZVEF, "Vd,VuVm", MATCH_VFSGNJNVV, MASK_VFSGNJNVV, match_vs1_eq_vs2, INSN_ALIAS },
-{"vfabs.v",    0, INSN_CLASS_XTHEADVECTOR, "Vd,VuVm", MATCH_VFSGNJXVV, MASK_VFSGNJXVV, match_vs1_eq_vs2, INSN_ALIAS },
-{"vfabs.v",    0, INSN_CLASS_ZVEF, "Vd,VuVm", MATCH_VFSGNJXVV, MASK_VFSGNJXVV, match_vs1_eq_vs2, INSN_ALIAS },
+{"vfneg.v",    0, INSN_CLASS_XTHEADVECTOR, "Vd,VuVm", MATCH_VFSGNJNVV, MASK_VFSGNJNVV, match_vd_neq_vm_and_vs1_eq_vs2, INSN_ALIAS },
+{"vfneg.v",    0, INSN_CLASS_ZVEF, "Vd,VuVm", MATCH_VFSGNJNVV, MASK_VFSGNJNVV, match_vd_neq_vm_and_vs1_eq_vs2, INSN_ALIAS },
+{"vfabs.v",    0, INSN_CLASS_XTHEADVECTOR, "Vd,VuVm", MATCH_VFSGNJXVV, MASK_VFSGNJXVV, match_vd_neq_vm_and_vs1_eq_vs2, INSN_ALIAS },
+{"vfabs.v",    0, INSN_CLASS_ZVEF, "Vd,VuVm", MATCH_VFSGNJXVV, MASK_VFSGNJXVV, match_vd_neq_vm_and_vs1_eq_vs2, INSN_ALIAS },
 
-{"vfsgnj.vv",  0, INSN_CLASS_XTHEADVECTOR, "Vd,Vt,VsVm", MATCH_VFSGNJVV, MASK_VFSGNJVV, match_opcode, INSN_ALIAS},
-{"vfsgnj.vv",  0, INSN_CLASS_ZVEF, "Vd,Vt,VsVm", MATCH_VFSGNJVV, MASK_VFSGNJVV, match_opcode, 0},
-{"vfsgnj.vf",  0, INSN_CLASS_XTHEADVECTOR, "Vd,Vt,SVm", MATCH_VFSGNJVF, MASK_VFSGNJVF, match_opcode, INSN_ALIAS},
-{"vfsgnj.vf",  0, INSN_CLASS_ZVEF, "Vd,Vt,SVm", MATCH_VFSGNJVF, MASK_VFSGNJVF, match_opcode, 0},
-{"vfsgnjn.vv", 0, INSN_CLASS_XTHEADVECTOR, "Vd,Vt,VsVm", MATCH_VFSGNJNVV, MASK_VFSGNJNVV, match_opcode, INSN_ALIAS},
-{"vfsgnjn.vv", 0, INSN_CLASS_ZVEF, "Vd,Vt,VsVm", MATCH_VFSGNJNVV, MASK_VFSGNJNVV, match_opcode, 0},
-{"vfsgnjn.vf", 0, INSN_CLASS_XTHEADVECTOR, "Vd,Vt,SVm", MATCH_VFSGNJNVF, MASK_VFSGNJNVF, match_opcode, INSN_ALIAS},
-{"vfsgnjn.vf", 0, INSN_CLASS_ZVEF, "Vd,Vt,SVm", MATCH_VFSGNJNVF, MASK_VFSGNJNVF, match_opcode, 0},
-{"vfsgnjx.vv", 0, INSN_CLASS_XTHEADVECTOR, "Vd,Vt,VsVm", MATCH_VFSGNJXVV, MASK_VFSGNJXVV, match_opcode, INSN_ALIAS},
-{"vfsgnjx.vv", 0, INSN_CLASS_ZVEF, "Vd,Vt,VsVm", MATCH_VFSGNJXVV, MASK_VFSGNJXVV, match_opcode, 0},
-{"vfsgnjx.vf", 0, INSN_CLASS_XTHEADVECTOR, "Vd,Vt,SVm", MATCH_VFSGNJXVF, MASK_VFSGNJXVF, match_opcode, INSN_ALIAS},
-{"vfsgnjx.vf", 0, INSN_CLASS_ZVEF, "Vd,Vt,SVm", MATCH_VFSGNJXVF, MASK_VFSGNJXVF, match_opcode, 0},
+{"vfsgnj.vv",  0, INSN_CLASS_XTHEADVECTOR, "Vd,Vt,VsVm", MATCH_VFSGNJVV, MASK_VFSGNJVV, match_vd_neq_vm, INSN_ALIAS},
+{"vfsgnj.vv",  0, INSN_CLASS_ZVEF, "Vd,Vt,VsVm", MATCH_VFSGNJVV, MASK_VFSGNJVV, match_vd_neq_vm, 0},
+{"vfsgnj.vf",  0, INSN_CLASS_XTHEADVECTOR, "Vd,Vt,SVm", MATCH_VFSGNJVF, MASK_VFSGNJVF, match_vd_neq_vm, INSN_ALIAS},
+{"vfsgnj.vf",  0, INSN_CLASS_ZVEF, "Vd,Vt,SVm", MATCH_VFSGNJVF, MASK_VFSGNJVF, match_vd_neq_vm, 0},
+{"vfsgnjn.vv", 0, INSN_CLASS_XTHEADVECTOR, "Vd,Vt,VsVm", MATCH_VFSGNJNVV, MASK_VFSGNJNVV, match_vd_neq_vm, INSN_ALIAS},
+{"vfsgnjn.vv", 0, INSN_CLASS_ZVEF, "Vd,Vt,VsVm", MATCH_VFSGNJNVV, MASK_VFSGNJNVV, match_vd_neq_vm, 0},
+{"vfsgnjn.vf", 0, INSN_CLASS_XTHEADVECTOR, "Vd,Vt,SVm", MATCH_VFSGNJNVF, MASK_VFSGNJNVF, match_vd_neq_vm, INSN_ALIAS},
+{"vfsgnjn.vf", 0, INSN_CLASS_ZVEF, "Vd,Vt,SVm", MATCH_VFSGNJNVF, MASK_VFSGNJNVF, match_vd_neq_vm, 0},
+{"vfsgnjx.vv", 0, INSN_CLASS_XTHEADVECTOR, "Vd,Vt,VsVm", MATCH_VFSGNJXVV, MASK_VFSGNJXVV, match_vd_neq_vm, INSN_ALIAS},
+{"vfsgnjx.vv", 0, INSN_CLASS_ZVEF, "Vd,Vt,VsVm", MATCH_VFSGNJXVV, MASK_VFSGNJXVV, match_vd_neq_vm, 0},
+{"vfsgnjx.vf", 0, INSN_CLASS_XTHEADVECTOR, "Vd,Vt,SVm", MATCH_VFSGNJXVF, MASK_VFSGNJXVF, match_vd_neq_vm, INSN_ALIAS},
+{"vfsgnjx.vf", 0, INSN_CLASS_ZVEF, "Vd,Vt,SVm", MATCH_VFSGNJXVF, MASK_VFSGNJXVF, match_vd_neq_vm, 0},
 
 {"vmfeq.vv",   0, INSN_CLASS_XTHEADVECTOR, "Vd,Vt,VsVm", MATCH_VMFEQVV, MASK_VMFEQVV, match_opcode, INSN_ALIAS},
 {"vmfeq.vv",   0, INSN_CLASS_ZVEF, "Vd,Vt,VsVm", MATCH_VMFEQVV, MASK_VMFEQVV, match_opcode, 0},
@@ -2447,38 +2817,38 @@ const struct riscv_opcode riscv_opcodes[] =
 {"vfmv.v.f",   0, INSN_CLASS_XTHEADVECTOR, "Vd,S", MATCH_VFMVVF, MASK_VFMVVF, match_opcode, INSN_ALIAS },
 {"vfmv.v.f",   0, INSN_CLASS_ZVEF, "Vd,S", MATCH_VFMVVF, MASK_VFMVVF, match_opcode, 0 },
 
-{"vfcvt.xu.f.v",0, INSN_CLASS_XTHEADVECTOR, "Vd,VtVm", MATCH_TH_VFCVTXUFV, MASK_TH_VFCVTXUFV, match_opcode, INSN_ALIAS},
-{"vfcvt.xu.f.v",     0, INSN_CLASS_ZVEF, "Vd,VtVm", MATCH_VFCVTXUFV, MASK_VFCVTXUFV, match_opcode, 0},
-{"vfcvt.x.f.v", 0, INSN_CLASS_XTHEADVECTOR, "Vd,VtVm", MATCH_TH_VFCVTXFV, MASK_TH_VFCVTXFV, match_opcode, INSN_ALIAS},
-{"vfcvt.x.f.v",      0, INSN_CLASS_ZVEF, "Vd,VtVm", MATCH_VFCVTXFV, MASK_VFCVTXFV, match_opcode, 0},
-{"vfcvt.rtz.xu.f.v", 0, INSN_CLASS_ZVEF, "Vd,VtVm", MATCH_VFCVTRTZXUFV, MASK_VFCVTRTZXUFV, match_opcode, 0},
-{"vfcvt.rtz.x.f.v",  0, INSN_CLASS_ZVEF, "Vd,VtVm", MATCH_VFCVTRTZXFV, MASK_VFCVTRTZXFV, match_opcode, 0},
-{"vfcvt.f.xu.v",0, INSN_CLASS_XTHEADVECTOR, "Vd,VtVm", MATCH_TH_VFCVTFXUV, MASK_TH_VFCVTFXUV, match_opcode, INSN_ALIAS},
-{"vfcvt.f.xu.v",     0, INSN_CLASS_ZVEF, "Vd,VtVm", MATCH_VFCVTFXUV, MASK_VFCVTFXUV, match_opcode, 0},
-{"vfcvt.f.x.v", 0, INSN_CLASS_XTHEADVECTOR, "Vd,VtVm", MATCH_TH_VFCVTFXV, MASK_TH_VFCVTFXV, match_opcode, INSN_ALIAS},
-{"vfcvt.f.x.v",      0, INSN_CLASS_ZVEF, "Vd,VtVm", MATCH_VFCVTFXV, MASK_VFCVTFXV, match_opcode, 0},
+{"vfcvt.xu.f.v",0, INSN_CLASS_XTHEADVECTOR, "Vd,VtVm", MATCH_TH_VFCVTXUFV, MASK_TH_VFCVTXUFV, match_vd_neq_vm, INSN_ALIAS},
+{"vfcvt.xu.f.v",     0, INSN_CLASS_ZVEF, "Vd,VtVm", MATCH_VFCVTXUFV, MASK_VFCVTXUFV, match_vd_neq_vm, 0},
+{"vfcvt.x.f.v", 0, INSN_CLASS_XTHEADVECTOR, "Vd,VtVm", MATCH_TH_VFCVTXFV, MASK_TH_VFCVTXFV, match_vd_neq_vm, INSN_ALIAS},
+{"vfcvt.x.f.v",      0, INSN_CLASS_ZVEF, "Vd,VtVm", MATCH_VFCVTXFV, MASK_VFCVTXFV, match_vd_neq_vm, 0},
+{"vfcvt.rtz.xu.f.v", 0, INSN_CLASS_ZVEF, "Vd,VtVm", MATCH_VFCVTRTZXUFV, MASK_VFCVTRTZXUFV, match_vd_neq_vm, 0},
+{"vfcvt.rtz.x.f.v",  0, INSN_CLASS_ZVEF, "Vd,VtVm", MATCH_VFCVTRTZXFV, MASK_VFCVTRTZXFV, match_vd_neq_vm, 0},
+{"vfcvt.f.xu.v",0, INSN_CLASS_XTHEADVECTOR, "Vd,VtVm", MATCH_TH_VFCVTFXUV, MASK_TH_VFCVTFXUV, match_vd_neq_vm, INSN_ALIAS},
+{"vfcvt.f.xu.v",     0, INSN_CLASS_ZVEF, "Vd,VtVm", MATCH_VFCVTFXUV, MASK_VFCVTFXUV, match_vd_neq_vm, 0},
+{"vfcvt.f.x.v", 0, INSN_CLASS_XTHEADVECTOR, "Vd,VtVm", MATCH_TH_VFCVTFXV, MASK_TH_VFCVTFXV, match_vd_neq_vm, INSN_ALIAS},
+{"vfcvt.f.x.v",      0, INSN_CLASS_ZVEF, "Vd,VtVm", MATCH_VFCVTFXV, MASK_VFCVTFXV, match_vd_neq_vm, 0},
 
-{"vfwcvt.xu.f.v",     0,INSN_CLASS_XTHEADVECTOR, "Vd,VtVm", MATCH_TH_VFWCVTXUFV, MASK_TH_VFWCVTXUFV, match_opcode, INSN_ALIAS},
-{"vfwcvt.xu.f.v",     0, INSN_CLASS_ZVEF, "Vd,VtVm", MATCH_VFWCVTXUFV, MASK_VFWCVTXUFV, match_opcode, 0},
-{"vfwcvt.x.f.v",      0, INSN_CLASS_XTHEADVECTOR, "Vd,VtVm", MATCH_TH_VFWCVTXFV, MASK_TH_VFWCVTXFV, match_opcode, INSN_ALIAS},
-{"vfwcvt.x.f.v",      0, INSN_CLASS_ZVEF, "Vd,VtVm", MATCH_VFWCVTXFV, MASK_VFWCVTXFV, match_opcode, 0},
-{"vfwcvt.rtz.xu.f.v", 0, INSN_CLASS_ZVEF, "Vd,VtVm", MATCH_VFWCVTRTZXUFV, MASK_VFWCVTRTZXUFV, match_opcode, 0},
-{"vfwcvt.rtz.x.f.v",  0, INSN_CLASS_ZVEF, "Vd,VtVm", MATCH_VFWCVTRTZXFV, MASK_VFWCVTRTZXFV, match_opcode, 0},
-{"vfwcvt.f.xu.v",     0,INSN_CLASS_XTHEADVECTOR, "Vd,VtVm", MATCH_TH_VFWCVTFXUV, MASK_TH_VFWCVTFXUV, match_opcode, INSN_ALIAS},
-{"vfwcvt.f.xu.v",     0, INSN_CLASS_ZVEF, "Vd,VtVm", MATCH_VFWCVTFXUV, MASK_VFWCVTFXUV, match_opcode, 0},
-{"vfwcvt.f.x.v",      0, INSN_CLASS_XTHEADVECTOR, "Vd,VtVm", MATCH_TH_VFWCVTFXV, MASK_TH_VFWCVTFXV, match_opcode, INSN_ALIAS},
-{"vfwcvt.f.x.v",      0, INSN_CLASS_ZVEF, "Vd,VtVm", MATCH_VFWCVTFXV, MASK_VFWCVTFXV, match_opcode, 0},
-{"vfwcvt.f.f.v",      0, INSN_CLASS_XTHEADVECTOR, "Vd,VtVm", MATCH_TH_VFWCVTFFV, MASK_TH_VFWCVTFFV, match_opcode, INSN_ALIAS},
-{"vfwcvt.f.f.v",      0, INSN_CLASS_ZVEF, "Vd,VtVm", MATCH_VFWCVTFFV, MASK_VFWCVTFFV, match_opcode, 0},
+{"vfwcvt.xu.f.v",     0,INSN_CLASS_XTHEADVECTOR, "Vd,VtVm", MATCH_TH_VFWCVTXUFV, MASK_TH_VFWCVTXUFV, match_vd_neq_vm_and_vd_neq_vs2, INSN_ALIAS},
+{"vfwcvt.xu.f.v",     0, INSN_CLASS_ZVEF, "Vd,VtVm", MATCH_VFWCVTXUFV, MASK_VFWCVTXUFV, match_vd_neq_vm_and_vd_neq_vs2, 0},
+{"vfwcvt.x.f.v",      0, INSN_CLASS_XTHEADVECTOR, "Vd,VtVm", MATCH_TH_VFWCVTXFV, MASK_TH_VFWCVTXFV, match_vd_neq_vm_and_vd_neq_vs2, INSN_ALIAS},
+{"vfwcvt.x.f.v",      0, INSN_CLASS_ZVEF, "Vd,VtVm", MATCH_VFWCVTXFV, MASK_VFWCVTXFV, match_vd_neq_vm_and_vd_neq_vs2, 0},
+{"vfwcvt.rtz.xu.f.v", 0, INSN_CLASS_ZVEF, "Vd,VtVm", MATCH_VFWCVTRTZXUFV, MASK_VFWCVTRTZXUFV, match_vd_neq_vm_and_vd_neq_vs2, 0},
+{"vfwcvt.rtz.x.f.v",  0, INSN_CLASS_ZVEF, "Vd,VtVm", MATCH_VFWCVTRTZXFV, MASK_VFWCVTRTZXFV, match_vd_neq_vm_and_vd_neq_vs2, 0},
+{"vfwcvt.f.xu.v",     0,INSN_CLASS_XTHEADVECTOR, "Vd,VtVm", MATCH_TH_VFWCVTFXUV, MASK_TH_VFWCVTFXUV, match_vd_neq_vm_and_vd_neq_vs2, INSN_ALIAS},
+{"vfwcvt.f.xu.v",     0, INSN_CLASS_ZVEF, "Vd,VtVm", MATCH_VFWCVTFXUV, MASK_VFWCVTFXUV, match_vd_neq_vm_and_vd_neq_vs2, 0},
+{"vfwcvt.f.x.v",      0, INSN_CLASS_XTHEADVECTOR, "Vd,VtVm", MATCH_TH_VFWCVTFXV, MASK_TH_VFWCVTFXV, match_vd_neq_vm_and_vd_neq_vs2, INSN_ALIAS},
+{"vfwcvt.f.x.v",      0, INSN_CLASS_ZVEF, "Vd,VtVm", MATCH_VFWCVTFXV, MASK_VFWCVTFXV, match_vd_neq_vm_and_vd_neq_vs2, 0},
+{"vfwcvt.f.f.v",      0, INSN_CLASS_XTHEADVECTOR, "Vd,VtVm", MATCH_TH_VFWCVTFFV, MASK_TH_VFWCVTFFV, match_vd_neq_vm_and_vd_neq_vs2, INSN_ALIAS},
+{"vfwcvt.f.f.v",      0, INSN_CLASS_ZVEF, "Vd,VtVm", MATCH_VFWCVTFFV, MASK_VFWCVTFFV, match_vd_neq_vm_and_vd_neq_vs2, 0},
 
-{"vfncvt.xu.f.w",     0, INSN_CLASS_ZVEF, "Vd,VtVm", MATCH_VFNCVTXUFW, MASK_VFNCVTXUFW, match_opcode, 0},
-{"vfncvt.x.f.w",      0, INSN_CLASS_ZVEF, "Vd,VtVm", MATCH_VFNCVTXFW, MASK_VFNCVTXFW, match_opcode, 0},
-{"vfncvt.rtz.xu.f.w", 0, INSN_CLASS_ZVEF, "Vd,VtVm", MATCH_VFNCVTRTZXUFW, MASK_VFNCVTRTZXUFW, match_opcode, 0},
-{"vfncvt.rtz.x.f.w",  0, INSN_CLASS_ZVEF, "Vd,VtVm", MATCH_VFNCVTRTZXFW, MASK_VFNCVTRTZXFW, match_opcode, 0},
-{"vfncvt.f.xu.w",     0, INSN_CLASS_ZVEF, "Vd,VtVm", MATCH_VFNCVTFXUW, MASK_VFNCVTFXUW, match_opcode, 0},
-{"vfncvt.f.x.w",      0, INSN_CLASS_ZVEF, "Vd,VtVm", MATCH_VFNCVTFXW, MASK_VFNCVTFXW, match_opcode, 0},
-{"vfncvt.f.f.w",      0, INSN_CLASS_ZVEF, "Vd,VtVm", MATCH_VFNCVTFFW, MASK_VFNCVTFFW, match_opcode, 0},
-{"vfncvt.rod.f.f.w",  0, INSN_CLASS_ZVEF, "Vd,VtVm", MATCH_VFNCVTRODFFW, MASK_VFNCVTRODFFW, match_opcode, 0},
+{"vfncvt.xu.f.w",     0, INSN_CLASS_ZVEF, "Vd,VtVm", MATCH_VFNCVTXUFW, MASK_VFNCVTXUFW, match_vd_neq_vm, 0},
+{"vfncvt.x.f.w",      0, INSN_CLASS_ZVEF, "Vd,VtVm", MATCH_VFNCVTXFW, MASK_VFNCVTXFW, match_vd_neq_vm, 0},
+{"vfncvt.rtz.xu.f.w", 0, INSN_CLASS_ZVEF, "Vd,VtVm", MATCH_VFNCVTRTZXUFW, MASK_VFNCVTRTZXUFW, match_vd_neq_vm, 0},
+{"vfncvt.rtz.x.f.w",  0, INSN_CLASS_ZVEF, "Vd,VtVm", MATCH_VFNCVTRTZXFW, MASK_VFNCVTRTZXFW, match_vd_neq_vm, 0},
+{"vfncvt.f.xu.w",     0, INSN_CLASS_ZVEF, "Vd,VtVm", MATCH_VFNCVTFXUW, MASK_VFNCVTFXUW, match_vd_neq_vm, 0},
+{"vfncvt.f.x.w",      0, INSN_CLASS_ZVEF, "Vd,VtVm", MATCH_VFNCVTFXW, MASK_VFNCVTFXW, match_vd_neq_vm, 0},
+{"vfncvt.f.f.w",      0, INSN_CLASS_ZVEF, "Vd,VtVm", MATCH_VFNCVTFFW, MASK_VFNCVTFFW, match_vd_neq_vm, 0},
+{"vfncvt.rod.f.f.w",  0, INSN_CLASS_ZVEF, "Vd,VtVm", MATCH_VFNCVTRODFFW, MASK_VFNCVTRODFFW, match_vd_neq_vm, 0},
 
 {"vredsum.vs", 0, INSN_CLASS_XTHEADVECTOR, "Vd,Vt,VsVm", MATCH_VREDSUMVS, MASK_VREDSUMVS, match_opcode, INSN_ALIAS},
 {"vredsum.vs", 0, INSN_CLASS_V, "Vd,Vt,VsVm", MATCH_VREDSUMVS, MASK_VREDSUMVS, match_opcode, 0},
@@ -2551,16 +2921,16 @@ const struct riscv_opcode riscv_opcodes[] =
 {"vcpop.m",    0, INSN_CLASS_V, "d,VtVm", MATCH_VCPOPM, MASK_VCPOPM, match_opcode, 0},
 {"vpopc.m",    0, INSN_CLASS_V, "d,VtVm", MATCH_VCPOPM, MASK_VCPOPM, match_opcode, INSN_ALIAS},
 {"vfirst.m",   0, INSN_CLASS_V, "d,VtVm", MATCH_VFIRSTM, MASK_VFIRSTM, match_opcode, 0},
-{"vmsbf.m",    0, INSN_CLASS_XTHEADVECTOR, "Vd,VtVm", MATCH_TH_VMSBFM, MASK_TH_VMSBFM, match_opcode, INSN_ALIAS},
-{"vmsbf.m",    0, INSN_CLASS_V, "Vd,VtVm", MATCH_VMSBFM, MASK_VMSBFM, match_opcode, 0},
-{"vmsif.m",    0, INSN_CLASS_XTHEADVECTOR, "Vd,VtVm", MATCH_TH_VMSIFM, MASK_TH_VMSIFM, match_opcode, INSN_ALIAS},
-{"vmsif.m",    0, INSN_CLASS_V, "Vd,VtVm", MATCH_VMSIFM, MASK_VMSIFM, match_opcode, 0},
-{"vmsof.m",    0, INSN_CLASS_XTHEADVECTOR, "Vd,VtVm", MATCH_TH_VMSOFM, MASK_TH_VMSOFM, match_opcode, INSN_ALIAS},
-{"vmsof.m",    0, INSN_CLASS_V, "Vd,VtVm", MATCH_VMSOFM, MASK_VMSOFM, match_opcode, 0},
-{"viota.m",    0, INSN_CLASS_XTHEADVECTOR, "Vd,VtVm", MATCH_TH_VIOTAM, MASK_TH_VIOTAM, match_opcode, INSN_ALIAS},
-{"viota.m",    0, INSN_CLASS_V, "Vd,VtVm", MATCH_VIOTAM, MASK_VIOTAM, match_opcode, 0},
-{"vid.v",      0, INSN_CLASS_XTHEADVECTOR, "VdVm", MATCH_TH_VIDV, MASK_TH_VIDV, match_opcode, INSN_ALIAS},
-{"vid.v",      0, INSN_CLASS_V, "VdVm", MATCH_VIDV, MASK_VIDV, match_opcode, 0},
+{"vmsbf.m",    0, INSN_CLASS_XTHEADVECTOR, "Vd,VtVm", MATCH_TH_VMSBFM, MASK_TH_VMSBFM, match_vd_neq_vm_and_vd_neq_vs2, INSN_ALIAS},
+{"vmsbf.m",    0, INSN_CLASS_V, "Vd,VtVm", MATCH_VMSBFM, MASK_VMSBFM, match_vd_neq_vm_and_vd_neq_vs2, 0},
+{"vmsif.m",    0, INSN_CLASS_XTHEADVECTOR, "Vd,VtVm", MATCH_TH_VMSIFM, MASK_TH_VMSIFM, match_vd_neq_vm_and_vd_neq_vs2, INSN_ALIAS},
+{"vmsif.m",    0, INSN_CLASS_V, "Vd,VtVm", MATCH_VMSIFM, MASK_VMSIFM, match_vd_neq_vm_and_vd_neq_vs2, 0},
+{"vmsof.m",    0, INSN_CLASS_XTHEADVECTOR, "Vd,VtVm", MATCH_TH_VMSOFM, MASK_TH_VMSOFM, match_vd_neq_vm_and_vd_neq_vs2, INSN_ALIAS},
+{"vmsof.m",    0, INSN_CLASS_V, "Vd,VtVm", MATCH_VMSOFM, MASK_VMSOFM, match_vd_neq_vm_and_vd_neq_vs2, 0},
+{"viota.m",    0, INSN_CLASS_XTHEADVECTOR, "Vd,VtVm", MATCH_TH_VIOTAM, MASK_TH_VIOTAM, match_vd_neq_vm_and_vd_neq_vs2, INSN_ALIAS},
+{"viota.m",    0, INSN_CLASS_V, "Vd,VtVm", MATCH_VIOTAM, MASK_VIOTAM, match_vd_neq_vm_and_vd_neq_vs2, 0},
+{"vid.v",      0, INSN_CLASS_XTHEADVECTOR, "VdVm", MATCH_TH_VIDV, MASK_TH_VIDV, match_vd_neq_vm, INSN_ALIAS},
+{"vid.v",      0, INSN_CLASS_V, "VdVm", MATCH_VIDV, MASK_VIDV, match_vd_neq_vm, 0},
 
 {"vmv.x.s",    0, INSN_CLASS_XTHEADVECTOR, "d,Vt", MATCH_TH_VMVXS, MASK_TH_VMVXS, match_opcode, INSN_ALIAS},
 {"vmv.x.s",    0, INSN_CLASS_V, "d,Vt", MATCH_VMVXS, MASK_VMVXS, match_opcode, 0},
@@ -2572,32 +2942,32 @@ const struct riscv_opcode riscv_opcodes[] =
 {"vfmv.s.f",   0, INSN_CLASS_XTHEADVECTOR, "Vd,S", MATCH_TH_VFMVSF, MASK_TH_VFMVSF, match_opcode, INSN_ALIAS},
 {"vfmv.s.f",   0, INSN_CLASS_ZVEF, "Vd,S", MATCH_VFMVSF, MASK_VFMVSF, match_opcode, 0},
 
-{"vslideup.vx",0, INSN_CLASS_XTHEADVECTOR, "Vd,Vt,sVm", MATCH_VSLIDEUPVX, MASK_VSLIDEUPVX, match_opcode, INSN_ALIAS},
-{"vslideup.vx",0, INSN_CLASS_V, "Vd,Vt,sVm", MATCH_VSLIDEUPVX, MASK_VSLIDEUPVX, match_opcode, 0},
-{"vslideup.vi",0, INSN_CLASS_XTHEADVECTOR, "Vd,Vt,VjVm", MATCH_VSLIDEUPVI, MASK_VSLIDEUPVI, match_opcode, INSN_ALIAS},
-{"vslideup.vi",0, INSN_CLASS_V, "Vd,Vt,VjVm", MATCH_VSLIDEUPVI, MASK_VSLIDEUPVI, match_opcode, 0},
-{"vslidedown.vx",0,INSN_CLASS_XTHEADVECTOR, "Vd,Vt,sVm", MATCH_VSLIDEDOWNVX, MASK_VSLIDEDOWNVX, match_opcode, INSN_ALIAS},
-{"vslidedown.vx",0,INSN_CLASS_V, "Vd,Vt,sVm", MATCH_VSLIDEDOWNVX, MASK_VSLIDEDOWNVX, match_opcode, 0},
-{"vslidedown.vi",0,INSN_CLASS_XTHEADVECTOR, "Vd,Vt,VjVm", MATCH_VSLIDEDOWNVI, MASK_VSLIDEDOWNVI, match_opcode, INSN_ALIAS},
-{"vslidedown.vi",0,INSN_CLASS_V, "Vd,Vt,VjVm", MATCH_VSLIDEDOWNVI, MASK_VSLIDEDOWNVI, match_opcode, 0},
+{"vslideup.vx",0, INSN_CLASS_XTHEADVECTOR, "Vd,Vt,sVm", MATCH_VSLIDEUPVX, MASK_VSLIDEUPVX, match_vd_neq_vm_and_vd_neq_vs2, INSN_ALIAS},
+{"vslideup.vx",0, INSN_CLASS_V, "Vd,Vt,sVm", MATCH_VSLIDEUPVX, MASK_VSLIDEUPVX, match_vd_neq_vm_and_vd_neq_vs2, 0},
+{"vslideup.vi",0, INSN_CLASS_XTHEADVECTOR, "Vd,Vt,VjVm", MATCH_VSLIDEUPVI, MASK_VSLIDEUPVI, match_vd_neq_vm_and_vd_neq_vs2, INSN_ALIAS},
+{"vslideup.vi",0, INSN_CLASS_V, "Vd,Vt,VjVm", MATCH_VSLIDEUPVI, MASK_VSLIDEUPVI, match_vd_neq_vm_and_vd_neq_vs2, 0},
+{"vslidedown.vx",0,INSN_CLASS_XTHEADVECTOR, "Vd,Vt,sVm", MATCH_VSLIDEDOWNVX, MASK_VSLIDEDOWNVX, match_vd_neq_vm, INSN_ALIAS},
+{"vslidedown.vx",0,INSN_CLASS_V, "Vd,Vt,sVm", MATCH_VSLIDEDOWNVX, MASK_VSLIDEDOWNVX, match_vd_neq_vm, 0},
+{"vslidedown.vi",0,INSN_CLASS_XTHEADVECTOR, "Vd,Vt,VjVm", MATCH_VSLIDEDOWNVI, MASK_VSLIDEDOWNVI, match_vd_neq_vm, INSN_ALIAS},
+{"vslidedown.vi",0,INSN_CLASS_V, "Vd,Vt,VjVm", MATCH_VSLIDEDOWNVI, MASK_VSLIDEDOWNVI, match_vd_neq_vm, 0},
 
-{"vslide1up.vx",0 ,INSN_CLASS_XTHEADVECTOR, "Vd,Vt,sVm", MATCH_VSLIDE1UPVX, MASK_VSLIDE1UPVX, match_opcode, INSN_ALIAS},
-{"vslide1up.vx",    0, INSN_CLASS_V, "Vd,Vt,sVm", MATCH_VSLIDE1UPVX, MASK_VSLIDE1UPVX, match_opcode, 0},
-{"vslide1down.vx",0,INSN_CLASS_XTHEADVECTOR, "Vd,Vt,sVm", MATCH_VSLIDE1DOWNVX, MASK_VSLIDE1DOWNVX, match_opcode, INSN_ALIAS},
-{"vslide1down.vx",  0, INSN_CLASS_V, "Vd,Vt,sVm", MATCH_VSLIDE1DOWNVX, MASK_VSLIDE1DOWNVX, match_opcode, 0},
-{"vfslide1up.vf",   0, INSN_CLASS_ZVEF, "Vd,Vt,SVm", MATCH_VFSLIDE1UPVF, MASK_VFSLIDE1UPVF, match_opcode, 0},
-{"vfslide1down.vf", 0, INSN_CLASS_ZVEF, "Vd,Vt,SVm", MATCH_VFSLIDE1DOWNVF, MASK_VFSLIDE1DOWNVF, match_opcode, 0},
+{"vslide1up.vx",0 ,INSN_CLASS_XTHEADVECTOR, "Vd,Vt,sVm", MATCH_VSLIDE1UPVX, MASK_VSLIDE1UPVX, match_vd_neq_vm_and_vd_neq_vs2, INSN_ALIAS},
+{"vslide1up.vx",    0, INSN_CLASS_V, "Vd,Vt,sVm", MATCH_VSLIDE1UPVX, MASK_VSLIDE1UPVX, match_vd_neq_vm_and_vd_neq_vs2, 0},
+{"vslide1down.vx",0,INSN_CLASS_XTHEADVECTOR, "Vd,Vt,sVm", MATCH_VSLIDE1DOWNVX, MASK_VSLIDE1DOWNVX, match_vd_neq_vm, INSN_ALIAS},
+{"vslide1down.vx",  0, INSN_CLASS_V, "Vd,Vt,sVm", MATCH_VSLIDE1DOWNVX, MASK_VSLIDE1DOWNVX, match_vd_neq_vm, 0},
+{"vfslide1up.vf",   0, INSN_CLASS_ZVEF, "Vd,Vt,SVm", MATCH_VFSLIDE1UPVF, MASK_VFSLIDE1UPVF, match_vd_neq_vm_and_vd_neq_vs2, 0},
+{"vfslide1down.vf", 0, INSN_CLASS_ZVEF, "Vd,Vt,SVm", MATCH_VFSLIDE1DOWNVF, MASK_VFSLIDE1DOWNVF, match_vd_neq_vm, 0},
 
-{"vrgather.vv",0, INSN_CLASS_XTHEADVECTOR, "Vd,Vt,VsVm", MATCH_VRGATHERVV, MASK_VRGATHERVV, match_opcode, INSN_ALIAS},
-{"vrgather.vv",    0, INSN_CLASS_V, "Vd,Vt,VsVm", MATCH_VRGATHERVV, MASK_VRGATHERVV, match_opcode, 0},
-{"vrgather.vx",0, INSN_CLASS_XTHEADVECTOR, "Vd,Vt,sVm", MATCH_VRGATHERVX, MASK_VRGATHERVX, match_opcode, INSN_ALIAS},
-{"vrgather.vx",    0, INSN_CLASS_V, "Vd,Vt,sVm", MATCH_VRGATHERVX, MASK_VRGATHERVX, match_opcode, 0},
-{"vrgather.vi",0, INSN_CLASS_XTHEADVECTOR, "Vd,Vt,VjVm", MATCH_VRGATHERVI, MASK_VRGATHERVI, match_opcode, INSN_ALIAS},
-{"vrgather.vi",    0, INSN_CLASS_V, "Vd,Vt,VjVm", MATCH_VRGATHERVI, MASK_VRGATHERVI, match_opcode, 0},
-{"vrgatherei16.vv",0, INSN_CLASS_V, "Vd,Vt,VsVm", MATCH_VRGATHEREI16VV, MASK_VRGATHEREI16VV, match_opcode, 0},
+{"vrgather.vv",0, INSN_CLASS_XTHEADVECTOR, "Vd,Vt,VsVm", MATCH_VRGATHERVV, MASK_VRGATHERVV, match_vd_neq_vm_and_vd_neq_vs1_vs2, INSN_ALIAS},
+{"vrgather.vv",    0, INSN_CLASS_V, "Vd,Vt,VsVm", MATCH_VRGATHERVV, MASK_VRGATHERVV, match_vd_neq_vm_and_vd_neq_vs1_vs2, 0},
+{"vrgather.vx",0, INSN_CLASS_XTHEADVECTOR, "Vd,Vt,sVm", MATCH_VRGATHERVX, MASK_VRGATHERVX, match_vd_neq_vm_and_vd_neq_vs2, INSN_ALIAS},
+{"vrgather.vx",    0, INSN_CLASS_V, "Vd,Vt,sVm", MATCH_VRGATHERVX, MASK_VRGATHERVX, match_vd_neq_vm_and_vd_neq_vs2, 0},
+{"vrgather.vi",0, INSN_CLASS_XTHEADVECTOR, "Vd,Vt,VjVm", MATCH_VRGATHERVI, MASK_VRGATHERVI, match_vd_neq_vm_and_vd_neq_vs2, INSN_ALIAS},
+{"vrgather.vi",    0, INSN_CLASS_V, "Vd,Vt,VjVm", MATCH_VRGATHERVI, MASK_VRGATHERVI, match_vd_neq_vm_and_vd_neq_vs2, 0},
+{"vrgatherei16.vv",0, INSN_CLASS_V, "Vd,Vt,VsVm", MATCH_VRGATHEREI16VV, MASK_VRGATHEREI16VV, match_vd_neq_vm, 0},
 
-{"vcompress.vm",0, INSN_CLASS_XTHEADVECTOR, "Vd,Vt,Vs", MATCH_VCOMPRESSVM, MASK_VCOMPRESSVM, match_opcode, INSN_ALIAS},
-{"vcompress.vm",0, INSN_CLASS_V, "Vd,Vt,Vs", MATCH_VCOMPRESSVM, MASK_VCOMPRESSVM, match_opcode, 0},
+{"vcompress.vm",0, INSN_CLASS_XTHEADVECTOR, "Vd,Vt,Vs", MATCH_VCOMPRESSVM, MASK_VCOMPRESSVM, match_vd_neq_vm_and_vd_neq_vs1_vs2, INSN_ALIAS},
+{"vcompress.vm",0, INSN_CLASS_V, "Vd,Vt,Vs", MATCH_VCOMPRESSVM, MASK_VCOMPRESSVM, match_vd_neq_vm_and_vd_neq_vs1_vs2, 0},
 
 {"vmv1r.v",    0, INSN_CLASS_V, "Vd,Vt", MATCH_VMV1RV, MASK_VMV1RV, match_opcode, 0},
 {"vmv2r.v",    0, INSN_CLASS_V, "Vd,Vt", MATCH_VMV2RV, MASK_VMV2RV, match_opcode, 0},
@@ -2605,67 +2975,80 @@ const struct riscv_opcode riscv_opcodes[] =
 {"vmv8r.v",    0, INSN_CLASS_V, "Vd,Vt", MATCH_VMV8RV, MASK_VMV8RV, match_opcode, 0},
 
 /* Zvfbfmin instructions.  */
-{"vfncvtbf16.f.f.w", 0, INSN_CLASS_ZVFBFMIN, "Vd,VtVm", MATCH_VFNCVTBF16_F_F_W, MASK_VFNCVTBF16_F_F_W, match_opcode, 0},
-{"vfwcvtbf16.f.f.v", 0, INSN_CLASS_ZVFBFMIN, "Vd,VtVm", MATCH_VFWCVTBF16_F_F_V, MASK_VFWCVTBF16_F_F_V, match_opcode, 0},
+{"vfncvtbf16.f.f.w", 0, INSN_CLASS_ZVFBFMIN, "Vd,VtVm", MATCH_VFNCVTBF16_F_F_W, MASK_VFNCVTBF16_F_F_W, match_vd_neq_vm, 0},
+{"vfwcvtbf16.f.f.v", 0, INSN_CLASS_ZVFBFMIN, "Vd,VtVm", MATCH_VFWCVTBF16_F_F_V, MASK_VFWCVTBF16_F_F_V, match_vd_neq_vm_and_vd_neq_vs2, 0},
 
 /* Zvfbfwma instructions.  */
-{"vfwmaccbf16.vf",  0, INSN_CLASS_ZVFBFWMA, "Vd,S,VtVm",  MATCH_VFWMACCBF16_VF, MASK_VFWMACCBF16_VF, match_opcode, 0},
-{"vfwmaccbf16.vv",  0, INSN_CLASS_ZVFBFWMA, "Vd,Vs,VtVm", MATCH_VFWMACCBF16_VV, MASK_VFWMACCBF16_VV, match_opcode, 0},
+{"vfwmaccbf16.vf",  0, INSN_CLASS_ZVFBFWMA, "Vd,S,VtVm",  MATCH_VFWMACCBF16_VF, MASK_VFWMACCBF16_VF, match_vd_neq_vm_and_vd_neq_vs2, 0},
+{"vfwmaccbf16.vv",  0, INSN_CLASS_ZVFBFWMA, "Vd,Vs,VtVm", MATCH_VFWMACCBF16_VV, MASK_VFWMACCBF16_VV, match_vd_neq_vm_and_vd_neq_vs1_vs2, 0},
 
 /* Zvbb/Zvkb instructions.  */
-{"vandn.vv",   0, INSN_CLASS_ZVKB, "Vd,Vt,VsVm", MATCH_VANDN_VV, MASK_VANDN_VV, match_opcode, 0},
-{"vandn.vx",   0, INSN_CLASS_ZVKB, "Vd,Vt,sVm", MATCH_VANDN_VX, MASK_VANDN_VX, match_opcode, 0},
-{"vbrev.v",   0, INSN_CLASS_ZVBB, "Vd,VtVm", MATCH_VBREV_V, MASK_VBREV_V, match_opcode, 0},
-{"vbrev8.v",   0, INSN_CLASS_ZVKB, "Vd,VtVm", MATCH_VBREV8_V, MASK_VBREV8_V, match_opcode, 0},
-{"vrev8.v",   0, INSN_CLASS_ZVKB, "Vd,VtVm", MATCH_VREV8_V, MASK_VREV8_V, match_opcode, 0},
-{"vclz.v",   0, INSN_CLASS_ZVBB, "Vd,VtVm", MATCH_VCLZ_V, MASK_VCLZ_V, match_opcode, 0},
-{"vctz.v",   0, INSN_CLASS_ZVBB, "Vd,VtVm", MATCH_VCTZ_V, MASK_VCTZ_V, match_opcode, 0},
-{"vcpop.v",   0, INSN_CLASS_ZVBB, "Vd,VtVm", MATCH_VCPOP_V, MASK_VCPOP_V, match_opcode, 0},
-{"vrol.vv",    0, INSN_CLASS_ZVKB, "Vd,Vt,VsVm", MATCH_VROL_VV, MASK_VROL_VV, match_opcode, 0},
-{"vrol.vx",    0, INSN_CLASS_ZVKB, "Vd,Vt,sVm", MATCH_VROL_VX, MASK_VROL_VX, match_opcode, 0},
-{"vror.vv",    0, INSN_CLASS_ZVKB, "Vd,Vt,VsVm", MATCH_VROR_VV, MASK_VROR_VV, match_opcode, 0},
-{"vror.vx",    0, INSN_CLASS_ZVKB, "Vd,Vt,sVm", MATCH_VROR_VX, MASK_VROR_VX, match_opcode, 0},
-{"vror.vi",    0, INSN_CLASS_ZVKB, "Vd,Vt,VlVm", MATCH_VROR_VI, MASK_VROR_VI, match_opcode, 0},
-{"vwsll.vv",    0, INSN_CLASS_ZVBB, "Vd,Vt,VsVm", MATCH_VWSLL_VV, MASK_VWSLL_VV, match_opcode, 0},
-{"vwsll.vx",    0, INSN_CLASS_ZVBB, "Vd,Vt,sVm", MATCH_VWSLL_VX, MASK_VWSLL_VX, match_opcode, 0},
-{"vwsll.vi",    0, INSN_CLASS_ZVBB, "Vd,Vt,VjVm", MATCH_VWSLL_VI, MASK_VWSLL_VI, match_opcode, 0},
+{"vandn.vv",   0, INSN_CLASS_ZVKB, "Vd,Vt,VsVm", MATCH_VANDN_VV, MASK_VANDN_VV, match_vd_neq_vm, 0},
+{"vandn.vx",   0, INSN_CLASS_ZVKB, "Vd,Vt,sVm", MATCH_VANDN_VX, MASK_VANDN_VX, match_vd_neq_vm, 0},
+{"vbrev.v",   0, INSN_CLASS_ZVBB, "Vd,VtVm", MATCH_VBREV_V, MASK_VBREV_V, match_vd_neq_vm, 0},
+{"vbrev8.v",   0, INSN_CLASS_ZVKB, "Vd,VtVm", MATCH_VBREV8_V, MASK_VBREV8_V, match_vd_neq_vm, 0},
+{"vrev8.v",   0, INSN_CLASS_ZVKB, "Vd,VtVm", MATCH_VREV8_V, MASK_VREV8_V, match_vd_neq_vm, 0},
+{"vclz.v",   0, INSN_CLASS_ZVBB, "Vd,VtVm", MATCH_VCLZ_V, MASK_VCLZ_V, match_vd_neq_vm, 0},
+{"vctz.v",   0, INSN_CLASS_ZVBB, "Vd,VtVm", MATCH_VCTZ_V, MASK_VCTZ_V, match_vd_neq_vm, 0},
+{"vcpop.v",   0, INSN_CLASS_ZVBB, "Vd,VtVm", MATCH_VCPOP_V, MASK_VCPOP_V, match_vd_neq_vm, 0},
+{"vrol.vv",    0, INSN_CLASS_ZVKB, "Vd,Vt,VsVm", MATCH_VROL_VV, MASK_VROL_VV, match_vd_neq_vm, 0},
+{"vrol.vx",    0, INSN_CLASS_ZVKB, "Vd,Vt,sVm", MATCH_VROL_VX, MASK_VROL_VX, match_vd_neq_vm, 0},
+{"vror.vv",    0, INSN_CLASS_ZVKB, "Vd,Vt,VsVm", MATCH_VROR_VV, MASK_VROR_VV, match_vd_neq_vm, 0},
+{"vror.vx",    0, INSN_CLASS_ZVKB, "Vd,Vt,sVm", MATCH_VROR_VX, MASK_VROR_VX, match_vd_neq_vm, 0},
+{"vror.vi",    0, INSN_CLASS_ZVKB, "Vd,Vt,VlVm", MATCH_VROR_VI, MASK_VROR_VI, match_vd_neq_vm, 0},
+{"vwsll.vv",    0, INSN_CLASS_ZVBB, "Vd,Vt,VsVm", MATCH_VWSLL_VV, MASK_VWSLL_VV, match_vd_neq_vm_and_vd_neq_vs1_vs2, 0},
+{"vwsll.vx",    0, INSN_CLASS_ZVBB, "Vd,Vt,sVm", MATCH_VWSLL_VX, MASK_VWSLL_VX, match_vd_neq_vm_and_vd_neq_vs2, 0},
+{"vwsll.vi",    0, INSN_CLASS_ZVBB, "Vd,Vt,VjVm", MATCH_VWSLL_VI, MASK_VWSLL_VI, match_vd_neq_vm_and_vd_neq_vs2, 0},
 
 /* Zvbc instructions.  */
-{"vclmul.vv",   0, INSN_CLASS_ZVBC, "Vd,Vt,VsVm", MATCH_VCLMUL_VV, MASK_VCLMUL_VV, match_opcode, 0},
-{"vclmul.vx",   0, INSN_CLASS_ZVBC, "Vd,Vt,sVm", MATCH_VCLMUL_VX, MASK_VCLMUL_VX, match_opcode, 0},
-{"vclmulh.vv",   0, INSN_CLASS_ZVBC, "Vd,Vt,VsVm", MATCH_VCLMULH_VV, MASK_VCLMULH_VV, match_opcode, 0},
-{"vclmulh.vx",   0, INSN_CLASS_ZVBC, "Vd,Vt,sVm", MATCH_VCLMULH_VX, MASK_VCLMULH_VX, match_opcode, 0},
+{"vclmul.vv",   0, INSN_CLASS_ZVBC_OR_ZVBC32E, "Vd,Vt,VsVm", MATCH_VCLMUL_VV, MASK_VCLMUL_VV, match_vd_neq_vm, 0},
+{"vclmul.vx",   0, INSN_CLASS_ZVBC_OR_ZVBC32E, "Vd,Vt,sVm", MATCH_VCLMUL_VX, MASK_VCLMUL_VX, match_vd_neq_vm, 0},
+{"vclmulh.vv",   0, INSN_CLASS_ZVBC_OR_ZVBC32E, "Vd,Vt,VsVm", MATCH_VCLMULH_VV, MASK_VCLMULH_VV, match_vd_neq_vm, 0},
+{"vclmulh.vx",   0, INSN_CLASS_ZVBC_OR_ZVBC32E, "Vd,Vt,sVm", MATCH_VCLMULH_VX, MASK_VCLMULH_VX, match_vd_neq_vm, 0},
 
 /* Zvkg instructions.  */
 {"vghsh.vv",   0, INSN_CLASS_ZVKG, "Vd,Vt,Vs", MATCH_VGHSH_VV, MASK_VGHSH_VV, match_opcode, 0},
 {"vgmul.vv",   0, INSN_CLASS_ZVKG, "Vd,Vt", MATCH_VGMUL_VV, MASK_VGMUL_VV, match_opcode, 0},
 
+/* Zvkgs instructions.  */
+{"vghsh.vs",   0, INSN_CLASS_ZVKGS, "Vd,Vt,Vs", MATCH_VGHSH_VS, MASK_VGHSH_VS, match_vd_neq_vs2, 0},
+{"vgmul.vs",   0, INSN_CLASS_ZVKGS, "Vd,Vt", MATCH_VGMUL_VS, MASK_VGMUL_VS, match_vd_neq_vs2, 0},
+
 /* Zvkned instructions.  */
 {"vaesdf.vv",   0, INSN_CLASS_ZVKNED, "Vd,Vt", MATCH_VAESDF_VV, MASK_VAESDF_VV, match_opcode, 0},
-{"vaesdf.vs",   0, INSN_CLASS_ZVKNED, "Vd,Vt", MATCH_VAESDF_VS, MASK_VAESDF_VV, match_opcode, 0},
+{"vaesdf.vs",   0, INSN_CLASS_ZVKNED, "Vd,Vt", MATCH_VAESDF_VS, MASK_VAESDF_VV, match_vd_neq_vs2, 0},
 {"vaesdm.vv",   0, INSN_CLASS_ZVKNED, "Vd,Vt", MATCH_VAESDM_VV, MASK_VAESDM_VV, match_opcode, 0},
-{"vaesdm.vs",   0, INSN_CLASS_ZVKNED, "Vd,Vt", MATCH_VAESDM_VS, MASK_VAESDM_VV, match_opcode, 0},
+{"vaesdm.vs",   0, INSN_CLASS_ZVKNED, "Vd,Vt", MATCH_VAESDM_VS, MASK_VAESDM_VV, match_vd_neq_vs2, 0},
 {"vaesef.vv",   0, INSN_CLASS_ZVKNED, "Vd,Vt", MATCH_VAESEF_VV, MASK_VAESEF_VV, match_opcode, 0},
-{"vaesef.vs",   0, INSN_CLASS_ZVKNED, "Vd,Vt", MATCH_VAESEF_VS, MASK_VAESEF_VV, match_opcode, 0},
+{"vaesef.vs",   0, INSN_CLASS_ZVKNED, "Vd,Vt", MATCH_VAESEF_VS, MASK_VAESEF_VV, match_vd_neq_vs2, 0},
 {"vaesem.vv",   0, INSN_CLASS_ZVKNED, "Vd,Vt", MATCH_VAESEM_VV, MASK_VAESEM_VV, match_opcode, 0},
-{"vaesem.vs",   0, INSN_CLASS_ZVKNED, "Vd,Vt", MATCH_VAESEM_VS, MASK_VAESEM_VV, match_opcode, 0},
+{"vaesem.vs",   0, INSN_CLASS_ZVKNED, "Vd,Vt", MATCH_VAESEM_VS, MASK_VAESEM_VV, match_vd_neq_vs2, 0},
 {"vaeskf1.vi",   0, INSN_CLASS_ZVKNED, "Vd,Vt,Vj", MATCH_VAESKF1_VI, MASK_VAESKF1_VI, match_opcode, 0},
 {"vaeskf2.vi",   0, INSN_CLASS_ZVKNED, "Vd,Vt,Vj", MATCH_VAESKF2_VI, MASK_VAESKF2_VI, match_opcode, 0},
-{"vaesz.vs",     0, INSN_CLASS_ZVKNED, "Vd,Vt", MATCH_VAESZ_VS, MASK_VAESZ_VS, match_opcode, 0},
+{"vaesz.vs",     0, INSN_CLASS_ZVKNED, "Vd,Vt", MATCH_VAESZ_VS, MASK_VAESZ_VS, match_vd_neq_vs2, 0},
 
 /* Zvknh[a,b] instructions.  */
-{"vsha2ch.vv",  0, INSN_CLASS_ZVKNHA_OR_ZVKNHB, "Vd,Vt,Vs", MATCH_VSHA2CH_VV, MASK_VSHA2CH_VV, match_opcode, 0},
-{"vsha2cl.vv",  0, INSN_CLASS_ZVKNHA_OR_ZVKNHB, "Vd,Vt,Vs", MATCH_VSHA2CL_VV, MASK_VSHA2CL_VV, match_opcode, 0},
-{"vsha2ms.vv",  0, INSN_CLASS_ZVKNHA_OR_ZVKNHB, "Vd,Vt,Vs", MATCH_VSHA2MS_VV, MASK_VSHA2MS_VV, match_opcode, 0},
+{"vsha2ch.vv",  0, INSN_CLASS_ZVKNHA_OR_ZVKNHB, "Vd,Vt,Vs", MATCH_VSHA2CH_VV, MASK_VSHA2CH_VV, match_vd_neq_vs1_vs2, 0},
+{"vsha2cl.vv",  0, INSN_CLASS_ZVKNHA_OR_ZVKNHB, "Vd,Vt,Vs", MATCH_VSHA2CL_VV, MASK_VSHA2CL_VV, match_vd_neq_vs1_vs2, 0},
+{"vsha2ms.vv",  0, INSN_CLASS_ZVKNHA_OR_ZVKNHB, "Vd,Vt,Vs", MATCH_VSHA2MS_VV, MASK_VSHA2MS_VV, match_vd_neq_vs1_vs2, 0},
 
 /* Zvksed instructions.  */
 {"vsm4k.vi",     0, INSN_CLASS_ZVKSED, "Vd,Vt,Vj", MATCH_VSM4K_VI, MASK_VSM4K_VI, match_opcode, 0},
-{"vsm4r.vv",     0, INSN_CLASS_ZVKSED, "Vd,Vt", MATCH_VSM4R_VV, MASK_VSM4R_VV, match_opcode, 0},
-{"vsm4r.vs",     0, INSN_CLASS_ZVKSED, "Vd,Vt", MATCH_VSM4R_VS, MASK_VSM4R_VS, match_opcode, 0},
+{"vsm4r.vv",     0, INSN_CLASS_ZVKSED, "Vd,Vt", MATCH_VSM4R_VV, MASK_VSM4R_VV, match_vd_neq_vs2, 0},
+{"vsm4r.vs",     0, INSN_CLASS_ZVKSED, "Vd,Vt", MATCH_VSM4R_VS, MASK_VSM4R_VS, match_vd_neq_vs2, 0},
 
 /* Zvksh instructions.  */
-{"vsm3c.vi",     0, INSN_CLASS_ZVKSH, "Vd,Vt,Vj", MATCH_VSM3C_VI, MASK_VSM3C_VI, match_opcode, 0},
-{"vsm3me.vv",    0, INSN_CLASS_ZVKSH, "Vd,Vt,Vs", MATCH_VSM3ME_VV, MASK_VSM3ME_VV, match_opcode, 0},
+{"vsm3c.vi",     0, INSN_CLASS_ZVKSH, "Vd,Vt,Vj", MATCH_VSM3C_VI, MASK_VSM3C_VI, match_vd_neq_vs2, 0},
+{"vsm3me.vv",    0, INSN_CLASS_ZVKSH, "Vd,Vt,Vs", MATCH_VSM3ME_VV, MASK_VSM3ME_VV, match_vd_neq_vs2, 0},
+
+/* Zvqdotq instructions.  */
+{"vqdot.vv",     0, INSN_CLASS_ZVQDOTQ, "Vd,Vt,VsVm", MATCH_VQDOT_VV, MASK_VQDOT_VV, match_vd_neq_vm, 0},
+{"vqdot.vx",     0, INSN_CLASS_ZVQDOTQ, "Vd,Vt,sVm", MATCH_VQDOT_VX, MASK_VQDOT_VX, match_vd_neq_vm, 0},
+{"vqdotu.vv",    0, INSN_CLASS_ZVQDOTQ, "Vd,Vt,VsVm", MATCH_VQDOTU_VV, MASK_VQDOTU_VV, match_vd_neq_vm, 0},
+{"vqdotu.vx",    0, INSN_CLASS_ZVQDOTQ, "Vd,Vt,sVm", MATCH_VQDOTU_VX, MASK_VQDOTU_VX, match_vd_neq_vm, 0},
+{"vqdotsu.vv",   0, INSN_CLASS_ZVQDOTQ, "Vd,Vt,VsVm", MATCH_VQDOTSU_VV, MASK_VQDOTSU_VV, match_vd_neq_vm, 0},
+{"vqdotsu.vx",   0, INSN_CLASS_ZVQDOTQ, "Vd,Vt,sVm", MATCH_VQDOTSU_VX, MASK_VQDOTSU_VX, match_vd_neq_vm, 0},
+{"vqdotus.vx",   0, INSN_CLASS_ZVQDOTQ, "Vd,Vt,sVm", MATCH_VQDOTUS_VX, MASK_VQDOTUS_VX, match_vd_neq_vm, 0},
 
 /* ZCB instructions.  */
 {"c.lbu",      0, INSN_CLASS_ZCB, "Ct,Wcb(Cs)", MATCH_C_LBU, MASK_C_LBU, match_opcode, INSN_DREF|INSN_1_BYTE },
@@ -2682,6 +3065,10 @@ const struct riscv_opcode riscv_opcodes[] =
 {"c.zext.b",   0, INSN_CLASS_ZCB, "Cs",  MATCH_C_ZEXT_B, MASK_C_ZEXT_B, match_opcode, 0 },
 {"c.sext.w",  64, INSN_CLASS_ZCB, "d",  MATCH_C_ADDIW, MASK_C_ADDIW|MASK_RVC_IMM, match_rd_nonzero, INSN_ALIAS },
 
+/* Zicfiss c.sspsuh and c.sspopchk.  */
+{"c.sspush",    0,  INSN_CLASS_ZICFISS_AND_ZCMOP, "d",  MATCH_C_SSPUSH,  MASK_C_SSPUSH, match_rd_is_x1, 0 },
+{"c.sspopchk",  0,  INSN_CLASS_ZICFISS_AND_ZCMOP, "d",  MATCH_C_SSPOPCHK,  MASK_C_SSPOPCHK, match_rd_is_x5, 0 },
+
 /* Zcmop instructions.  */
 {"c.mop.1",     0,  INSN_CLASS_ZCMOP, "",  MATCH_C_MOP_1,  MASK_C_MOP_1, match_opcode, 0 },
 {"c.mop.3",     0,  INSN_CLASS_ZCMOP, "",  MATCH_C_MOP_3,  MASK_C_MOP_3, match_opcode, 0 },
@@ -2691,7 +3078,6 @@ const struct riscv_opcode riscv_opcodes[] =
 {"c.mop.11",    0,  INSN_CLASS_ZCMOP, "",  MATCH_C_MOP_11, MASK_C_MOP_11, match_opcode, 0 },
 {"c.mop.13",    0,  INSN_CLASS_ZCMOP, "",  MATCH_C_MOP_13, MASK_C_MOP_13, match_opcode, 0 },
 {"c.mop.15",    0,  INSN_CLASS_ZCMOP, "",  MATCH_C_MOP_15, MASK_C_MOP_15, match_opcode, 0 },
-
 /* Zcmp instructions.  */
 {"cm.push",    0,  INSN_CLASS_ZCMP, "{Wcr},Wcp",  MATCH_CM_PUSH, MASK_CM_PUSH, match_opcode, 0 },
 {"cm.pop",     0,  INSN_CLASS_ZCMP, "{Wcr},Wcp",  MATCH_CM_POP, MASK_CM_POP, match_opcode, 0 },
@@ -2736,6 +3122,13 @@ const struct riscv_opcode riscv_opcodes[] =
 
 /* Smctr/Ssctr instruction.  */
 {"sctrclr", 0, INSN_CLASS_SMCTR_OR_SSCTR, "", MATCH_SCTRCLR, MASK_SCTRCLR, match_opcode, 0 },
+
+/* Smrnmi instruction.  */
+{"mnret", 0, INSN_CLASS_SMRNMI, "", MATCH_MNRET, MASK_MNRET, match_opcode, 0 },
+
+/* Smsdid instruction.  */
+{"mfence.spa", 0, INSN_CLASS_SMSDID, "s,t", MATCH_MFENCE_SPA, MASK_MFENCE_SPA, match_opcode, 0 },
+{"minval.spa", 0, INSN_CLASS_SMSDID, "s,t", MATCH_MINVAL_SPA, MASK_MINVAL_SPA, match_opcode, 0 },
 
 /* Svinval instructions.  */
 {"sinval.vma",      0, INSN_CLASS_SVINVAL, "s,t", MATCH_SINVAL_VMA, MASK_SINVAL_VMA, match_opcode, 0 },
@@ -2848,7 +3241,7 @@ const struct riscv_opcode riscv_opcodes[] =
 {"th.dcache.cpa",    0, INSN_CLASS_XTHEADCMO,   "s",  MATCH_TH_DCACHE_CPA,    MASK_TH_DCACHE_CPA,    match_opcode, 0},
 {"th.dcache.cipa",   0, INSN_CLASS_XTHEADCMO,   "s",  MATCH_TH_DCACHE_CIPA,   MASK_TH_DCACHE_CIPA,   match_opcode, 0},
 {"th.dcache.ipa",    0, INSN_CLASS_XTHEADCMO,   "s",  MATCH_TH_DCACHE_IPA,    MASK_TH_DCACHE_IPA,    match_opcode, 0},
-{"th.dcache.cva",    0, INSN_CLASS_XTHEADCMO,   "s",  MATCH_TH_DCACHE_CVA,    MASK_TH_DCACHE_CVA,    match_opcode, 0 },
+{"th.dcache.cva",    0, INSN_CLASS_XTHEADCMO,   "s",  MATCH_TH_DCACHE_CVA,    MASK_TH_DCACHE_CVA,    match_opcode, 0},
 {"th.dcache.civa",   0, INSN_CLASS_XTHEADCMO,   "s",  MATCH_TH_DCACHE_CIVA,   MASK_TH_DCACHE_CIVA,   match_opcode, 0},
 {"th.dcache.iva",    0, INSN_CLASS_XTHEADCMO,   "s",  MATCH_TH_DCACHE_IVA,    MASK_TH_DCACHE_IVA,    match_opcode, 0},
 {"th.dcache.csw",    0, INSN_CLASS_XTHEADCMO,   "s",  MATCH_TH_DCACHE_CSW,    MASK_TH_DCACHE_CSW,    match_opcode, 0},
@@ -2961,64 +3354,64 @@ const struct riscv_opcode riscv_opcodes[] =
 /* Vendor-specific (T-Head) XTheadVector instructions.  */
 {"th.vsetvl",     0, INSN_CLASS_XTHEADVECTOR,  "d,s,t", MATCH_VSETVL, MASK_VSETVL, match_opcode, 0 },
 {"th.vsetvli",    0, INSN_CLASS_XTHEADVECTOR,  "d,s,XtVc", MATCH_VSETVLI, MASK_VSETVLI, match_opcode, 0 },
-{"vlb.v",      0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_TH_VLBV, MASK_TH_VLBV, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vlb.v",      0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_TH_VLBV, MASK_TH_VLBV, match_opcode, INSN_DREF },
-{"vlh.v",      0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_TH_VLHV, MASK_TH_VLHV, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vlh.v",      0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_TH_VLHV, MASK_TH_VLHV, match_opcode, INSN_DREF },
-{"vlw.v",      0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_TH_VLWV, MASK_TH_VLWV, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vlw.v",      0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_TH_VLWV, MASK_TH_VLWV, match_opcode, INSN_DREF },
-{"vlbu.v",     0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLE8V, MASK_VLE8V, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vlbu.v",     0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLE8V, MASK_VLE8V, match_opcode, INSN_DREF },
-{"vlhu.v",     0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLE16V, MASK_VLE16V, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vlhu.v",     0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLE16V, MASK_VLE16V, match_opcode, INSN_DREF },
-{"vlwu.v",     0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLE32V, MASK_VLE32V, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vlwu.v",     0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLE32V, MASK_VLE32V, match_opcode, INSN_DREF },
-{"vle.v",      0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLE64V, MASK_VLE64V, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vle.v",      0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLE64V, MASK_VLE64V, match_opcode, INSN_DREF },
+{"vlb.v",      0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_TH_VLBV, MASK_TH_VLBV, match_vd_neq_vm, INSN_DREF|INSN_ALIAS },
+{"th.vlb.v",      0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_TH_VLBV, MASK_TH_VLBV, match_vd_neq_vm, INSN_DREF },
+{"vlh.v",      0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_TH_VLHV, MASK_TH_VLHV, match_vd_neq_vm, INSN_DREF|INSN_ALIAS },
+{"th.vlh.v",      0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_TH_VLHV, MASK_TH_VLHV, match_vd_neq_vm, INSN_DREF },
+{"vlw.v",      0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_TH_VLWV, MASK_TH_VLWV, match_vd_neq_vm, INSN_DREF|INSN_ALIAS },
+{"th.vlw.v",      0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_TH_VLWV, MASK_TH_VLWV, match_vd_neq_vm, INSN_DREF },
+{"vlbu.v",     0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLE8V, MASK_VLE8V, match_vd_neq_vm, INSN_DREF|INSN_ALIAS },
+{"th.vlbu.v",     0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLE8V, MASK_VLE8V, match_vd_neq_vm, INSN_DREF },
+{"vlhu.v",     0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLE16V, MASK_VLE16V, match_vd_neq_vm, INSN_DREF|INSN_ALIAS },
+{"th.vlhu.v",     0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLE16V, MASK_VLE16V, match_vd_neq_vm, INSN_DREF },
+{"vlwu.v",     0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLE32V, MASK_VLE32V, match_vd_neq_vm, INSN_DREF|INSN_ALIAS },
+{"th.vlwu.v",     0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLE32V, MASK_VLE32V, match_vd_neq_vm, INSN_DREF },
+{"vle.v",      0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLE64V, MASK_VLE64V, match_vd_neq_vm, INSN_DREF|INSN_ALIAS },
+{"th.vle.v",      0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLE64V, MASK_VLE64V, match_vd_neq_vm, INSN_DREF },
 {"vsb.v",      0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VSE8V, MASK_VSE8V, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vsb.v",      0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VSE8V, MASK_VSE8V, match_opcode, INSN_DREF },
+{"th.vsb.v",      0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VSE8V, MASK_VSE8V, match_vd_neq_vm, INSN_DREF },
 {"vsh.v",      0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VSE16V, MASK_VSE16V, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vsh.v",      0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VSE16V, MASK_VSE16V, match_opcode, INSN_DREF },
+{"th.vsh.v",      0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VSE16V, MASK_VSE16V, match_vd_neq_vm, INSN_DREF },
 {"vsw.v",      0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VSE32V, MASK_VSE32V, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vsw.v",      0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VSE32V, MASK_VSE32V, match_opcode, INSN_DREF },
+{"th.vsw.v",      0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VSE32V, MASK_VSE32V, match_vd_neq_vm, INSN_DREF },
 {"vse.v",      0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VSE64V, MASK_VSE64V, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vse.v",      0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VSE64V, MASK_VSE64V, match_opcode, INSN_DREF },
-{"vlsb.v",     0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_TH_VLSBV, MASK_TH_VLSBV, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vlsb.v",     0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_TH_VLSBV, MASK_TH_VLSBV, match_opcode, INSN_DREF },
-{"vlsh.v",     0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_TH_VLSHV, MASK_TH_VLSHV, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vlsh.v",     0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_TH_VLSHV, MASK_TH_VLSHV, match_opcode, INSN_DREF },
-{"vlsw.v",     0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_TH_VLSWV, MASK_TH_VLSWV, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vlsw.v",     0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_TH_VLSWV, MASK_TH_VLSWV, match_opcode, INSN_DREF },
-{"vlsbu.v",    0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VLSE8V, MASK_VLSE8V, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vlsbu.v",    0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VLSE8V, MASK_VLSE8V, match_opcode, INSN_DREF },
-{"vlshu.v",    0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VLSE16V, MASK_VLSE16V, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vlshu.v",    0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VLSE16V, MASK_VLSE16V, match_opcode, INSN_DREF },
-{"vlswu.v",    0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VLSE32V, MASK_VLSE32V, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vlswu.v",    0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VLSE32V, MASK_VLSE32V, match_opcode, INSN_DREF },
-{"vlse.v",     0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VLSE64V, MASK_VLSE64V, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vlse.v",     0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VLSE64V, MASK_VLSE64V, match_opcode, INSN_DREF },
-{"vssb.v",     0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VSSE8V, MASK_VSSE8V, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vssb.v",     0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VSSE8V, MASK_VSSE8V, match_opcode, INSN_DREF },
-{"vssh.v",     0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VSSE16V, MASK_VSSE16V, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vssh.v",     0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VSSE16V, MASK_VSSE16V, match_opcode, INSN_DREF },
-{"vssw.v",     0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VSSE32V, MASK_VSSE32V, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vssw.v",     0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VSSE32V, MASK_VSSE32V, match_opcode, INSN_DREF },
-{"vsse.v",     0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VSSE64V, MASK_VSSE64V, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vsse.v",     0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VSSE64V, MASK_VSSE64V, match_opcode, INSN_DREF },
-{"vlxb.v",     0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_TH_VLXBV, MASK_TH_VLXBV, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vlxb.v",     0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_TH_VLXBV, MASK_TH_VLXBV, match_opcode, INSN_DREF },
-{"vlxh.v",     0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_TH_VLXHV, MASK_TH_VLXHV, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vlxh.v",     0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_TH_VLXHV, MASK_TH_VLXHV, match_opcode, INSN_DREF },
-{"vlxw.v",     0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_TH_VLXWV, MASK_TH_VLXWV, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vlxw.v",     0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_TH_VLXWV, MASK_TH_VLXWV, match_opcode, INSN_DREF },
-{"vlxbu.v",    0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_VLOXEI8V, MASK_VLOXEI8V, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vlxbu.v",    0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_VLOXEI8V, MASK_VLOXEI8V, match_opcode, INSN_DREF },
-{"vlxhu.v",    0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_VLOXEI16V, MASK_VLOXEI16V, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vlxhu.v",    0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_VLOXEI16V, MASK_VLOXEI16V, match_opcode, INSN_DREF },
-{"vlxwu.v",    0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_VLOXEI32V, MASK_VLOXEI32V, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vlxwu.v",    0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_VLOXEI32V, MASK_VLOXEI32V, match_opcode, INSN_DREF },
-{"vlxe.v",     0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_VLOXEI64V, MASK_VLOXEI64V, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vlxe.v",     0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_VLOXEI64V, MASK_VLOXEI64V, match_opcode, INSN_DREF },
+{"th.vse.v",      0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VSE64V, MASK_VSE64V, match_vd_neq_vm, INSN_DREF },
+{"vlsb.v",     0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_TH_VLSBV, MASK_TH_VLSBV, match_vd_neq_vm, INSN_DREF|INSN_ALIAS },
+{"th.vlsb.v",     0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_TH_VLSBV, MASK_TH_VLSBV, match_vd_neq_vm, INSN_DREF },
+{"vlsh.v",     0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_TH_VLSHV, MASK_TH_VLSHV, match_vd_neq_vm, INSN_DREF|INSN_ALIAS },
+{"th.vlsh.v",     0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_TH_VLSHV, MASK_TH_VLSHV, match_vd_neq_vm, INSN_DREF },
+{"vlsw.v",     0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_TH_VLSWV, MASK_TH_VLSWV, match_vd_neq_vm, INSN_DREF|INSN_ALIAS },
+{"th.vlsw.v",     0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_TH_VLSWV, MASK_TH_VLSWV, match_vd_neq_vm, INSN_DREF },
+{"vlsbu.v",    0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VLSE8V, MASK_VLSE8V, match_vd_neq_vm, INSN_DREF|INSN_ALIAS },
+{"th.vlsbu.v",    0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VLSE8V, MASK_VLSE8V, match_vd_neq_vm, INSN_DREF },
+{"vlshu.v",    0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VLSE16V, MASK_VLSE16V, match_vd_neq_vm, INSN_DREF|INSN_ALIAS },
+{"th.vlshu.v",    0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VLSE16V, MASK_VLSE16V, match_vd_neq_vm, INSN_DREF },
+{"vlswu.v",    0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VLSE32V, MASK_VLSE32V, match_vd_neq_vm, INSN_DREF|INSN_ALIAS },
+{"th.vlswu.v",    0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VLSE32V, MASK_VLSE32V, match_vd_neq_vm, INSN_DREF },
+{"vlse.v",     0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VLSE64V, MASK_VLSE64V, match_vd_neq_vm, INSN_DREF|INSN_ALIAS },
+{"th.vlse.v",     0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VLSE64V, MASK_VLSE64V, match_vd_neq_vm, INSN_DREF },
+{"vssb.v",     0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VSSE8V, MASK_VSSE8V, match_vd_neq_vm, INSN_DREF|INSN_ALIAS },
+{"th.vssb.v",     0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VSSE8V, MASK_VSSE8V, match_vd_neq_vm, INSN_DREF },
+{"vssh.v",     0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VSSE16V, MASK_VSSE16V, match_vd_neq_vm, INSN_DREF|INSN_ALIAS },
+{"th.vssh.v",     0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VSSE16V, MASK_VSSE16V, match_vd_neq_vm, INSN_DREF },
+{"vssw.v",     0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VSSE32V, MASK_VSSE32V, match_vd_neq_vm, INSN_DREF|INSN_ALIAS },
+{"th.vssw.v",     0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VSSE32V, MASK_VSSE32V, match_vd_neq_vm, INSN_DREF },
+{"vsse.v",     0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VSSE64V, MASK_VSSE64V, match_vd_neq_vm, INSN_DREF|INSN_ALIAS },
+{"th.vsse.v",     0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VSSE64V, MASK_VSSE64V, match_vd_neq_vm, INSN_DREF },
+{"vlxb.v",     0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_TH_VLXBV, MASK_TH_VLXBV, match_vd_neq_vm, INSN_DREF|INSN_ALIAS },
+{"th.vlxb.v",     0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_TH_VLXBV, MASK_TH_VLXBV, match_vd_neq_vm, INSN_DREF },
+{"vlxh.v",     0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_TH_VLXHV, MASK_TH_VLXHV, match_vd_neq_vm, INSN_DREF|INSN_ALIAS },
+{"th.vlxh.v",     0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_TH_VLXHV, MASK_TH_VLXHV, match_vd_neq_vm, INSN_DREF },
+{"vlxw.v",     0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_TH_VLXWV, MASK_TH_VLXWV, match_vd_neq_vm, INSN_DREF|INSN_ALIAS },
+{"th.vlxw.v",     0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_TH_VLXWV, MASK_TH_VLXWV, match_vd_neq_vm, INSN_DREF },
+{"vlxbu.v",    0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_VLOXEI8V, MASK_VLOXEI8V, match_vd_neq_vm, INSN_DREF|INSN_ALIAS },
+{"th.vlxbu.v",    0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_VLOXEI8V, MASK_VLOXEI8V, match_vd_neq_vm, INSN_DREF },
+{"vlxhu.v",    0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_VLOXEI16V, MASK_VLOXEI16V, match_vd_neq_vm, INSN_DREF|INSN_ALIAS },
+{"th.vlxhu.v",    0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_VLOXEI16V, MASK_VLOXEI16V, match_vd_neq_vm, INSN_DREF },
+{"vlxwu.v",    0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_VLOXEI32V, MASK_VLOXEI32V, match_vd_neq_vm, INSN_DREF|INSN_ALIAS },
+{"th.vlxwu.v",    0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_VLOXEI32V, MASK_VLOXEI32V, match_vd_neq_vm, INSN_DREF },
+{"vlxe.v",     0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_VLOXEI64V, MASK_VLOXEI64V, match_vd_neq_vm, INSN_DREF|INSN_ALIAS },
+{"th.vlxe.v",     0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_VLOXEI64V, MASK_VLOXEI64V, match_vd_neq_vm, INSN_DREF },
 {"vsxb.v",     0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_VSOXEI8V, MASK_VSOXEI8V, match_opcode, INSN_DREF|INSN_ALIAS },
 {"th.vsxb.v",     0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_VSOXEI8V, MASK_VSOXEI8V, match_opcode, INSN_DREF },
 {"vsxh.v",     0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_VSOXEI16V, MASK_VSOXEI16V, match_opcode, INSN_DREF|INSN_ALIAS },
@@ -3035,580 +3428,580 @@ const struct riscv_opcode riscv_opcodes[] =
 {"th.vsuxw.v",    0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_TH_VSUXWV, MASK_TH_VSUXWV, match_opcode, INSN_DREF },
 {"vsuxe.v",    0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_TH_VSUXEV, MASK_TH_VSUXEV, match_opcode, INSN_DREF|INSN_ALIAS },
 {"th.vsuxe.v",    0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_TH_VSUXEV, MASK_TH_VSUXEV, match_opcode, INSN_DREF },
-{"vlbff.v",    0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_TH_VLBFFV, MASK_TH_VLBFFV, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vlbff.v",    0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_TH_VLBFFV, MASK_TH_VLBFFV, match_opcode, INSN_DREF },
-{"vlhff.v",    0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_TH_VLHFFV, MASK_TH_VLHFFV, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vlhff.v",    0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_TH_VLHFFV, MASK_TH_VLHFFV, match_opcode, INSN_DREF },
-{"vlwff.v",    0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_TH_VLWFFV, MASK_TH_VLWFFV, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vlwff.v",    0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_TH_VLWFFV, MASK_TH_VLWFFV, match_opcode, INSN_DREF },
-{"vlbuff.v",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLE8FFV, MASK_VLE8FFV, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vlbuff.v",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLE8FFV, MASK_VLE8FFV, match_opcode, INSN_DREF },
-{"vlhuff.v",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLE16FFV, MASK_VLE16FFV, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vlhuff.v",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLE16FFV, MASK_VLE16FFV, match_opcode, INSN_DREF },
-{"vlwuff.v",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLE32FFV, MASK_VLE32FFV, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vlwuff.v",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLE32FFV, MASK_VLE32FFV, match_opcode, INSN_DREF },
-{"vleff.v",    0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLE64FFV, MASK_VLE64FFV, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vleff.v",    0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLE64FFV, MASK_VLE64FFV, match_opcode, INSN_DREF },
-{"vlseg2b.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_TH_VLSEG2BV, MASK_TH_VLSEG2BV, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vlseg2b.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_TH_VLSEG2BV, MASK_TH_VLSEG2BV, match_opcode, INSN_DREF },
-{"vlseg2h.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_TH_VLSEG2HV, MASK_TH_VLSEG2HV, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vlseg2h.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_TH_VLSEG2HV, MASK_TH_VLSEG2HV, match_opcode, INSN_DREF },
-{"vlseg2w.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_TH_VLSEG2WV, MASK_TH_VLSEG2WV, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vlseg2w.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_TH_VLSEG2WV, MASK_TH_VLSEG2WV, match_opcode, INSN_DREF },
-{"vlseg2bu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLSEG2E8V, MASK_VLSEG2E8V, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vlseg2bu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLSEG2E8V, MASK_VLSEG2E8V, match_opcode, INSN_DREF },
-{"vlseg2hu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLSEG2E16V, MASK_VLSEG2E16V, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vlseg2hu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLSEG2E16V, MASK_VLSEG2E16V, match_opcode, INSN_DREF },
-{"vlseg2wu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLSEG2E32V, MASK_VLSEG2E32V, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vlseg2wu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLSEG2E32V, MASK_VLSEG2E32V, match_opcode, INSN_DREF },
-{"vlseg2e.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLSEG2E64V, MASK_VLSEG2E64V, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vlseg2e.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLSEG2E64V, MASK_VLSEG2E64V, match_opcode, INSN_DREF },
-{"vsseg2b.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VSSEG2E8V, MASK_VSSEG2E8V, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vsseg2b.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VSSEG2E8V, MASK_VSSEG2E8V, match_opcode, INSN_DREF },
-{"vsseg2h.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VSSEG2E16V, MASK_VSSEG2E16V, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vsseg2h.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VSSEG2E16V, MASK_VSSEG2E16V, match_opcode, INSN_DREF },
-{"vsseg2w.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VSSEG2E32V, MASK_VSSEG2E32V, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vsseg2w.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VSSEG2E32V, MASK_VSSEG2E32V, match_opcode, INSN_DREF },
-{"vsseg2e.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VSSEG2E64V, MASK_VSSEG2E64V, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vsseg2e.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VSSEG2E64V, MASK_VSSEG2E64V, match_opcode, INSN_DREF },
-{"vlseg3b.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_TH_VLSEG3BV, MASK_TH_VLSEG3BV, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vlseg3b.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_TH_VLSEG3BV, MASK_TH_VLSEG3BV, match_opcode, INSN_DREF },
-{"vlseg3h.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_TH_VLSEG3HV, MASK_TH_VLSEG3HV, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vlseg3h.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_TH_VLSEG3HV, MASK_TH_VLSEG3HV, match_opcode, INSN_DREF },
-{"vlseg3w.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_TH_VLSEG3WV, MASK_TH_VLSEG3WV, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vlseg3w.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_TH_VLSEG3WV, MASK_TH_VLSEG3WV, match_opcode, INSN_DREF },
-{"vlseg3bu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLSEG3E8V, MASK_VLSEG3E8V, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vlseg3bu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLSEG3E8V, MASK_VLSEG3E8V, match_opcode, INSN_DREF },
-{"vlseg3hu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLSEG3E16V, MASK_VLSEG3E16V, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vlseg3hu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLSEG3E16V, MASK_VLSEG3E16V, match_opcode, INSN_DREF },
-{"vlseg3wu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLSEG3E32V, MASK_VLSEG3E32V, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vlseg3wu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLSEG3E32V, MASK_VLSEG3E32V, match_opcode, INSN_DREF },
-{"vlseg3e.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLSEG3E64V, MASK_VLSEG3E64V, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vlseg3e.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLSEG3E64V, MASK_VLSEG3E64V, match_opcode, INSN_DREF },
-{"vsseg3b.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VSSEG3E8V, MASK_VSSEG3E8V, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vsseg3b.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VSSEG3E8V, MASK_VSSEG3E8V, match_opcode, INSN_DREF },
-{"vsseg3h.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VSSEG3E16V, MASK_VSSEG3E16V, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vsseg3h.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VSSEG3E16V, MASK_VSSEG3E16V, match_opcode, INSN_DREF },
-{"vsseg3w.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VSSEG3E32V, MASK_VSSEG3E32V, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vsseg3w.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VSSEG3E32V, MASK_VSSEG3E32V, match_opcode, INSN_DREF },
-{"vsseg3e.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VSSEG3E64V, MASK_VSSEG3E64V, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vsseg3e.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VSSEG3E64V, MASK_VSSEG3E64V, match_opcode, INSN_DREF },
-{"vlseg4b.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_TH_VLSEG4BV, MASK_TH_VLSEG4BV, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vlseg4b.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_TH_VLSEG4BV, MASK_TH_VLSEG4BV, match_opcode, INSN_DREF },
-{"vlseg4h.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_TH_VLSEG4HV, MASK_TH_VLSEG4HV, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vlseg4h.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_TH_VLSEG4HV, MASK_TH_VLSEG4HV, match_opcode, INSN_DREF },
-{"vlseg4w.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_TH_VLSEG4WV, MASK_TH_VLSEG4WV, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vlseg4w.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_TH_VLSEG4WV, MASK_TH_VLSEG4WV, match_opcode, INSN_DREF },
-{"vlseg4bu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLSEG4E8V, MASK_VLSEG4E8V, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vlseg4bu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLSEG4E8V, MASK_VLSEG4E8V, match_opcode, INSN_DREF },
-{"vlseg4hu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLSEG4E16V, MASK_VLSEG4E16V, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vlseg4hu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLSEG4E16V, MASK_VLSEG4E16V, match_opcode, INSN_DREF },
-{"vlseg4wu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLSEG4E32V, MASK_VLSEG4E32V, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vlseg4wu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLSEG4E32V, MASK_VLSEG4E32V, match_opcode, INSN_DREF },
-{"vlseg4e.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLSEG4E64V, MASK_VLSEG4E64V, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vlseg4e.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLSEG4E64V, MASK_VLSEG4E64V, match_opcode, INSN_DREF },
-{"vsseg4b.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VSSEG4E8V, MASK_VSSEG4E8V, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vsseg4b.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VSSEG4E8V, MASK_VSSEG4E8V, match_opcode, INSN_DREF },
-{"vsseg4h.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VSSEG4E16V, MASK_VSSEG4E16V, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vsseg4h.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VSSEG4E16V, MASK_VSSEG4E16V, match_opcode, INSN_DREF },
-{"vsseg4w.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VSSEG4E32V, MASK_VSSEG4E32V, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vsseg4w.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VSSEG4E32V, MASK_VSSEG4E32V, match_opcode, INSN_DREF },
-{"vsseg4e.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VSSEG4E64V, MASK_VSSEG4E64V, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vsseg4e.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VSSEG4E64V, MASK_VSSEG4E64V, match_opcode, INSN_DREF },
-{"vlseg5b.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_TH_VLSEG5BV, MASK_TH_VLSEG5BV, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vlseg5b.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_TH_VLSEG5BV, MASK_TH_VLSEG5BV, match_opcode, INSN_DREF },
-{"vlseg5h.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_TH_VLSEG5HV, MASK_TH_VLSEG5HV, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vlseg5h.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_TH_VLSEG5HV, MASK_TH_VLSEG5HV, match_opcode, INSN_DREF },
-{"vlseg5w.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_TH_VLSEG5WV, MASK_TH_VLSEG5WV, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vlseg5w.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_TH_VLSEG5WV, MASK_TH_VLSEG5WV, match_opcode, INSN_DREF },
-{"vlseg5bu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLSEG5E8V, MASK_VLSEG5E8V, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vlseg5bu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLSEG5E8V, MASK_VLSEG5E8V, match_opcode, INSN_DREF },
-{"vlseg5hu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLSEG5E16V, MASK_VLSEG5E16V, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vlseg5hu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLSEG5E16V, MASK_VLSEG5E16V, match_opcode, INSN_DREF },
-{"vlseg5wu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLSEG5E32V, MASK_VLSEG5E32V, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vlseg5wu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLSEG5E32V, MASK_VLSEG5E32V, match_opcode, INSN_DREF },
-{"vlseg5e.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLSEG5E64V, MASK_VLSEG5E64V, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vlseg5e.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLSEG5E64V, MASK_VLSEG5E64V, match_opcode, INSN_DREF },
-{"vsseg5b.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VSSEG5E8V, MASK_VSSEG5E8V, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vsseg5b.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VSSEG5E8V, MASK_VSSEG5E8V, match_opcode, INSN_DREF },
-{"vsseg5h.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VSSEG5E16V, MASK_VSSEG5E16V, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vsseg5h.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VSSEG5E16V, MASK_VSSEG5E16V, match_opcode, INSN_DREF },
-{"vsseg5w.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VSSEG5E32V, MASK_VSSEG5E32V, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vsseg5w.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VSSEG5E32V, MASK_VSSEG5E32V, match_opcode, INSN_DREF },
-{"vsseg5e.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VSSEG5E64V, MASK_VSSEG5E64V, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vsseg5e.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VSSEG5E64V, MASK_VSSEG5E64V, match_opcode, INSN_DREF },
-{"vlseg6b.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_TH_VLSEG6BV, MASK_TH_VLSEG6BV, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vlseg6b.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_TH_VLSEG6BV, MASK_TH_VLSEG6BV, match_opcode, INSN_DREF },
-{"vlseg6h.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_TH_VLSEG6HV, MASK_TH_VLSEG6HV, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vlseg6h.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_TH_VLSEG6HV, MASK_TH_VLSEG6HV, match_opcode, INSN_DREF },
-{"vlseg6w.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_TH_VLSEG6WV, MASK_TH_VLSEG6WV, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vlseg6w.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_TH_VLSEG6WV, MASK_TH_VLSEG6WV, match_opcode, INSN_DREF },
-{"vlseg6bu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLSEG6E8V, MASK_VLSEG6E8V, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vlseg6bu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLSEG6E8V, MASK_VLSEG6E8V, match_opcode, INSN_DREF },
-{"vlseg6hu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLSEG6E16V, MASK_VLSEG6E16V, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vlseg6hu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLSEG6E16V, MASK_VLSEG6E16V, match_opcode, INSN_DREF },
-{"vlseg6wu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLSEG6E32V, MASK_VLSEG6E32V, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vlseg6wu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLSEG6E32V, MASK_VLSEG6E32V, match_opcode, INSN_DREF },
-{"vlseg6e.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLSEG6E64V, MASK_VLSEG6E64V, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vlseg6e.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLSEG6E64V, MASK_VLSEG6E64V, match_opcode, INSN_DREF },
-{"vsseg6b.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VSSEG6E8V, MASK_VSSEG6E8V, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vsseg6b.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VSSEG6E8V, MASK_VSSEG6E8V, match_opcode, INSN_DREF },
-{"vsseg6h.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VSSEG6E16V, MASK_VSSEG6E16V, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vsseg6h.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VSSEG6E16V, MASK_VSSEG6E16V, match_opcode, INSN_DREF },
-{"vsseg6w.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VSSEG6E32V, MASK_VSSEG6E32V, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vsseg6w.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VSSEG6E32V, MASK_VSSEG6E32V, match_opcode, INSN_DREF },
-{"vsseg6e.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VSSEG6E64V, MASK_VSSEG6E64V, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vsseg6e.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VSSEG6E64V, MASK_VSSEG6E64V, match_opcode, INSN_DREF },
-{"vlseg7b.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_TH_VLSEG7BV, MASK_TH_VLSEG7BV, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vlseg7b.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_TH_VLSEG7BV, MASK_TH_VLSEG7BV, match_opcode, INSN_DREF },
-{"vlseg7h.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_TH_VLSEG7HV, MASK_TH_VLSEG7HV, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vlseg7h.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_TH_VLSEG7HV, MASK_TH_VLSEG7HV, match_opcode, INSN_DREF },
-{"vlseg7w.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_TH_VLSEG7WV, MASK_TH_VLSEG7WV, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vlseg7w.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_TH_VLSEG7WV, MASK_TH_VLSEG7WV, match_opcode, INSN_DREF },
-{"vlseg7bu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLSEG7E8V, MASK_VLSEG7E8V, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vlseg7bu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLSEG7E8V, MASK_VLSEG7E8V, match_opcode, INSN_DREF },
-{"vlseg7hu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLSEG7E16V, MASK_VLSEG7E16V, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vlseg7hu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLSEG7E16V, MASK_VLSEG7E16V, match_opcode, INSN_DREF },
-{"vlseg7wu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLSEG7E32V, MASK_VLSEG7E32V, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vlseg7wu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLSEG7E32V, MASK_VLSEG7E32V, match_opcode, INSN_DREF },
-{"vlseg7e.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLSEG7E64V, MASK_VLSEG7E64V, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vlseg7e.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLSEG7E64V, MASK_VLSEG7E64V, match_opcode, INSN_DREF },
-{"vsseg7b.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VSSEG7E8V, MASK_VSSEG7E8V, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vsseg7b.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VSSEG7E8V, MASK_VSSEG7E8V, match_opcode, INSN_DREF },
-{"vsseg7h.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VSSEG7E16V, MASK_VSSEG7E16V, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vsseg7h.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VSSEG7E16V, MASK_VSSEG7E16V, match_opcode, INSN_DREF },
-{"vsseg7w.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VSSEG7E32V, MASK_VSSEG7E32V, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vsseg7w.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VSSEG7E32V, MASK_VSSEG7E32V, match_opcode, INSN_DREF },
-{"vsseg7e.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VSSEG7E64V, MASK_VSSEG7E64V, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vsseg7e.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VSSEG7E64V, MASK_VSSEG7E64V, match_opcode, INSN_DREF },
-{"vlseg8b.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_TH_VLSEG8BV, MASK_TH_VLSEG8BV, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vlseg8b.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_TH_VLSEG8BV, MASK_TH_VLSEG8BV, match_opcode, INSN_DREF },
-{"vlseg8h.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_TH_VLSEG8HV, MASK_TH_VLSEG8HV, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vlseg8h.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_TH_VLSEG8HV, MASK_TH_VLSEG8HV, match_opcode, INSN_DREF },
-{"vlseg8w.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_TH_VLSEG8WV, MASK_TH_VLSEG8WV, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vlseg8w.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_TH_VLSEG8WV, MASK_TH_VLSEG8WV, match_opcode, INSN_DREF },
-{"vlseg8bu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLSEG8E8V, MASK_VLSEG8E8V, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vlseg8bu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLSEG8E8V, MASK_VLSEG8E8V, match_opcode, INSN_DREF },
-{"vlseg8hu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLSEG8E16V, MASK_VLSEG8E16V, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vlseg8hu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLSEG8E16V, MASK_VLSEG8E16V, match_opcode, INSN_DREF },
-{"vlseg8wu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLSEG8E32V, MASK_VLSEG8E32V, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vlseg8wu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLSEG8E32V, MASK_VLSEG8E32V, match_opcode, INSN_DREF },
-{"vlseg8e.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLSEG8E64V, MASK_VLSEG8E64V, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vlseg8e.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLSEG8E64V, MASK_VLSEG8E64V, match_opcode, INSN_DREF },
-{"vsseg8b.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VSSEG8E8V, MASK_VSSEG8E8V, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vsseg8b.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VSSEG8E8V, MASK_VSSEG8E8V, match_opcode, INSN_DREF },
-{"vsseg8h.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VSSEG8E16V, MASK_VSSEG8E16V, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vsseg8h.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VSSEG8E16V, MASK_VSSEG8E16V, match_opcode, INSN_DREF },
-{"vsseg8w.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VSSEG8E32V, MASK_VSSEG8E32V, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vsseg8w.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VSSEG8E32V, MASK_VSSEG8E32V, match_opcode, INSN_DREF },
-{"vsseg8e.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VSSEG8E64V, MASK_VSSEG8E64V, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vsseg8e.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VSSEG8E64V, MASK_VSSEG8E64V, match_opcode, INSN_DREF },
-{"vlsseg2b.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_TH_VLSSEG2BV, MASK_TH_VLSSEG2BV, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vlsseg2b.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_TH_VLSSEG2BV, MASK_TH_VLSSEG2BV, match_opcode, INSN_DREF },
-{"vlsseg2h.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_TH_VLSSEG2HV, MASK_TH_VLSSEG2HV, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vlsseg2h.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_TH_VLSSEG2HV, MASK_TH_VLSSEG2HV, match_opcode, INSN_DREF },
-{"vlsseg2w.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_TH_VLSSEG2WV, MASK_TH_VLSSEG2WV, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vlsseg2w.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_TH_VLSSEG2WV, MASK_TH_VLSSEG2WV, match_opcode, INSN_DREF },
-{"vlsseg2bu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VLSSEG2E8V, MASK_VLSSEG2E8V, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vlsseg2bu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VLSSEG2E8V, MASK_VLSSEG2E8V, match_opcode, INSN_DREF },
-{"vlsseg2hu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VLSSEG2E16V, MASK_VLSSEG2E16V, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vlsseg2hu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VLSSEG2E16V, MASK_VLSSEG2E16V, match_opcode, INSN_DREF },
-{"vlsseg2wu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VLSSEG2E32V, MASK_VLSSEG2E32V, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vlsseg2wu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VLSSEG2E32V, MASK_VLSSEG2E32V, match_opcode, INSN_DREF },
-{"vlsseg2e.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VLSSEG2E64V, MASK_VLSSEG2E64V, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vlsseg2e.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VLSSEG2E64V, MASK_VLSSEG2E64V, match_opcode, INSN_DREF },
-{"vssseg2b.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VSSSEG2E8V, MASK_VSSSEG2E8V, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vssseg2b.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VSSSEG2E8V, MASK_VSSSEG2E8V, match_opcode, INSN_DREF },
-{"vssseg2h.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VSSSEG2E16V, MASK_VSSSEG2E16V, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vssseg2h.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VSSSEG2E16V, MASK_VSSSEG2E16V, match_opcode, INSN_DREF },
-{"vssseg2w.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VSSSEG2E32V, MASK_VSSSEG2E32V, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vssseg2w.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VSSSEG2E32V, MASK_VSSSEG2E32V, match_opcode, INSN_DREF },
-{"vssseg2e.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VSSSEG2E64V, MASK_VSSSEG2E64V, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vssseg2e.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VSSSEG2E64V, MASK_VSSSEG2E64V, match_opcode, INSN_DREF },
-{"vlsseg3b.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_TH_VLSSEG3BV, MASK_TH_VLSSEG3BV, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vlsseg3b.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_TH_VLSSEG3BV, MASK_TH_VLSSEG3BV, match_opcode, INSN_DREF },
-{"vlsseg3h.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_TH_VLSSEG3HV, MASK_TH_VLSSEG3HV, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vlsseg3h.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_TH_VLSSEG3HV, MASK_TH_VLSSEG3HV, match_opcode, INSN_DREF },
-{"vlsseg3w.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_TH_VLSSEG3WV, MASK_TH_VLSSEG3WV, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vlsseg3w.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_TH_VLSSEG3WV, MASK_TH_VLSSEG3WV, match_opcode, INSN_DREF },
-{"vlsseg3bu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VLSSEG3E8V, MASK_VLSSEG3E8V, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vlsseg3bu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VLSSEG3E8V, MASK_VLSSEG3E8V, match_opcode, INSN_DREF },
-{"vlsseg3hu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VLSSEG3E16V, MASK_VLSSEG3E16V, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vlsseg3hu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VLSSEG3E16V, MASK_VLSSEG3E16V, match_opcode, INSN_DREF },
-{"vlsseg3wu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VLSSEG3E32V, MASK_VLSSEG3E32V, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vlsseg3wu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VLSSEG3E32V, MASK_VLSSEG3E32V, match_opcode, INSN_DREF },
-{"vlsseg3e.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VLSSEG3E64V, MASK_VLSSEG3E64V, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vlsseg3e.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VLSSEG3E64V, MASK_VLSSEG3E64V, match_opcode, INSN_DREF },
-{"vssseg3b.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VSSSEG3E8V, MASK_VSSSEG3E8V, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vssseg3b.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VSSSEG3E8V, MASK_VSSSEG3E8V, match_opcode, INSN_DREF },
-{"vssseg3h.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VSSSEG3E16V, MASK_VSSSEG3E16V, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vssseg3h.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VSSSEG3E16V, MASK_VSSSEG3E16V, match_opcode, INSN_DREF },
-{"vssseg3w.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VSSSEG3E32V, MASK_VSSSEG3E32V, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vssseg3w.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VSSSEG3E32V, MASK_VSSSEG3E32V, match_opcode, INSN_DREF },
-{"vssseg3e.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VSSSEG3E64V, MASK_VSSSEG3E64V, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vssseg3e.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VSSSEG3E64V, MASK_VSSSEG3E64V, match_opcode, INSN_DREF },
-{"vlsseg4b.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_TH_VLSSEG4BV, MASK_TH_VLSSEG4BV, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vlsseg4b.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_TH_VLSSEG4BV, MASK_TH_VLSSEG4BV, match_opcode, INSN_DREF },
-{"vlsseg4h.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_TH_VLSSEG4HV, MASK_TH_VLSSEG4HV, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vlsseg4h.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_TH_VLSSEG4HV, MASK_TH_VLSSEG4HV, match_opcode, INSN_DREF },
-{"vlsseg4w.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_TH_VLSSEG4WV, MASK_TH_VLSSEG4WV, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vlsseg4w.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_TH_VLSSEG4WV, MASK_TH_VLSSEG4WV, match_opcode, INSN_DREF },
-{"vlsseg4bu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VLSSEG4E8V, MASK_VLSSEG4E8V, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vlsseg4bu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VLSSEG4E8V, MASK_VLSSEG4E8V, match_opcode, INSN_DREF },
-{"vlsseg4hu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VLSSEG4E16V, MASK_VLSSEG4E16V, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vlsseg4hu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VLSSEG4E16V, MASK_VLSSEG4E16V, match_opcode, INSN_DREF },
-{"vlsseg4wu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VLSSEG4E32V, MASK_VLSSEG4E32V, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vlsseg4wu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VLSSEG4E32V, MASK_VLSSEG4E32V, match_opcode, INSN_DREF },
-{"vlsseg4e.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VLSSEG4E64V, MASK_VLSSEG4E64V, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vlsseg4e.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VLSSEG4E64V, MASK_VLSSEG4E64V, match_opcode, INSN_DREF },
-{"vssseg4b.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VSSSEG4E8V, MASK_VSSSEG4E8V, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vssseg4b.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VSSSEG4E8V, MASK_VSSSEG4E8V, match_opcode, INSN_DREF },
-{"vssseg4h.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VSSSEG4E16V, MASK_VSSSEG4E16V, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vssseg4h.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VSSSEG4E16V, MASK_VSSSEG4E16V, match_opcode, INSN_DREF },
-{"vssseg4w.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VSSSEG4E32V, MASK_VSSSEG4E32V, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vssseg4w.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VSSSEG4E32V, MASK_VSSSEG4E32V, match_opcode, INSN_DREF },
-{"vssseg4e.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VSSSEG4E64V, MASK_VSSSEG4E64V, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vssseg4e.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VSSSEG4E64V, MASK_VSSSEG4E64V, match_opcode, INSN_DREF },
-{"vlsseg5b.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_TH_VLSSEG5BV, MASK_TH_VLSSEG5BV, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vlsseg5b.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_TH_VLSSEG5BV, MASK_TH_VLSSEG5BV, match_opcode, INSN_DREF },
-{"vlsseg5h.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_TH_VLSSEG5HV, MASK_TH_VLSSEG5HV, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vlsseg5h.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_TH_VLSSEG5HV, MASK_TH_VLSSEG5HV, match_opcode, INSN_DREF },
-{"vlsseg5w.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_TH_VLSSEG5WV, MASK_TH_VLSSEG5WV, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vlsseg5w.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_TH_VLSSEG5WV, MASK_TH_VLSSEG5WV, match_opcode, INSN_DREF },
-{"vlsseg5bu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VLSSEG5E8V, MASK_VLSSEG5E8V, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vlsseg5bu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VLSSEG5E8V, MASK_VLSSEG5E8V, match_opcode, INSN_DREF },
-{"vlsseg5hu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VLSSEG5E16V, MASK_VLSSEG5E16V, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vlsseg5hu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VLSSEG5E16V, MASK_VLSSEG5E16V, match_opcode, INSN_DREF },
-{"vlsseg5wu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VLSSEG5E32V, MASK_VLSSEG5E32V, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vlsseg5wu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VLSSEG5E32V, MASK_VLSSEG5E32V, match_opcode, INSN_DREF },
-{"vlsseg5e.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VLSSEG5E64V, MASK_VLSSEG5E64V, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vlsseg5e.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VLSSEG5E64V, MASK_VLSSEG5E64V, match_opcode, INSN_DREF },
-{"vssseg5b.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VSSSEG5E8V, MASK_VSSSEG5E8V, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vssseg5b.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VSSSEG5E8V, MASK_VSSSEG5E8V, match_opcode, INSN_DREF },
-{"vssseg5h.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VSSSEG5E16V, MASK_VSSSEG5E16V, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vssseg5h.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VSSSEG5E16V, MASK_VSSSEG5E16V, match_opcode, INSN_DREF },
-{"vssseg5w.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VSSSEG5E32V, MASK_VSSSEG5E32V, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vssseg5w.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VSSSEG5E32V, MASK_VSSSEG5E32V, match_opcode, INSN_DREF },
-{"vssseg5e.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VSSSEG5E64V, MASK_VSSSEG5E64V, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vssseg5e.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VSSSEG5E64V, MASK_VSSSEG5E64V, match_opcode, INSN_DREF },
-{"vlsseg6b.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_TH_VLSSEG6BV, MASK_TH_VLSSEG6BV, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vlsseg6b.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_TH_VLSSEG6BV, MASK_TH_VLSSEG6BV, match_opcode, INSN_DREF },
-{"vlsseg6h.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_TH_VLSSEG6HV, MASK_TH_VLSSEG6HV, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vlsseg6h.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_TH_VLSSEG6HV, MASK_TH_VLSSEG6HV, match_opcode, INSN_DREF },
-{"vlsseg6w.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_TH_VLSSEG6WV, MASK_TH_VLSSEG6WV, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vlsseg6w.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_TH_VLSSEG6WV, MASK_TH_VLSSEG6WV, match_opcode, INSN_DREF },
-{"vlsseg6bu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VLSSEG6E8V, MASK_VLSSEG6E8V, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vlsseg6bu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VLSSEG6E8V, MASK_VLSSEG6E8V, match_opcode, INSN_DREF },
-{"vlsseg6hu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VLSSEG6E16V, MASK_VLSSEG6E16V, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vlsseg6hu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VLSSEG6E16V, MASK_VLSSEG6E16V, match_opcode, INSN_DREF },
-{"vlsseg6wu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VLSSEG6E32V, MASK_VLSSEG6E32V, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vlsseg6wu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VLSSEG6E32V, MASK_VLSSEG6E32V, match_opcode, INSN_DREF },
-{"vlsseg6e.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VLSSEG6E64V, MASK_VLSSEG6E64V, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vlsseg6e.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VLSSEG6E64V, MASK_VLSSEG6E64V, match_opcode, INSN_DREF },
-{"vssseg6b.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VSSSEG6E8V, MASK_VSSSEG6E8V, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vssseg6b.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VSSSEG6E8V, MASK_VSSSEG6E8V, match_opcode, INSN_DREF },
-{"vssseg6h.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VSSSEG6E16V, MASK_VSSSEG6E16V, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vssseg6h.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VSSSEG6E16V, MASK_VSSSEG6E16V, match_opcode, INSN_DREF },
-{"vssseg6w.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VSSSEG6E32V, MASK_VSSSEG6E32V, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vssseg6w.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VSSSEG6E32V, MASK_VSSSEG6E32V, match_opcode, INSN_DREF },
-{"vssseg6e.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VSSSEG6E64V, MASK_VSSSEG6E64V, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vssseg6e.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VSSSEG6E64V, MASK_VSSSEG6E64V, match_opcode, INSN_DREF },
-{"vlsseg7b.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_TH_VLSSEG7BV, MASK_TH_VLSSEG7BV, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vlsseg7b.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_TH_VLSSEG7BV, MASK_TH_VLSSEG7BV, match_opcode, INSN_DREF },
-{"vlsseg7h.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_TH_VLSSEG7HV, MASK_TH_VLSSEG7HV, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vlsseg7h.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_TH_VLSSEG7HV, MASK_TH_VLSSEG7HV, match_opcode, INSN_DREF },
-{"vlsseg7w.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_TH_VLSSEG7WV, MASK_TH_VLSSEG7WV, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vlsseg7w.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_TH_VLSSEG7WV, MASK_TH_VLSSEG7WV, match_opcode, INSN_DREF },
-{"vlsseg7bu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VLSSEG7E8V, MASK_VLSSEG7E8V, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vlsseg7bu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VLSSEG7E8V, MASK_VLSSEG7E8V, match_opcode, INSN_DREF },
-{"vlsseg7hu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VLSSEG7E16V, MASK_VLSSEG7E16V, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vlsseg7hu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VLSSEG7E16V, MASK_VLSSEG7E16V, match_opcode, INSN_DREF },
-{"vlsseg7wu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VLSSEG7E32V, MASK_VLSSEG7E32V, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vlsseg7wu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VLSSEG7E32V, MASK_VLSSEG7E32V, match_opcode, INSN_DREF },
-{"vlsseg7e.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VLSSEG7E64V, MASK_VLSSEG7E64V, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vlsseg7e.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VLSSEG7E64V, MASK_VLSSEG7E64V, match_opcode, INSN_DREF },
-{"vssseg7b.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VSSSEG7E8V, MASK_VSSSEG7E8V, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vssseg7b.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VSSSEG7E8V, MASK_VSSSEG7E8V, match_opcode, INSN_DREF },
-{"vssseg7h.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VSSSEG7E16V, MASK_VSSSEG7E16V, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vssseg7h.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VSSSEG7E16V, MASK_VSSSEG7E16V, match_opcode, INSN_DREF },
-{"vssseg7w.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VSSSEG7E32V, MASK_VSSSEG7E32V, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vssseg7w.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VSSSEG7E32V, MASK_VSSSEG7E32V, match_opcode, INSN_DREF },
-{"vssseg7e.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VSSSEG7E64V, MASK_VSSSEG7E64V, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vssseg7e.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VSSSEG7E64V, MASK_VSSSEG7E64V, match_opcode, INSN_DREF },
-{"vlsseg8b.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_TH_VLSSEG8BV, MASK_TH_VLSSEG8BV, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vlsseg8b.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_TH_VLSSEG8BV, MASK_TH_VLSSEG8BV, match_opcode, INSN_DREF },
-{"vlsseg8h.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_TH_VLSSEG8HV, MASK_TH_VLSSEG8HV, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vlsseg8h.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_TH_VLSSEG8HV, MASK_TH_VLSSEG8HV, match_opcode, INSN_DREF },
-{"vlsseg8w.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_TH_VLSSEG8WV, MASK_TH_VLSSEG8WV, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vlsseg8w.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_TH_VLSSEG8WV, MASK_TH_VLSSEG8WV, match_opcode, INSN_DREF },
-{"vlsseg8bu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VLSSEG8E8V, MASK_VLSSEG8E8V, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vlsseg8bu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VLSSEG8E8V, MASK_VLSSEG8E8V, match_opcode, INSN_DREF },
-{"vlsseg8hu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VLSSEG8E16V, MASK_VLSSEG8E16V, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vlsseg8hu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VLSSEG8E16V, MASK_VLSSEG8E16V, match_opcode, INSN_DREF },
-{"vlsseg8wu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VLSSEG8E32V, MASK_VLSSEG8E32V, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vlsseg8wu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VLSSEG8E32V, MASK_VLSSEG8E32V, match_opcode, INSN_DREF },
-{"vlsseg8e.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VLSSEG8E64V, MASK_VLSSEG8E64V, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vlsseg8e.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VLSSEG8E64V, MASK_VLSSEG8E64V, match_opcode, INSN_DREF },
-{"vssseg8b.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VSSSEG8E8V, MASK_VSSSEG8E8V, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vssseg8b.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VSSSEG8E8V, MASK_VSSSEG8E8V, match_opcode, INSN_DREF },
-{"vssseg8h.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VSSSEG8E16V, MASK_VSSSEG8E16V, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vssseg8h.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VSSSEG8E16V, MASK_VSSSEG8E16V, match_opcode, INSN_DREF },
-{"vssseg8w.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VSSSEG8E32V, MASK_VSSSEG8E32V, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vssseg8w.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VSSSEG8E32V, MASK_VSSSEG8E32V, match_opcode, INSN_DREF },
-{"vssseg8e.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VSSSEG8E64V, MASK_VSSSEG8E64V, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vssseg8e.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VSSSEG8E64V, MASK_VSSSEG8E64V, match_opcode, INSN_DREF },
-{"vlxseg2b.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_TH_VLXSEG2BV, MASK_TH_VLXSEG2BV, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vlxseg2b.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_TH_VLXSEG2BV, MASK_TH_VLXSEG2BV, match_opcode, INSN_DREF },
-{"vlxseg2h.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_TH_VLXSEG2HV, MASK_TH_VLXSEG2HV, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vlxseg2h.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_TH_VLXSEG2HV, MASK_TH_VLXSEG2HV, match_opcode, INSN_DREF },
-{"vlxseg2w.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_TH_VLXSEG2WV, MASK_TH_VLXSEG2WV, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vlxseg2w.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_TH_VLXSEG2WV, MASK_TH_VLXSEG2WV, match_opcode, INSN_DREF },
-{"vlxseg2bu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_VLOXSEG2EI8V, MASK_VLOXSEG2EI8V, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vlxseg2bu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_VLOXSEG2EI8V, MASK_VLOXSEG2EI8V, match_opcode, INSN_DREF },
-{"vlxseg2hu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_VLOXSEG2EI16V, MASK_VLOXSEG2EI16V, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vlxseg2hu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_VLOXSEG2EI16V, MASK_VLOXSEG2EI16V, match_opcode, INSN_DREF },
-{"vlxseg2wu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_VLOXSEG2EI32V, MASK_VLOXSEG2EI32V, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vlxseg2wu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_VLOXSEG2EI32V, MASK_VLOXSEG2EI32V, match_opcode, INSN_DREF },
-{"vlxseg2e.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_VLOXSEG2EI64V, MASK_VLOXSEG2EI64V, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vlxseg2e.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_VLOXSEG2EI64V, MASK_VLOXSEG2EI64V, match_opcode, INSN_DREF },
-{"vsxseg2b.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_VSOXSEG2EI8V, MASK_VSOXSEG2EI8V, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vsxseg2b.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_VSOXSEG2EI8V, MASK_VSOXSEG2EI8V, match_opcode, INSN_DREF },
-{"vsxseg2h.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_VSOXSEG2EI16V, MASK_VSOXSEG2EI16V, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vsxseg2h.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_VSOXSEG2EI16V, MASK_VSOXSEG2EI16V, match_opcode, INSN_DREF },
-{"vsxseg2w.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_VSOXSEG2EI32V, MASK_VSOXSEG2EI32V, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vsxseg2w.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_VSOXSEG2EI32V, MASK_VSOXSEG2EI32V, match_opcode, INSN_DREF },
-{"vsxseg2e.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_VSOXSEG2EI64V, MASK_VSOXSEG2EI64V, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vsxseg2e.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_VSOXSEG2EI64V, MASK_VSOXSEG2EI64V, match_opcode, INSN_DREF },
-{"vlxseg3b.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_TH_VLXSEG3BV, MASK_TH_VLXSEG3BV, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vlxseg3b.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_TH_VLXSEG3BV, MASK_TH_VLXSEG3BV, match_opcode, INSN_DREF },
-{"vlxseg3h.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_TH_VLXSEG3HV, MASK_TH_VLXSEG3HV, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vlxseg3h.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_TH_VLXSEG3HV, MASK_TH_VLXSEG3HV, match_opcode, INSN_DREF },
-{"vlxseg3w.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_TH_VLXSEG3WV, MASK_TH_VLXSEG3WV, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vlxseg3w.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_TH_VLXSEG3WV, MASK_TH_VLXSEG3WV, match_opcode, INSN_DREF },
-{"vlxseg3bu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_VLOXSEG3EI8V, MASK_VLOXSEG3EI8V, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vlxseg3bu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_VLOXSEG3EI8V, MASK_VLOXSEG3EI8V, match_opcode, INSN_DREF },
-{"vlxseg3hu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_VLOXSEG3EI16V, MASK_VLOXSEG3EI16V, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vlxseg3hu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_VLOXSEG3EI16V, MASK_VLOXSEG3EI16V, match_opcode, INSN_DREF },
-{"vlxseg3wu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_VLOXSEG3EI32V, MASK_VLOXSEG3EI32V, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vlxseg3wu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_VLOXSEG3EI32V, MASK_VLOXSEG3EI32V, match_opcode, INSN_DREF },
-{"vlxseg3e.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_VLOXSEG3EI64V, MASK_VLOXSEG3EI64V, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vlxseg3e.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_VLOXSEG3EI64V, MASK_VLOXSEG3EI64V, match_opcode, INSN_DREF },
-{"vsxseg3b.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_VSOXSEG3EI8V, MASK_VSOXSEG3EI8V, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vsxseg3b.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_VSOXSEG3EI8V, MASK_VSOXSEG3EI8V, match_opcode, INSN_DREF },
-{"vsxseg3h.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_VSOXSEG3EI16V, MASK_VSOXSEG3EI16V, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vsxseg3h.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_VSOXSEG3EI16V, MASK_VSOXSEG3EI16V, match_opcode, INSN_DREF },
-{"vsxseg3w.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_VSOXSEG3EI32V, MASK_VSOXSEG3EI32V, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vsxseg3w.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_VSOXSEG3EI32V, MASK_VSOXSEG3EI32V, match_opcode, INSN_DREF },
-{"vsxseg3e.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_VSOXSEG3EI64V, MASK_VSOXSEG3EI64V, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vsxseg3e.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_VSOXSEG3EI64V, MASK_VSOXSEG3EI64V, match_opcode, INSN_DREF },
-{"vlxseg4b.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_TH_VLXSEG4BV, MASK_TH_VLXSEG4BV, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vlxseg4b.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_TH_VLXSEG4BV, MASK_TH_VLXSEG4BV, match_opcode, INSN_DREF },
-{"vlxseg4h.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_TH_VLXSEG4HV, MASK_TH_VLXSEG4HV, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vlxseg4h.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_TH_VLXSEG4HV, MASK_TH_VLXSEG4HV, match_opcode, INSN_DREF },
-{"vlxseg4w.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_TH_VLXSEG4WV, MASK_TH_VLXSEG4WV, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vlxseg4w.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_TH_VLXSEG4WV, MASK_TH_VLXSEG4WV, match_opcode, INSN_DREF },
-{"vlxseg4bu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_VLOXSEG4EI8V, MASK_VLOXSEG4EI8V, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vlxseg4bu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_VLOXSEG4EI8V, MASK_VLOXSEG4EI8V, match_opcode, INSN_DREF },
-{"vlxseg4hu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_VLOXSEG4EI16V, MASK_VLOXSEG4EI16V, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vlxseg4hu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_VLOXSEG4EI16V, MASK_VLOXSEG4EI16V, match_opcode, INSN_DREF },
-{"vlxseg4wu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_VLOXSEG4EI32V, MASK_VLOXSEG4EI32V, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vlxseg4wu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_VLOXSEG4EI32V, MASK_VLOXSEG4EI32V, match_opcode, INSN_DREF },
-{"vlxseg4e.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_VLOXSEG4EI64V, MASK_VLOXSEG4EI64V, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vlxseg4e.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_VLOXSEG4EI64V, MASK_VLOXSEG4EI64V, match_opcode, INSN_DREF },
-{"vsxseg4b.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_VSOXSEG4EI8V, MASK_VSOXSEG4EI8V, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vsxseg4b.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_VSOXSEG4EI8V, MASK_VSOXSEG4EI8V, match_opcode, INSN_DREF },
-{"vsxseg4h.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_VSOXSEG4EI16V, MASK_VSOXSEG4EI16V, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vsxseg4h.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_VSOXSEG4EI16V, MASK_VSOXSEG4EI16V, match_opcode, INSN_DREF },
-{"vsxseg4w.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_VSOXSEG4EI32V, MASK_VSOXSEG4EI32V, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vsxseg4w.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_VSOXSEG4EI32V, MASK_VSOXSEG4EI32V, match_opcode, INSN_DREF },
-{"vsxseg4e.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_VSOXSEG4EI64V, MASK_VSOXSEG4EI64V, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vsxseg4e.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_VSOXSEG4EI64V, MASK_VSOXSEG4EI64V, match_opcode, INSN_DREF },
-{"vlxseg5b.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_TH_VLXSEG5BV, MASK_TH_VLXSEG5BV, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vlxseg5b.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_TH_VLXSEG5BV, MASK_TH_VLXSEG5BV, match_opcode, INSN_DREF },
-{"vlxseg5h.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_TH_VLXSEG5HV, MASK_TH_VLXSEG5HV, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vlxseg5h.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_TH_VLXSEG5HV, MASK_TH_VLXSEG5HV, match_opcode, INSN_DREF },
-{"vlxseg5w.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_TH_VLXSEG5WV, MASK_TH_VLXSEG5WV, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vlxseg5w.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_TH_VLXSEG5WV, MASK_TH_VLXSEG5WV, match_opcode, INSN_DREF },
-{"vlxseg5bu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_VLOXSEG5EI8V, MASK_VLOXSEG5EI8V, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vlxseg5bu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_VLOXSEG5EI8V, MASK_VLOXSEG5EI8V, match_opcode, INSN_DREF },
-{"vlxseg5hu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_VLOXSEG5EI16V, MASK_VLOXSEG5EI16V, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vlxseg5hu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_VLOXSEG5EI16V, MASK_VLOXSEG5EI16V, match_opcode, INSN_DREF },
-{"vlxseg5wu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_VLOXSEG5EI32V, MASK_VLOXSEG5EI32V, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vlxseg5wu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_VLOXSEG5EI32V, MASK_VLOXSEG5EI32V, match_opcode, INSN_DREF },
-{"vlxseg5e.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_VLOXSEG5EI64V, MASK_VLOXSEG5EI64V, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vlxseg5e.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_VLOXSEG5EI64V, MASK_VLOXSEG5EI64V, match_opcode, INSN_DREF },
-{"vsxseg5b.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_VSOXSEG5EI8V, MASK_VSOXSEG5EI8V, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vsxseg5b.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_VSOXSEG5EI8V, MASK_VSOXSEG5EI8V, match_opcode, INSN_DREF },
-{"vsxseg5h.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_VSOXSEG5EI16V, MASK_VSOXSEG5EI16V, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vsxseg5h.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_VSOXSEG5EI16V, MASK_VSOXSEG5EI16V, match_opcode, INSN_DREF },
-{"vsxseg5w.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_VSOXSEG5EI32V, MASK_VSOXSEG5EI32V, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vsxseg5w.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_VSOXSEG5EI32V, MASK_VSOXSEG5EI32V, match_opcode, INSN_DREF },
-{"vsxseg5e.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_VSOXSEG5EI64V, MASK_VSOXSEG5EI64V, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vsxseg5e.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_VSOXSEG5EI64V, MASK_VSOXSEG5EI64V, match_opcode, INSN_DREF },
-{"vlxseg6b.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_TH_VLXSEG6BV, MASK_TH_VLXSEG6BV, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vlxseg6b.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_TH_VLXSEG6BV, MASK_TH_VLXSEG6BV, match_opcode, INSN_DREF },
-{"vlxseg6h.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_TH_VLXSEG6HV, MASK_TH_VLXSEG6HV, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vlxseg6h.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_TH_VLXSEG6HV, MASK_TH_VLXSEG6HV, match_opcode, INSN_DREF },
-{"vlxseg6w.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_TH_VLXSEG6WV, MASK_TH_VLXSEG6WV, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vlxseg6w.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_TH_VLXSEG6WV, MASK_TH_VLXSEG6WV, match_opcode, INSN_DREF },
-{"vlxseg6bu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_VLOXSEG6EI8V, MASK_VLOXSEG6EI8V, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vlxseg6bu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_VLOXSEG6EI8V, MASK_VLOXSEG6EI8V, match_opcode, INSN_DREF },
-{"vlxseg6hu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_VLOXSEG6EI16V, MASK_VLOXSEG6EI16V, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vlxseg6hu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_VLOXSEG6EI16V, MASK_VLOXSEG6EI16V, match_opcode, INSN_DREF },
-{"vlxseg6wu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_VLOXSEG6EI32V, MASK_VLOXSEG6EI32V, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vlxseg6wu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_VLOXSEG6EI32V, MASK_VLOXSEG6EI32V, match_opcode, INSN_DREF },
-{"vlxseg6e.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_VLOXSEG6EI64V, MASK_VLOXSEG6EI64V, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vlxseg6e.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_VLOXSEG6EI64V, MASK_VLOXSEG6EI64V, match_opcode, INSN_DREF },
-{"vsxseg6b.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_VSOXSEG6EI8V, MASK_VSOXSEG6EI8V, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vsxseg6b.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_VSOXSEG6EI8V, MASK_VSOXSEG6EI8V, match_opcode, INSN_DREF },
-{"vsxseg6h.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_VSOXSEG6EI16V, MASK_VSOXSEG6EI16V, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vsxseg6h.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_VSOXSEG6EI16V, MASK_VSOXSEG6EI16V, match_opcode, INSN_DREF },
-{"vsxseg6w.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_VSOXSEG6EI32V, MASK_VSOXSEG6EI32V, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vsxseg6w.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_VSOXSEG6EI32V, MASK_VSOXSEG6EI32V, match_opcode, INSN_DREF },
-{"vsxseg6e.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_VSOXSEG6EI64V, MASK_VSOXSEG6EI64V, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vsxseg6e.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_VSOXSEG6EI64V, MASK_VSOXSEG6EI64V, match_opcode, INSN_DREF },
-{"vlxseg7b.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_TH_VLXSEG7BV, MASK_TH_VLXSEG7BV, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vlxseg7b.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_TH_VLXSEG7BV, MASK_TH_VLXSEG7BV, match_opcode, INSN_DREF },
-{"vlxseg7h.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_TH_VLXSEG7HV, MASK_TH_VLXSEG7HV, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vlxseg7h.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_TH_VLXSEG7HV, MASK_TH_VLXSEG7HV, match_opcode, INSN_DREF },
-{"vlxseg7w.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_TH_VLXSEG7WV, MASK_TH_VLXSEG7WV, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vlxseg7w.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_TH_VLXSEG7WV, MASK_TH_VLXSEG7WV, match_opcode, INSN_DREF },
-{"vlxseg7bu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_VLOXSEG7EI8V, MASK_VLOXSEG7EI8V, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vlxseg7bu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_VLOXSEG7EI8V, MASK_VLOXSEG7EI8V, match_opcode, INSN_DREF },
-{"vlxseg7hu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_VLOXSEG7EI16V, MASK_VLOXSEG7EI16V, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vlxseg7hu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_VLOXSEG7EI16V, MASK_VLOXSEG7EI16V, match_opcode, INSN_DREF },
-{"vlxseg7wu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_VLOXSEG7EI32V, MASK_VLOXSEG7EI32V, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vlxseg7wu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_VLOXSEG7EI32V, MASK_VLOXSEG7EI32V, match_opcode, INSN_DREF },
-{"vlxseg7e.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_VLOXSEG7EI64V, MASK_VLOXSEG7EI64V, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vlxseg7e.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_VLOXSEG7EI64V, MASK_VLOXSEG7EI64V, match_opcode, INSN_DREF },
-{"vsxseg7b.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_VSOXSEG7EI8V, MASK_VSOXSEG7EI8V, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vsxseg7b.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_VSOXSEG7EI8V, MASK_VSOXSEG7EI8V, match_opcode, INSN_DREF },
-{"vsxseg7h.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_VSOXSEG7EI16V, MASK_VSOXSEG7EI16V, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vsxseg7h.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_VSOXSEG7EI16V, MASK_VSOXSEG7EI16V, match_opcode, INSN_DREF },
-{"vsxseg7w.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_VSOXSEG7EI32V, MASK_VSOXSEG7EI32V, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vsxseg7w.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_VSOXSEG7EI32V, MASK_VSOXSEG7EI32V, match_opcode, INSN_DREF },
-{"vsxseg7e.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_VSOXSEG7EI64V, MASK_VSOXSEG7EI64V, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vsxseg7e.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_VSOXSEG7EI64V, MASK_VSOXSEG7EI64V, match_opcode, INSN_DREF },
-{"vlxseg8b.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_TH_VLXSEG8BV, MASK_TH_VLXSEG8BV, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vlxseg8b.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_TH_VLXSEG8BV, MASK_TH_VLXSEG8BV, match_opcode, INSN_DREF },
-{"vlxseg8h.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_TH_VLXSEG8HV, MASK_TH_VLXSEG8HV, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vlxseg8h.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_TH_VLXSEG8HV, MASK_TH_VLXSEG8HV, match_opcode, INSN_DREF },
-{"vlxseg8w.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_TH_VLXSEG8WV, MASK_TH_VLXSEG8WV, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vlxseg8w.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_TH_VLXSEG8WV, MASK_TH_VLXSEG8WV, match_opcode, INSN_DREF },
-{"vlxseg8bu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_VLOXSEG8EI8V, MASK_VLOXSEG8EI8V, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vlxseg8bu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_VLOXSEG8EI8V, MASK_VLOXSEG8EI8V, match_opcode, INSN_DREF },
-{"vlxseg8hu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_VLOXSEG8EI16V, MASK_VLOXSEG8EI16V, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vlxseg8hu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_VLOXSEG8EI16V, MASK_VLOXSEG8EI16V, match_opcode, INSN_DREF },
-{"vlxseg8wu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_VLOXSEG8EI32V, MASK_VLOXSEG8EI32V, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vlxseg8wu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_VLOXSEG8EI32V, MASK_VLOXSEG8EI32V, match_opcode, INSN_DREF },
-{"vlxseg8e.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_VLOXSEG8EI64V, MASK_VLOXSEG8EI64V, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vlxseg8e.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_VLOXSEG8EI64V, MASK_VLOXSEG8EI64V, match_opcode, INSN_DREF },
-{"vsxseg8b.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_VSOXSEG8EI8V, MASK_VSOXSEG8EI8V, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vsxseg8b.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_VSOXSEG8EI8V, MASK_VSOXSEG8EI8V, match_opcode, INSN_DREF },
-{"vsxseg8h.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_VSOXSEG8EI16V, MASK_VSOXSEG8EI16V, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vsxseg8h.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_VSOXSEG8EI16V, MASK_VSOXSEG8EI16V, match_opcode, INSN_DREF },
-{"vsxseg8w.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_VSOXSEG8EI32V, MASK_VSOXSEG8EI32V, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vsxseg8w.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_VSOXSEG8EI32V, MASK_VSOXSEG8EI32V, match_opcode, INSN_DREF },
-{"vsxseg8e.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_VSOXSEG8EI64V, MASK_VSOXSEG8EI64V, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vsxseg8e.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_VSOXSEG8EI64V, MASK_VSOXSEG8EI64V, match_opcode, INSN_DREF },
-{"vlseg2bff.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_TH_VLSEG2BFFV, MASK_TH_VLSEG2BFFV, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vlseg2bff.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_TH_VLSEG2BFFV, MASK_TH_VLSEG2BFFV, match_opcode, INSN_DREF },
-{"vlseg2hff.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_TH_VLSEG2HFFV, MASK_TH_VLSEG2HFFV, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vlseg2hff.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_TH_VLSEG2HFFV, MASK_TH_VLSEG2HFFV, match_opcode, INSN_DREF },
-{"vlseg2wff.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_TH_VLSEG2WFFV, MASK_TH_VLSEG2WFFV, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vlseg2wff.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_TH_VLSEG2WFFV, MASK_TH_VLSEG2WFFV, match_opcode, INSN_DREF },
-{"vlseg2buff.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLSEG2E8FFV, MASK_VLSEG2E8FFV, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vlseg2buff.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLSEG2E8FFV, MASK_VLSEG2E8FFV, match_opcode, INSN_DREF },
-{"vlseg2huff.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLSEG2E16FFV, MASK_VLSEG2E16FFV, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vlseg2huff.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLSEG2E16FFV, MASK_VLSEG2E16FFV, match_opcode, INSN_DREF },
-{"vlseg2wuff.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLSEG2E32FFV, MASK_VLSEG2E32FFV, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vlseg2wuff.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLSEG2E32FFV, MASK_VLSEG2E32FFV, match_opcode, INSN_DREF },
-{"vlseg2eff.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLSEG2E64FFV, MASK_VLSEG2E64FFV, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vlseg2eff.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLSEG2E64FFV, MASK_VLSEG2E64FFV, match_opcode, INSN_DREF },
-{"vlseg3bff.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_TH_VLSEG3BFFV, MASK_TH_VLSEG3BFFV, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vlseg3bff.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_TH_VLSEG3BFFV, MASK_TH_VLSEG3BFFV, match_opcode, INSN_DREF },
-{"vlseg3hff.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_TH_VLSEG3HFFV, MASK_TH_VLSEG3HFFV, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vlseg3hff.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_TH_VLSEG3HFFV, MASK_TH_VLSEG3HFFV, match_opcode, INSN_DREF },
-{"vlseg3wff.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_TH_VLSEG3WFFV, MASK_TH_VLSEG3WFFV, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vlseg3wff.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_TH_VLSEG3WFFV, MASK_TH_VLSEG3WFFV, match_opcode, INSN_DREF },
-{"vlseg3buff.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLSEG3E8FFV, MASK_VLSEG3E8FFV, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vlseg3buff.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLSEG3E8FFV, MASK_VLSEG3E8FFV, match_opcode, INSN_DREF },
-{"vlseg3huff.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLSEG3E16FFV, MASK_VLSEG3E16FFV, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vlseg3huff.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLSEG3E16FFV, MASK_VLSEG3E16FFV, match_opcode, INSN_DREF },
-{"vlseg3wuff.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLSEG3E32FFV, MASK_VLSEG3E32FFV, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vlseg3wuff.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLSEG3E32FFV, MASK_VLSEG3E32FFV, match_opcode, INSN_DREF },
-{"vlseg3eff.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLSEG3E64FFV, MASK_VLSEG3E64FFV, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vlseg3eff.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLSEG3E64FFV, MASK_VLSEG3E64FFV, match_opcode, INSN_DREF },
-{"vlseg4bff.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_TH_VLSEG4BFFV, MASK_TH_VLSEG4BFFV, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vlseg4bff.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_TH_VLSEG4BFFV, MASK_TH_VLSEG4BFFV, match_opcode, INSN_DREF },
-{"vlseg4hff.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_TH_VLSEG4HFFV, MASK_TH_VLSEG4HFFV, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vlseg4hff.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_TH_VLSEG4HFFV, MASK_TH_VLSEG4HFFV, match_opcode, INSN_DREF },
-{"vlseg4wff.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_TH_VLSEG4WFFV, MASK_TH_VLSEG4WFFV, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vlseg4wff.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_TH_VLSEG4WFFV, MASK_TH_VLSEG4WFFV, match_opcode, INSN_DREF },
-{"vlseg4buff.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLSEG4E8FFV, MASK_VLSEG4E8FFV, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vlseg4buff.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLSEG4E8FFV, MASK_VLSEG4E8FFV, match_opcode, INSN_DREF },
-{"vlseg4huff.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLSEG4E16FFV, MASK_VLSEG4E16FFV, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vlseg4huff.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLSEG4E16FFV, MASK_VLSEG4E16FFV, match_opcode, INSN_DREF },
-{"vlseg4wuff.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLSEG4E32FFV, MASK_VLSEG4E32FFV, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vlseg4wuff.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLSEG4E32FFV, MASK_VLSEG4E32FFV, match_opcode, INSN_DREF },
-{"vlseg4eff.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLSEG4E64FFV, MASK_VLSEG4E64FFV, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vlseg4eff.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLSEG4E64FFV, MASK_VLSEG4E64FFV, match_opcode, INSN_DREF },
-{"vlseg5bff.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_TH_VLSEG5BFFV, MASK_TH_VLSEG5BFFV, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vlseg5bff.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_TH_VLSEG5BFFV, MASK_TH_VLSEG5BFFV, match_opcode, INSN_DREF },
-{"vlseg5hff.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_TH_VLSEG5HFFV, MASK_TH_VLSEG5HFFV, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vlseg5hff.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_TH_VLSEG5HFFV, MASK_TH_VLSEG5HFFV, match_opcode, INSN_DREF },
-{"vlseg5wff.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_TH_VLSEG5WFFV, MASK_TH_VLSEG5WFFV, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vlseg5wff.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_TH_VLSEG5WFFV, MASK_TH_VLSEG5WFFV, match_opcode, INSN_DREF },
-{"vlseg5buff.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLSEG5E8FFV, MASK_VLSEG5E8FFV, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vlseg5buff.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLSEG5E8FFV, MASK_VLSEG5E8FFV, match_opcode, INSN_DREF },
-{"vlseg5huff.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLSEG5E16FFV, MASK_VLSEG5E16FFV, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vlseg5huff.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLSEG5E16FFV, MASK_VLSEG5E16FFV, match_opcode, INSN_DREF },
-{"vlseg5wuff.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLSEG5E32FFV, MASK_VLSEG5E32FFV, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vlseg5wuff.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLSEG5E32FFV, MASK_VLSEG5E32FFV, match_opcode, INSN_DREF },
-{"vlseg5eff.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLSEG5E64FFV, MASK_VLSEG5E64FFV, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vlseg5eff.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLSEG5E64FFV, MASK_VLSEG5E64FFV, match_opcode, INSN_DREF },
-{"vlseg6bff.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_TH_VLSEG6BFFV, MASK_TH_VLSEG6BFFV, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vlseg6bff.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_TH_VLSEG6BFFV, MASK_TH_VLSEG6BFFV, match_opcode, INSN_DREF },
-{"vlseg6hff.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_TH_VLSEG6HFFV, MASK_TH_VLSEG6HFFV, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vlseg6hff.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_TH_VLSEG6HFFV, MASK_TH_VLSEG6HFFV, match_opcode, INSN_DREF },
-{"vlseg6wff.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_TH_VLSEG6WFFV, MASK_TH_VLSEG6WFFV, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vlseg6wff.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_TH_VLSEG6WFFV, MASK_TH_VLSEG6WFFV, match_opcode, INSN_DREF },
-{"vlseg6buff.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLSEG6E8FFV, MASK_VLSEG6E8FFV, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vlseg6buff.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLSEG6E8FFV, MASK_VLSEG6E8FFV, match_opcode, INSN_DREF },
-{"vlseg6huff.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLSEG6E16FFV, MASK_VLSEG6E16FFV, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vlseg6huff.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLSEG6E16FFV, MASK_VLSEG6E16FFV, match_opcode, INSN_DREF },
-{"vlseg6wuff.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLSEG6E32FFV, MASK_VLSEG6E32FFV, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vlseg6wuff.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLSEG6E32FFV, MASK_VLSEG6E32FFV, match_opcode, INSN_DREF },
-{"vlseg6eff.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLSEG6E64FFV, MASK_VLSEG6E64FFV, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vlseg6eff.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLSEG6E64FFV, MASK_VLSEG6E64FFV, match_opcode, INSN_DREF },
-{"vlseg7bff.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_TH_VLSEG7BFFV, MASK_TH_VLSEG7BFFV, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vlseg7bff.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_TH_VLSEG7BFFV, MASK_TH_VLSEG7BFFV, match_opcode, INSN_DREF },
-{"vlseg7hff.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_TH_VLSEG7HFFV, MASK_TH_VLSEG7HFFV, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vlseg7hff.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_TH_VLSEG7HFFV, MASK_TH_VLSEG7HFFV, match_opcode, INSN_DREF },
-{"vlseg7wff.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_TH_VLSEG7WFFV, MASK_TH_VLSEG7WFFV, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vlseg7wff.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_TH_VLSEG7WFFV, MASK_TH_VLSEG7WFFV, match_opcode, INSN_DREF },
-{"vlseg7buff.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLSEG7E8FFV, MASK_VLSEG7E8FFV, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vlseg7buff.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLSEG7E8FFV, MASK_VLSEG7E8FFV, match_opcode, INSN_DREF },
-{"vlseg7huff.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLSEG7E16FFV, MASK_VLSEG7E16FFV, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vlseg7huff.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLSEG7E16FFV, MASK_VLSEG7E16FFV, match_opcode, INSN_DREF },
-{"vlseg7wuff.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLSEG7E32FFV, MASK_VLSEG7E32FFV, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vlseg7wuff.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLSEG7E32FFV, MASK_VLSEG7E32FFV, match_opcode, INSN_DREF },
-{"vlseg7eff.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLSEG7E64FFV, MASK_VLSEG7E64FFV, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vlseg7eff.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLSEG7E64FFV, MASK_VLSEG7E64FFV, match_opcode, INSN_DREF },
-{"vlseg8bff.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_TH_VLSEG8BFFV, MASK_TH_VLSEG8BFFV, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vlseg8bff.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_TH_VLSEG8BFFV, MASK_TH_VLSEG8BFFV, match_opcode, INSN_DREF },
-{"vlseg8hff.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_TH_VLSEG8HFFV, MASK_TH_VLSEG8HFFV, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vlseg8hff.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_TH_VLSEG8HFFV, MASK_TH_VLSEG8HFFV, match_opcode, INSN_DREF },
-{"vlseg8wff.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_TH_VLSEG8WFFV, MASK_TH_VLSEG8WFFV, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vlseg8wff.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_TH_VLSEG8WFFV, MASK_TH_VLSEG8WFFV, match_opcode, INSN_DREF },
-{"vlseg8buff.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLSEG8E8FFV, MASK_VLSEG8E8FFV, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vlseg8buff.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLSEG8E8FFV, MASK_VLSEG8E8FFV, match_opcode, INSN_DREF },
-{"vlseg8huff.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLSEG8E16FFV, MASK_VLSEG8E16FFV, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vlseg8huff.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLSEG8E16FFV, MASK_VLSEG8E16FFV, match_opcode, INSN_DREF },
-{"vlseg8wuff.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLSEG8E32FFV, MASK_VLSEG8E32FFV, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vlseg8wuff.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLSEG8E32FFV, MASK_VLSEG8E32FFV, match_opcode, INSN_DREF },
-{"vlseg8eff.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLSEG8E64FFV, MASK_VLSEG8E64FFV, match_opcode, INSN_DREF|INSN_ALIAS },
-{"th.vlseg8eff.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLSEG8E64FFV, MASK_VLSEG8E64FFV, match_opcode, INSN_DREF },
+{"vlbff.v",    0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_TH_VLBFFV, MASK_TH_VLBFFV, match_vd_neq_vm, INSN_DREF|INSN_ALIAS },
+{"th.vlbff.v",    0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_TH_VLBFFV, MASK_TH_VLBFFV, match_vd_neq_vm, INSN_DREF },
+{"vlhff.v",    0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_TH_VLHFFV, MASK_TH_VLHFFV, match_vd_neq_vm, INSN_DREF|INSN_ALIAS },
+{"th.vlhff.v",    0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_TH_VLHFFV, MASK_TH_VLHFFV, match_vd_neq_vm, INSN_DREF },
+{"vlwff.v",    0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_TH_VLWFFV, MASK_TH_VLWFFV, match_vd_neq_vm, INSN_DREF|INSN_ALIAS },
+{"th.vlwff.v",    0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_TH_VLWFFV, MASK_TH_VLWFFV, match_vd_neq_vm, INSN_DREF },
+{"vlbuff.v",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLE8FFV, MASK_VLE8FFV, match_vd_neq_vm, INSN_DREF|INSN_ALIAS },
+{"th.vlbuff.v",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLE8FFV, MASK_VLE8FFV, match_vd_neq_vm, INSN_DREF },
+{"vlhuff.v",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLE16FFV, MASK_VLE16FFV, match_vd_neq_vm, INSN_DREF|INSN_ALIAS },
+{"th.vlhuff.v",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLE16FFV, MASK_VLE16FFV, match_vd_neq_vm, INSN_DREF },
+{"vlwuff.v",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLE32FFV, MASK_VLE32FFV, match_vd_neq_vm, INSN_DREF|INSN_ALIAS },
+{"th.vlwuff.v",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLE32FFV, MASK_VLE32FFV, match_vd_neq_vm, INSN_DREF },
+{"vleff.v",    0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLE64FFV, MASK_VLE64FFV, match_vd_neq_vm, INSN_DREF|INSN_ALIAS },
+{"th.vleff.v",    0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLE64FFV, MASK_VLE64FFV, match_vd_neq_vm, INSN_DREF },
+{"vlseg2b.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_TH_VLSEG2BV, MASK_TH_VLSEG2BV, match_vd_neq_vm_with_nf, INSN_DREF|INSN_ALIAS },
+{"th.vlseg2b.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_TH_VLSEG2BV, MASK_TH_VLSEG2BV, match_vd_neq_vm_with_nf, INSN_DREF },
+{"vlseg2h.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_TH_VLSEG2HV, MASK_TH_VLSEG2HV, match_vd_neq_vm_with_nf, INSN_DREF|INSN_ALIAS },
+{"th.vlseg2h.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_TH_VLSEG2HV, MASK_TH_VLSEG2HV, match_vd_neq_vm_with_nf, INSN_DREF },
+{"vlseg2w.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_TH_VLSEG2WV, MASK_TH_VLSEG2WV, match_vd_neq_vm_with_nf, INSN_DREF|INSN_ALIAS },
+{"th.vlseg2w.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_TH_VLSEG2WV, MASK_TH_VLSEG2WV, match_vd_neq_vm_with_nf, INSN_DREF },
+{"vlseg2bu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLSEG2E8V, MASK_VLSEG2E8V, match_vd_neq_vm_with_nf, INSN_DREF|INSN_ALIAS },
+{"th.vlseg2bu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLSEG2E8V, MASK_VLSEG2E8V, match_vd_neq_vm_with_nf, INSN_DREF },
+{"vlseg2hu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLSEG2E16V, MASK_VLSEG2E16V, match_vd_neq_vm_with_nf, INSN_DREF|INSN_ALIAS },
+{"th.vlseg2hu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLSEG2E16V, MASK_VLSEG2E16V, match_vd_neq_vm_with_nf, INSN_DREF },
+{"vlseg2wu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLSEG2E32V, MASK_VLSEG2E32V, match_vd_neq_vm_with_nf, INSN_DREF|INSN_ALIAS },
+{"th.vlseg2wu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLSEG2E32V, MASK_VLSEG2E32V, match_vd_neq_vm_with_nf, INSN_DREF },
+{"vlseg2e.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLSEG2E64V, MASK_VLSEG2E64V, match_vd_neq_vm_with_nf, INSN_DREF|INSN_ALIAS },
+{"th.vlseg2e.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLSEG2E64V, MASK_VLSEG2E64V, match_vd_neq_vm_with_nf, INSN_DREF },
+{"vsseg2b.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VSSEG2E8V, MASK_VSSEG2E8V, match_vd_with_nf, INSN_DREF|INSN_ALIAS },
+{"th.vsseg2b.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VSSEG2E8V, MASK_VSSEG2E8V, match_vd_with_nf, INSN_DREF },
+{"vsseg2h.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VSSEG2E16V, MASK_VSSEG2E16V, match_vd_with_nf, INSN_DREF|INSN_ALIAS },
+{"th.vsseg2h.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VSSEG2E16V, MASK_VSSEG2E16V, match_vd_with_nf, INSN_DREF },
+{"vsseg2w.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VSSEG2E32V, MASK_VSSEG2E32V, match_vd_with_nf, INSN_DREF|INSN_ALIAS },
+{"th.vsseg2w.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VSSEG2E32V, MASK_VSSEG2E32V, match_vd_with_nf, INSN_DREF },
+{"vsseg2e.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VSSEG2E64V, MASK_VSSEG2E64V, match_vd_with_nf, INSN_DREF|INSN_ALIAS },
+{"th.vsseg2e.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VSSEG2E64V, MASK_VSSEG2E64V, match_vd_with_nf, INSN_DREF },
+{"vlseg3b.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_TH_VLSEG3BV, MASK_TH_VLSEG3BV, match_vd_neq_vm_with_nf, INSN_DREF|INSN_ALIAS },
+{"th.vlseg3b.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_TH_VLSEG3BV, MASK_TH_VLSEG3BV, match_vd_neq_vm_with_nf, INSN_DREF },
+{"vlseg3h.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_TH_VLSEG3HV, MASK_TH_VLSEG3HV, match_vd_neq_vm_with_nf, INSN_DREF|INSN_ALIAS },
+{"th.vlseg3h.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_TH_VLSEG3HV, MASK_TH_VLSEG3HV, match_vd_neq_vm_with_nf, INSN_DREF },
+{"vlseg3w.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_TH_VLSEG3WV, MASK_TH_VLSEG3WV, match_vd_neq_vm_with_nf, INSN_DREF|INSN_ALIAS },
+{"th.vlseg3w.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_TH_VLSEG3WV, MASK_TH_VLSEG3WV, match_vd_neq_vm_with_nf, INSN_DREF },
+{"vlseg3bu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLSEG3E8V, MASK_VLSEG3E8V, match_vd_neq_vm_with_nf, INSN_DREF|INSN_ALIAS },
+{"th.vlseg3bu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLSEG3E8V, MASK_VLSEG3E8V, match_vd_neq_vm_with_nf, INSN_DREF },
+{"vlseg3hu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLSEG3E16V, MASK_VLSEG3E16V, match_vd_neq_vm_with_nf, INSN_DREF|INSN_ALIAS },
+{"th.vlseg3hu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLSEG3E16V, MASK_VLSEG3E16V, match_vd_neq_vm_with_nf, INSN_DREF },
+{"vlseg3wu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLSEG3E32V, MASK_VLSEG3E32V, match_vd_neq_vm_with_nf, INSN_DREF|INSN_ALIAS },
+{"th.vlseg3wu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLSEG3E32V, MASK_VLSEG3E32V, match_vd_neq_vm_with_nf, INSN_DREF },
+{"vlseg3e.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLSEG3E64V, MASK_VLSEG3E64V, match_vd_neq_vm_with_nf, INSN_DREF|INSN_ALIAS },
+{"th.vlseg3e.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLSEG3E64V, MASK_VLSEG3E64V, match_vd_neq_vm_with_nf, INSN_DREF },
+{"vsseg3b.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VSSEG3E8V, MASK_VSSEG3E8V, match_vd_with_nf, INSN_DREF|INSN_ALIAS },
+{"th.vsseg3b.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VSSEG3E8V, MASK_VSSEG3E8V, match_vd_with_nf, INSN_DREF },
+{"vsseg3h.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VSSEG3E16V, MASK_VSSEG3E16V, match_vd_with_nf, INSN_DREF|INSN_ALIAS },
+{"th.vsseg3h.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VSSEG3E16V, MASK_VSSEG3E16V, match_vd_with_nf, INSN_DREF },
+{"vsseg3w.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VSSEG3E32V, MASK_VSSEG3E32V, match_vd_with_nf, INSN_DREF|INSN_ALIAS },
+{"th.vsseg3w.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VSSEG3E32V, MASK_VSSEG3E32V, match_vd_with_nf, INSN_DREF },
+{"vsseg3e.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VSSEG3E64V, MASK_VSSEG3E64V, match_vd_with_nf, INSN_DREF|INSN_ALIAS },
+{"th.vsseg3e.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VSSEG3E64V, MASK_VSSEG3E64V, match_vd_with_nf, INSN_DREF },
+{"vlseg4b.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_TH_VLSEG4BV, MASK_TH_VLSEG4BV, match_vd_neq_vm_with_nf, INSN_DREF|INSN_ALIAS },
+{"th.vlseg4b.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_TH_VLSEG4BV, MASK_TH_VLSEG4BV, match_vd_neq_vm_with_nf, INSN_DREF },
+{"vlseg4h.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_TH_VLSEG4HV, MASK_TH_VLSEG4HV, match_vd_neq_vm_with_nf, INSN_DREF|INSN_ALIAS },
+{"th.vlseg4h.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_TH_VLSEG4HV, MASK_TH_VLSEG4HV, match_vd_neq_vm_with_nf, INSN_DREF },
+{"vlseg4w.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_TH_VLSEG4WV, MASK_TH_VLSEG4WV, match_vd_neq_vm_with_nf, INSN_DREF|INSN_ALIAS },
+{"th.vlseg4w.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_TH_VLSEG4WV, MASK_TH_VLSEG4WV, match_vd_neq_vm_with_nf, INSN_DREF },
+{"vlseg4bu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLSEG4E8V, MASK_VLSEG4E8V, match_vd_neq_vm_with_nf, INSN_DREF|INSN_ALIAS },
+{"th.vlseg4bu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLSEG4E8V, MASK_VLSEG4E8V, match_vd_neq_vm_with_nf, INSN_DREF },
+{"vlseg4hu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLSEG4E16V, MASK_VLSEG4E16V, match_vd_neq_vm_with_nf, INSN_DREF|INSN_ALIAS },
+{"th.vlseg4hu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLSEG4E16V, MASK_VLSEG4E16V, match_vd_neq_vm_with_nf, INSN_DREF },
+{"vlseg4wu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLSEG4E32V, MASK_VLSEG4E32V, match_vd_neq_vm_with_nf, INSN_DREF|INSN_ALIAS },
+{"th.vlseg4wu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLSEG4E32V, MASK_VLSEG4E32V, match_vd_neq_vm_with_nf, INSN_DREF },
+{"vlseg4e.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLSEG4E64V, MASK_VLSEG4E64V, match_vd_neq_vm_with_nf, INSN_DREF|INSN_ALIAS },
+{"th.vlseg4e.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLSEG4E64V, MASK_VLSEG4E64V, match_vd_neq_vm_with_nf, INSN_DREF },
+{"vsseg4b.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VSSEG4E8V, MASK_VSSEG4E8V, match_vd_with_nf, INSN_DREF|INSN_ALIAS },
+{"th.vsseg4b.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VSSEG4E8V, MASK_VSSEG4E8V, match_vd_with_nf, INSN_DREF },
+{"vsseg4h.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VSSEG4E16V, MASK_VSSEG4E16V, match_vd_with_nf, INSN_DREF|INSN_ALIAS },
+{"th.vsseg4h.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VSSEG4E16V, MASK_VSSEG4E16V, match_vd_with_nf, INSN_DREF },
+{"vsseg4w.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VSSEG4E32V, MASK_VSSEG4E32V, match_vd_with_nf, INSN_DREF|INSN_ALIAS },
+{"th.vsseg4w.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VSSEG4E32V, MASK_VSSEG4E32V, match_vd_with_nf, INSN_DREF },
+{"vsseg4e.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VSSEG4E64V, MASK_VSSEG4E64V, match_vd_with_nf, INSN_DREF|INSN_ALIAS },
+{"th.vsseg4e.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VSSEG4E64V, MASK_VSSEG4E64V, match_vd_with_nf, INSN_DREF },
+{"vlseg5b.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_TH_VLSEG5BV, MASK_TH_VLSEG5BV, match_vd_neq_vm_with_nf, INSN_DREF|INSN_ALIAS },
+{"th.vlseg5b.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_TH_VLSEG5BV, MASK_TH_VLSEG5BV, match_vd_neq_vm_with_nf, INSN_DREF },
+{"vlseg5h.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_TH_VLSEG5HV, MASK_TH_VLSEG5HV, match_vd_neq_vm_with_nf, INSN_DREF|INSN_ALIAS },
+{"th.vlseg5h.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_TH_VLSEG5HV, MASK_TH_VLSEG5HV, match_vd_neq_vm_with_nf, INSN_DREF },
+{"vlseg5w.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_TH_VLSEG5WV, MASK_TH_VLSEG5WV, match_vd_neq_vm_with_nf, INSN_DREF|INSN_ALIAS },
+{"th.vlseg5w.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_TH_VLSEG5WV, MASK_TH_VLSEG5WV, match_vd_neq_vm_with_nf, INSN_DREF },
+{"vlseg5bu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLSEG5E8V, MASK_VLSEG5E8V, match_vd_neq_vm_with_nf, INSN_DREF|INSN_ALIAS },
+{"th.vlseg5bu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLSEG5E8V, MASK_VLSEG5E8V, match_vd_neq_vm_with_nf, INSN_DREF },
+{"vlseg5hu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLSEG5E16V, MASK_VLSEG5E16V, match_vd_neq_vm_with_nf, INSN_DREF|INSN_ALIAS },
+{"th.vlseg5hu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLSEG5E16V, MASK_VLSEG5E16V, match_vd_neq_vm_with_nf, INSN_DREF },
+{"vlseg5wu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLSEG5E32V, MASK_VLSEG5E32V, match_vd_neq_vm_with_nf, INSN_DREF|INSN_ALIAS },
+{"th.vlseg5wu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLSEG5E32V, MASK_VLSEG5E32V, match_vd_neq_vm_with_nf, INSN_DREF },
+{"vlseg5e.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLSEG5E64V, MASK_VLSEG5E64V, match_vd_neq_vm_with_nf, INSN_DREF|INSN_ALIAS },
+{"th.vlseg5e.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLSEG5E64V, MASK_VLSEG5E64V, match_vd_neq_vm_with_nf, INSN_DREF },
+{"vsseg5b.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VSSEG5E8V, MASK_VSSEG5E8V, match_vd_with_nf, INSN_DREF|INSN_ALIAS },
+{"th.vsseg5b.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VSSEG5E8V, MASK_VSSEG5E8V, match_vd_with_nf, INSN_DREF },
+{"vsseg5h.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VSSEG5E16V, MASK_VSSEG5E16V, match_vd_with_nf, INSN_DREF|INSN_ALIAS },
+{"th.vsseg5h.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VSSEG5E16V, MASK_VSSEG5E16V, match_vd_with_nf, INSN_DREF },
+{"vsseg5w.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VSSEG5E32V, MASK_VSSEG5E32V, match_vd_with_nf, INSN_DREF|INSN_ALIAS },
+{"th.vsseg5w.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VSSEG5E32V, MASK_VSSEG5E32V, match_vd_with_nf, INSN_DREF },
+{"vsseg5e.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VSSEG5E64V, MASK_VSSEG5E64V, match_vd_with_nf, INSN_DREF|INSN_ALIAS },
+{"th.vsseg5e.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VSSEG5E64V, MASK_VSSEG5E64V, match_vd_with_nf, INSN_DREF },
+{"vlseg6b.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_TH_VLSEG6BV, MASK_TH_VLSEG6BV, match_vd_neq_vm_with_nf, INSN_DREF|INSN_ALIAS },
+{"th.vlseg6b.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_TH_VLSEG6BV, MASK_TH_VLSEG6BV, match_vd_neq_vm_with_nf, INSN_DREF },
+{"vlseg6h.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_TH_VLSEG6HV, MASK_TH_VLSEG6HV, match_vd_neq_vm_with_nf, INSN_DREF|INSN_ALIAS },
+{"th.vlseg6h.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_TH_VLSEG6HV, MASK_TH_VLSEG6HV, match_vd_neq_vm_with_nf, INSN_DREF },
+{"vlseg6w.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_TH_VLSEG6WV, MASK_TH_VLSEG6WV, match_vd_neq_vm_with_nf, INSN_DREF|INSN_ALIAS },
+{"th.vlseg6w.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_TH_VLSEG6WV, MASK_TH_VLSEG6WV, match_vd_neq_vm_with_nf, INSN_DREF },
+{"vlseg6bu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLSEG6E8V, MASK_VLSEG6E8V, match_vd_neq_vm_with_nf, INSN_DREF|INSN_ALIAS },
+{"th.vlseg6bu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLSEG6E8V, MASK_VLSEG6E8V, match_vd_neq_vm_with_nf, INSN_DREF },
+{"vlseg6hu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLSEG6E16V, MASK_VLSEG6E16V, match_vd_neq_vm_with_nf, INSN_DREF|INSN_ALIAS },
+{"th.vlseg6hu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLSEG6E16V, MASK_VLSEG6E16V, match_vd_neq_vm_with_nf, INSN_DREF },
+{"vlseg6wu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLSEG6E32V, MASK_VLSEG6E32V, match_vd_neq_vm_with_nf, INSN_DREF|INSN_ALIAS },
+{"th.vlseg6wu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLSEG6E32V, MASK_VLSEG6E32V, match_vd_neq_vm_with_nf, INSN_DREF },
+{"vlseg6e.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLSEG6E64V, MASK_VLSEG6E64V, match_vd_neq_vm_with_nf, INSN_DREF|INSN_ALIAS },
+{"th.vlseg6e.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLSEG6E64V, MASK_VLSEG6E64V, match_vd_neq_vm_with_nf, INSN_DREF },
+{"vsseg6b.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VSSEG6E8V, MASK_VSSEG6E8V, match_vd_with_nf, INSN_DREF|INSN_ALIAS },
+{"th.vsseg6b.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VSSEG6E8V, MASK_VSSEG6E8V, match_vd_with_nf, INSN_DREF },
+{"vsseg6h.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VSSEG6E16V, MASK_VSSEG6E16V, match_vd_with_nf, INSN_DREF|INSN_ALIAS },
+{"th.vsseg6h.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VSSEG6E16V, MASK_VSSEG6E16V, match_vd_with_nf, INSN_DREF },
+{"vsseg6w.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VSSEG6E32V, MASK_VSSEG6E32V, match_vd_with_nf, INSN_DREF|INSN_ALIAS },
+{"th.vsseg6w.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VSSEG6E32V, MASK_VSSEG6E32V, match_vd_with_nf, INSN_DREF },
+{"vsseg6e.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VSSEG6E64V, MASK_VSSEG6E64V, match_vd_with_nf, INSN_DREF|INSN_ALIAS },
+{"th.vsseg6e.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VSSEG6E64V, MASK_VSSEG6E64V, match_vd_with_nf, INSN_DREF },
+{"vlseg7b.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_TH_VLSEG7BV, MASK_TH_VLSEG7BV, match_vd_neq_vm_with_nf, INSN_DREF|INSN_ALIAS },
+{"th.vlseg7b.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_TH_VLSEG7BV, MASK_TH_VLSEG7BV, match_vd_neq_vm_with_nf, INSN_DREF },
+{"vlseg7h.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_TH_VLSEG7HV, MASK_TH_VLSEG7HV, match_vd_neq_vm_with_nf, INSN_DREF|INSN_ALIAS },
+{"th.vlseg7h.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_TH_VLSEG7HV, MASK_TH_VLSEG7HV, match_vd_neq_vm_with_nf, INSN_DREF },
+{"vlseg7w.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_TH_VLSEG7WV, MASK_TH_VLSEG7WV, match_vd_neq_vm_with_nf, INSN_DREF|INSN_ALIAS },
+{"th.vlseg7w.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_TH_VLSEG7WV, MASK_TH_VLSEG7WV, match_vd_neq_vm_with_nf, INSN_DREF },
+{"vlseg7bu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLSEG7E8V, MASK_VLSEG7E8V, match_vd_neq_vm_with_nf, INSN_DREF|INSN_ALIAS },
+{"th.vlseg7bu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLSEG7E8V, MASK_VLSEG7E8V, match_vd_neq_vm_with_nf, INSN_DREF },
+{"vlseg7hu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLSEG7E16V, MASK_VLSEG7E16V, match_vd_neq_vm_with_nf, INSN_DREF|INSN_ALIAS },
+{"th.vlseg7hu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLSEG7E16V, MASK_VLSEG7E16V, match_vd_neq_vm_with_nf, INSN_DREF },
+{"vlseg7wu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLSEG7E32V, MASK_VLSEG7E32V, match_vd_neq_vm_with_nf, INSN_DREF|INSN_ALIAS },
+{"th.vlseg7wu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLSEG7E32V, MASK_VLSEG7E32V, match_vd_neq_vm_with_nf, INSN_DREF },
+{"vlseg7e.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLSEG7E64V, MASK_VLSEG7E64V, match_vd_neq_vm_with_nf, INSN_DREF|INSN_ALIAS },
+{"th.vlseg7e.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLSEG7E64V, MASK_VLSEG7E64V, match_vd_neq_vm_with_nf, INSN_DREF },
+{"vsseg7b.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VSSEG7E8V, MASK_VSSEG7E8V, match_vd_with_nf, INSN_DREF|INSN_ALIAS },
+{"th.vsseg7b.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VSSEG7E8V, MASK_VSSEG7E8V, match_vd_with_nf, INSN_DREF },
+{"vsseg7h.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VSSEG7E16V, MASK_VSSEG7E16V, match_vd_with_nf, INSN_DREF|INSN_ALIAS },
+{"th.vsseg7h.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VSSEG7E16V, MASK_VSSEG7E16V, match_vd_with_nf, INSN_DREF },
+{"vsseg7w.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VSSEG7E32V, MASK_VSSEG7E32V, match_vd_with_nf, INSN_DREF|INSN_ALIAS },
+{"th.vsseg7w.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VSSEG7E32V, MASK_VSSEG7E32V, match_vd_with_nf, INSN_DREF },
+{"vsseg7e.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VSSEG7E64V, MASK_VSSEG7E64V, match_vd_with_nf, INSN_DREF|INSN_ALIAS },
+{"th.vsseg7e.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VSSEG7E64V, MASK_VSSEG7E64V, match_vd_with_nf, INSN_DREF },
+{"vlseg8b.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_TH_VLSEG8BV, MASK_TH_VLSEG8BV, match_vd_neq_vm_with_nf, INSN_DREF|INSN_ALIAS },
+{"th.vlseg8b.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_TH_VLSEG8BV, MASK_TH_VLSEG8BV, match_vd_neq_vm_with_nf, INSN_DREF },
+{"vlseg8h.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_TH_VLSEG8HV, MASK_TH_VLSEG8HV, match_vd_neq_vm_with_nf, INSN_DREF|INSN_ALIAS },
+{"th.vlseg8h.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_TH_VLSEG8HV, MASK_TH_VLSEG8HV, match_vd_neq_vm_with_nf, INSN_DREF },
+{"vlseg8w.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_TH_VLSEG8WV, MASK_TH_VLSEG8WV, match_vd_neq_vm_with_nf, INSN_DREF|INSN_ALIAS },
+{"th.vlseg8w.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_TH_VLSEG8WV, MASK_TH_VLSEG8WV, match_vd_neq_vm_with_nf, INSN_DREF },
+{"vlseg8bu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLSEG8E8V, MASK_VLSEG8E8V, match_vd_neq_vm_with_nf, INSN_DREF|INSN_ALIAS },
+{"th.vlseg8bu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLSEG8E8V, MASK_VLSEG8E8V, match_vd_neq_vm_with_nf, INSN_DREF },
+{"vlseg8hu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLSEG8E16V, MASK_VLSEG8E16V, match_vd_neq_vm_with_nf, INSN_DREF|INSN_ALIAS },
+{"th.vlseg8hu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLSEG8E16V, MASK_VLSEG8E16V, match_vd_neq_vm_with_nf, INSN_DREF },
+{"vlseg8wu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLSEG8E32V, MASK_VLSEG8E32V, match_vd_neq_vm_with_nf, INSN_DREF|INSN_ALIAS },
+{"th.vlseg8wu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLSEG8E32V, MASK_VLSEG8E32V, match_vd_neq_vm_with_nf, INSN_DREF },
+{"vlseg8e.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLSEG8E64V, MASK_VLSEG8E64V, match_vd_neq_vm_with_nf, INSN_DREF|INSN_ALIAS },
+{"th.vlseg8e.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLSEG8E64V, MASK_VLSEG8E64V, match_vd_neq_vm_with_nf, INSN_DREF },
+{"vsseg8b.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VSSEG8E8V, MASK_VSSEG8E8V, match_vd_with_nf, INSN_DREF|INSN_ALIAS },
+{"th.vsseg8b.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VSSEG8E8V, MASK_VSSEG8E8V, match_vd_with_nf, INSN_DREF },
+{"vsseg8h.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VSSEG8E16V, MASK_VSSEG8E16V, match_vd_with_nf, INSN_DREF|INSN_ALIAS },
+{"th.vsseg8h.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VSSEG8E16V, MASK_VSSEG8E16V, match_vd_with_nf, INSN_DREF },
+{"vsseg8w.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VSSEG8E32V, MASK_VSSEG8E32V, match_vd_with_nf, INSN_DREF|INSN_ALIAS },
+{"th.vsseg8w.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VSSEG8E32V, MASK_VSSEG8E32V, match_vd_with_nf, INSN_DREF },
+{"vsseg8e.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VSSEG8E64V, MASK_VSSEG8E64V, match_vd_with_nf, INSN_DREF|INSN_ALIAS },
+{"th.vsseg8e.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VSSEG8E64V, MASK_VSSEG8E64V, match_vd_with_nf, INSN_DREF },
+{"vlsseg2b.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_TH_VLSSEG2BV, MASK_TH_VLSSEG2BV, match_vd_neq_vm, INSN_DREF|INSN_ALIAS },
+{"th.vlsseg2b.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_TH_VLSSEG2BV, MASK_TH_VLSSEG2BV, match_vd_neq_vm, INSN_DREF },
+{"vlsseg2h.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_TH_VLSSEG2HV, MASK_TH_VLSSEG2HV, match_vd_neq_vm, INSN_DREF|INSN_ALIAS },
+{"th.vlsseg2h.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_TH_VLSSEG2HV, MASK_TH_VLSSEG2HV, match_vd_neq_vm, INSN_DREF },
+{"vlsseg2w.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_TH_VLSSEG2WV, MASK_TH_VLSSEG2WV, match_vd_neq_vm, INSN_DREF|INSN_ALIAS },
+{"th.vlsseg2w.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_TH_VLSSEG2WV, MASK_TH_VLSSEG2WV, match_vd_neq_vm, INSN_DREF },
+{"vlsseg2bu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VLSSEG2E8V, MASK_VLSSEG2E8V, match_vd_neq_vm, INSN_DREF|INSN_ALIAS },
+{"th.vlsseg2bu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VLSSEG2E8V, MASK_VLSSEG2E8V, match_vd_neq_vm, INSN_DREF },
+{"vlsseg2hu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VLSSEG2E16V, MASK_VLSSEG2E16V, match_vd_neq_vm, INSN_DREF|INSN_ALIAS },
+{"th.vlsseg2hu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VLSSEG2E16V, MASK_VLSSEG2E16V, match_vd_neq_vm, INSN_DREF },
+{"vlsseg2wu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VLSSEG2E32V, MASK_VLSSEG2E32V, match_vd_neq_vm, INSN_DREF|INSN_ALIAS },
+{"th.vlsseg2wu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VLSSEG2E32V, MASK_VLSSEG2E32V, match_vd_neq_vm, INSN_DREF },
+{"vlsseg2e.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VLSSEG2E64V, MASK_VLSSEG2E64V, match_vd_neq_vm, INSN_DREF|INSN_ALIAS },
+{"th.vlsseg2e.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VLSSEG2E64V, MASK_VLSSEG2E64V, match_vd_neq_vm, INSN_DREF },
+{"vssseg2b.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VSSSEG2E8V, MASK_VSSSEG2E8V, match_vd_neq_vm, INSN_DREF|INSN_ALIAS },
+{"th.vssseg2b.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VSSSEG2E8V, MASK_VSSSEG2E8V, match_vd_neq_vm, INSN_DREF },
+{"vssseg2h.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VSSSEG2E16V, MASK_VSSSEG2E16V, match_vd_neq_vm, INSN_DREF|INSN_ALIAS },
+{"th.vssseg2h.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VSSSEG2E16V, MASK_VSSSEG2E16V, match_vd_neq_vm, INSN_DREF },
+{"vssseg2w.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VSSSEG2E32V, MASK_VSSSEG2E32V, match_vd_neq_vm, INSN_DREF|INSN_ALIAS },
+{"th.vssseg2w.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VSSSEG2E32V, MASK_VSSSEG2E32V, match_vd_neq_vm, INSN_DREF },
+{"vssseg2e.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VSSSEG2E64V, MASK_VSSSEG2E64V, match_vd_neq_vm, INSN_DREF|INSN_ALIAS },
+{"th.vssseg2e.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VSSSEG2E64V, MASK_VSSSEG2E64V, match_vd_neq_vm, INSN_DREF },
+{"vlsseg3b.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_TH_VLSSEG3BV, MASK_TH_VLSSEG3BV, match_vd_neq_vm, INSN_DREF|INSN_ALIAS },
+{"th.vlsseg3b.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_TH_VLSSEG3BV, MASK_TH_VLSSEG3BV, match_vd_neq_vm, INSN_DREF },
+{"vlsseg3h.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_TH_VLSSEG3HV, MASK_TH_VLSSEG3HV, match_vd_neq_vm, INSN_DREF|INSN_ALIAS },
+{"th.vlsseg3h.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_TH_VLSSEG3HV, MASK_TH_VLSSEG3HV, match_vd_neq_vm, INSN_DREF },
+{"vlsseg3w.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_TH_VLSSEG3WV, MASK_TH_VLSSEG3WV, match_vd_neq_vm, INSN_DREF|INSN_ALIAS },
+{"th.vlsseg3w.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_TH_VLSSEG3WV, MASK_TH_VLSSEG3WV, match_vd_neq_vm, INSN_DREF },
+{"vlsseg3bu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VLSSEG3E8V, MASK_VLSSEG3E8V, match_vd_neq_vm, INSN_DREF|INSN_ALIAS },
+{"th.vlsseg3bu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VLSSEG3E8V, MASK_VLSSEG3E8V, match_vd_neq_vm, INSN_DREF },
+{"vlsseg3hu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VLSSEG3E16V, MASK_VLSSEG3E16V, match_vd_neq_vm, INSN_DREF|INSN_ALIAS },
+{"th.vlsseg3hu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VLSSEG3E16V, MASK_VLSSEG3E16V, match_vd_neq_vm, INSN_DREF },
+{"vlsseg3wu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VLSSEG3E32V, MASK_VLSSEG3E32V, match_vd_neq_vm, INSN_DREF|INSN_ALIAS },
+{"th.vlsseg3wu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VLSSEG3E32V, MASK_VLSSEG3E32V, match_vd_neq_vm, INSN_DREF },
+{"vlsseg3e.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VLSSEG3E64V, MASK_VLSSEG3E64V, match_vd_neq_vm, INSN_DREF|INSN_ALIAS },
+{"th.vlsseg3e.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VLSSEG3E64V, MASK_VLSSEG3E64V, match_vd_neq_vm, INSN_DREF },
+{"vssseg3b.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VSSSEG3E8V, MASK_VSSSEG3E8V, match_vd_neq_vm, INSN_DREF|INSN_ALIAS },
+{"th.vssseg3b.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VSSSEG3E8V, MASK_VSSSEG3E8V, match_vd_neq_vm, INSN_DREF },
+{"vssseg3h.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VSSSEG3E16V, MASK_VSSSEG3E16V, match_vd_neq_vm, INSN_DREF|INSN_ALIAS },
+{"th.vssseg3h.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VSSSEG3E16V, MASK_VSSSEG3E16V, match_vd_neq_vm, INSN_DREF },
+{"vssseg3w.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VSSSEG3E32V, MASK_VSSSEG3E32V, match_vd_neq_vm, INSN_DREF|INSN_ALIAS },
+{"th.vssseg3w.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VSSSEG3E32V, MASK_VSSSEG3E32V, match_vd_neq_vm, INSN_DREF },
+{"vssseg3e.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VSSSEG3E64V, MASK_VSSSEG3E64V, match_vd_neq_vm, INSN_DREF|INSN_ALIAS },
+{"th.vssseg3e.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VSSSEG3E64V, MASK_VSSSEG3E64V, match_vd_neq_vm, INSN_DREF },
+{"vlsseg4b.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_TH_VLSSEG4BV, MASK_TH_VLSSEG4BV, match_vd_neq_vm, INSN_DREF|INSN_ALIAS },
+{"th.vlsseg4b.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_TH_VLSSEG4BV, MASK_TH_VLSSEG4BV, match_vd_neq_vm, INSN_DREF },
+{"vlsseg4h.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_TH_VLSSEG4HV, MASK_TH_VLSSEG4HV, match_vd_neq_vm, INSN_DREF|INSN_ALIAS },
+{"th.vlsseg4h.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_TH_VLSSEG4HV, MASK_TH_VLSSEG4HV, match_vd_neq_vm, INSN_DREF },
+{"vlsseg4w.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_TH_VLSSEG4WV, MASK_TH_VLSSEG4WV, match_vd_neq_vm, INSN_DREF|INSN_ALIAS },
+{"th.vlsseg4w.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_TH_VLSSEG4WV, MASK_TH_VLSSEG4WV, match_vd_neq_vm, INSN_DREF },
+{"vlsseg4bu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VLSSEG4E8V, MASK_VLSSEG4E8V, match_vd_neq_vm, INSN_DREF|INSN_ALIAS },
+{"th.vlsseg4bu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VLSSEG4E8V, MASK_VLSSEG4E8V, match_vd_neq_vm, INSN_DREF },
+{"vlsseg4hu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VLSSEG4E16V, MASK_VLSSEG4E16V, match_vd_neq_vm, INSN_DREF|INSN_ALIAS },
+{"th.vlsseg4hu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VLSSEG4E16V, MASK_VLSSEG4E16V, match_vd_neq_vm, INSN_DREF },
+{"vlsseg4wu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VLSSEG4E32V, MASK_VLSSEG4E32V, match_vd_neq_vm, INSN_DREF|INSN_ALIAS },
+{"th.vlsseg4wu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VLSSEG4E32V, MASK_VLSSEG4E32V, match_vd_neq_vm, INSN_DREF },
+{"vlsseg4e.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VLSSEG4E64V, MASK_VLSSEG4E64V, match_vd_neq_vm, INSN_DREF|INSN_ALIAS },
+{"th.vlsseg4e.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VLSSEG4E64V, MASK_VLSSEG4E64V, match_vd_neq_vm, INSN_DREF },
+{"vssseg4b.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VSSSEG4E8V, MASK_VSSSEG4E8V, match_vd_neq_vm, INSN_DREF|INSN_ALIAS },
+{"th.vssseg4b.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VSSSEG4E8V, MASK_VSSSEG4E8V, match_vd_neq_vm, INSN_DREF },
+{"vssseg4h.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VSSSEG4E16V, MASK_VSSSEG4E16V, match_vd_neq_vm, INSN_DREF|INSN_ALIAS },
+{"th.vssseg4h.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VSSSEG4E16V, MASK_VSSSEG4E16V, match_vd_neq_vm, INSN_DREF },
+{"vssseg4w.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VSSSEG4E32V, MASK_VSSSEG4E32V, match_vd_neq_vm, INSN_DREF|INSN_ALIAS },
+{"th.vssseg4w.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VSSSEG4E32V, MASK_VSSSEG4E32V, match_vd_neq_vm, INSN_DREF },
+{"vssseg4e.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VSSSEG4E64V, MASK_VSSSEG4E64V, match_vd_neq_vm, INSN_DREF|INSN_ALIAS },
+{"th.vssseg4e.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VSSSEG4E64V, MASK_VSSSEG4E64V, match_vd_neq_vm, INSN_DREF },
+{"vlsseg5b.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_TH_VLSSEG5BV, MASK_TH_VLSSEG5BV, match_vd_neq_vm, INSN_DREF|INSN_ALIAS },
+{"th.vlsseg5b.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_TH_VLSSEG5BV, MASK_TH_VLSSEG5BV, match_vd_neq_vm, INSN_DREF },
+{"vlsseg5h.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_TH_VLSSEG5HV, MASK_TH_VLSSEG5HV, match_vd_neq_vm, INSN_DREF|INSN_ALIAS },
+{"th.vlsseg5h.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_TH_VLSSEG5HV, MASK_TH_VLSSEG5HV, match_vd_neq_vm, INSN_DREF },
+{"vlsseg5w.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_TH_VLSSEG5WV, MASK_TH_VLSSEG5WV, match_vd_neq_vm, INSN_DREF|INSN_ALIAS },
+{"th.vlsseg5w.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_TH_VLSSEG5WV, MASK_TH_VLSSEG5WV, match_vd_neq_vm, INSN_DREF },
+{"vlsseg5bu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VLSSEG5E8V, MASK_VLSSEG5E8V, match_vd_neq_vm, INSN_DREF|INSN_ALIAS },
+{"th.vlsseg5bu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VLSSEG5E8V, MASK_VLSSEG5E8V, match_vd_neq_vm, INSN_DREF },
+{"vlsseg5hu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VLSSEG5E16V, MASK_VLSSEG5E16V, match_vd_neq_vm, INSN_DREF|INSN_ALIAS },
+{"th.vlsseg5hu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VLSSEG5E16V, MASK_VLSSEG5E16V, match_vd_neq_vm, INSN_DREF },
+{"vlsseg5wu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VLSSEG5E32V, MASK_VLSSEG5E32V, match_vd_neq_vm, INSN_DREF|INSN_ALIAS },
+{"th.vlsseg5wu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VLSSEG5E32V, MASK_VLSSEG5E32V, match_vd_neq_vm, INSN_DREF },
+{"vlsseg5e.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VLSSEG5E64V, MASK_VLSSEG5E64V, match_vd_neq_vm, INSN_DREF|INSN_ALIAS },
+{"th.vlsseg5e.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VLSSEG5E64V, MASK_VLSSEG5E64V, match_vd_neq_vm, INSN_DREF },
+{"vssseg5b.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VSSSEG5E8V, MASK_VSSSEG5E8V, match_vd_neq_vm, INSN_DREF|INSN_ALIAS },
+{"th.vssseg5b.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VSSSEG5E8V, MASK_VSSSEG5E8V, match_vd_neq_vm, INSN_DREF },
+{"vssseg5h.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VSSSEG5E16V, MASK_VSSSEG5E16V, match_vd_neq_vm, INSN_DREF|INSN_ALIAS },
+{"th.vssseg5h.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VSSSEG5E16V, MASK_VSSSEG5E16V, match_vd_neq_vm, INSN_DREF },
+{"vssseg5w.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VSSSEG5E32V, MASK_VSSSEG5E32V, match_vd_neq_vm, INSN_DREF|INSN_ALIAS },
+{"th.vssseg5w.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VSSSEG5E32V, MASK_VSSSEG5E32V, match_vd_neq_vm, INSN_DREF },
+{"vssseg5e.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VSSSEG5E64V, MASK_VSSSEG5E64V, match_vd_neq_vm, INSN_DREF|INSN_ALIAS },
+{"th.vssseg5e.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VSSSEG5E64V, MASK_VSSSEG5E64V, match_vd_neq_vm, INSN_DREF },
+{"vlsseg6b.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_TH_VLSSEG6BV, MASK_TH_VLSSEG6BV, match_vd_neq_vm, INSN_DREF|INSN_ALIAS },
+{"th.vlsseg6b.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_TH_VLSSEG6BV, MASK_TH_VLSSEG6BV, match_vd_neq_vm, INSN_DREF },
+{"vlsseg6h.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_TH_VLSSEG6HV, MASK_TH_VLSSEG6HV, match_vd_neq_vm, INSN_DREF|INSN_ALIAS },
+{"th.vlsseg6h.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_TH_VLSSEG6HV, MASK_TH_VLSSEG6HV, match_vd_neq_vm, INSN_DREF },
+{"vlsseg6w.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_TH_VLSSEG6WV, MASK_TH_VLSSEG6WV, match_vd_neq_vm, INSN_DREF|INSN_ALIAS },
+{"th.vlsseg6w.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_TH_VLSSEG6WV, MASK_TH_VLSSEG6WV, match_vd_neq_vm, INSN_DREF },
+{"vlsseg6bu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VLSSEG6E8V, MASK_VLSSEG6E8V, match_vd_neq_vm, INSN_DREF|INSN_ALIAS },
+{"th.vlsseg6bu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VLSSEG6E8V, MASK_VLSSEG6E8V, match_vd_neq_vm, INSN_DREF },
+{"vlsseg6hu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VLSSEG6E16V, MASK_VLSSEG6E16V, match_vd_neq_vm, INSN_DREF|INSN_ALIAS },
+{"th.vlsseg6hu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VLSSEG6E16V, MASK_VLSSEG6E16V, match_vd_neq_vm, INSN_DREF },
+{"vlsseg6wu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VLSSEG6E32V, MASK_VLSSEG6E32V, match_vd_neq_vm, INSN_DREF|INSN_ALIAS },
+{"th.vlsseg6wu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VLSSEG6E32V, MASK_VLSSEG6E32V, match_vd_neq_vm, INSN_DREF },
+{"vlsseg6e.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VLSSEG6E64V, MASK_VLSSEG6E64V, match_vd_neq_vm, INSN_DREF|INSN_ALIAS },
+{"th.vlsseg6e.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VLSSEG6E64V, MASK_VLSSEG6E64V, match_vd_neq_vm, INSN_DREF },
+{"vssseg6b.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VSSSEG6E8V, MASK_VSSSEG6E8V, match_vd_neq_vm, INSN_DREF|INSN_ALIAS },
+{"th.vssseg6b.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VSSSEG6E8V, MASK_VSSSEG6E8V, match_vd_neq_vm, INSN_DREF },
+{"vssseg6h.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VSSSEG6E16V, MASK_VSSSEG6E16V, match_vd_neq_vm, INSN_DREF|INSN_ALIAS },
+{"th.vssseg6h.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VSSSEG6E16V, MASK_VSSSEG6E16V, match_vd_neq_vm, INSN_DREF },
+{"vssseg6w.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VSSSEG6E32V, MASK_VSSSEG6E32V, match_vd_neq_vm, INSN_DREF|INSN_ALIAS },
+{"th.vssseg6w.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VSSSEG6E32V, MASK_VSSSEG6E32V, match_vd_neq_vm, INSN_DREF },
+{"vssseg6e.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VSSSEG6E64V, MASK_VSSSEG6E64V, match_vd_neq_vm, INSN_DREF|INSN_ALIAS },
+{"th.vssseg6e.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VSSSEG6E64V, MASK_VSSSEG6E64V, match_vd_neq_vm, INSN_DREF },
+{"vlsseg7b.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_TH_VLSSEG7BV, MASK_TH_VLSSEG7BV, match_vd_neq_vm, INSN_DREF|INSN_ALIAS },
+{"th.vlsseg7b.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_TH_VLSSEG7BV, MASK_TH_VLSSEG7BV, match_vd_neq_vm, INSN_DREF },
+{"vlsseg7h.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_TH_VLSSEG7HV, MASK_TH_VLSSEG7HV, match_vd_neq_vm, INSN_DREF|INSN_ALIAS },
+{"th.vlsseg7h.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_TH_VLSSEG7HV, MASK_TH_VLSSEG7HV, match_vd_neq_vm, INSN_DREF },
+{"vlsseg7w.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_TH_VLSSEG7WV, MASK_TH_VLSSEG7WV, match_vd_neq_vm, INSN_DREF|INSN_ALIAS },
+{"th.vlsseg7w.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_TH_VLSSEG7WV, MASK_TH_VLSSEG7WV, match_vd_neq_vm, INSN_DREF },
+{"vlsseg7bu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VLSSEG7E8V, MASK_VLSSEG7E8V, match_vd_neq_vm, INSN_DREF|INSN_ALIAS },
+{"th.vlsseg7bu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VLSSEG7E8V, MASK_VLSSEG7E8V, match_vd_neq_vm, INSN_DREF },
+{"vlsseg7hu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VLSSEG7E16V, MASK_VLSSEG7E16V, match_vd_neq_vm, INSN_DREF|INSN_ALIAS },
+{"th.vlsseg7hu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VLSSEG7E16V, MASK_VLSSEG7E16V, match_vd_neq_vm, INSN_DREF },
+{"vlsseg7wu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VLSSEG7E32V, MASK_VLSSEG7E32V, match_vd_neq_vm, INSN_DREF|INSN_ALIAS },
+{"th.vlsseg7wu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VLSSEG7E32V, MASK_VLSSEG7E32V, match_vd_neq_vm, INSN_DREF },
+{"vlsseg7e.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VLSSEG7E64V, MASK_VLSSEG7E64V, match_vd_neq_vm, INSN_DREF|INSN_ALIAS },
+{"th.vlsseg7e.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VLSSEG7E64V, MASK_VLSSEG7E64V, match_vd_neq_vm, INSN_DREF },
+{"vssseg7b.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VSSSEG7E8V, MASK_VSSSEG7E8V, match_vd_neq_vm, INSN_DREF|INSN_ALIAS },
+{"th.vssseg7b.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VSSSEG7E8V, MASK_VSSSEG7E8V, match_vd_neq_vm, INSN_DREF },
+{"vssseg7h.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VSSSEG7E16V, MASK_VSSSEG7E16V, match_vd_neq_vm, INSN_DREF|INSN_ALIAS },
+{"th.vssseg7h.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VSSSEG7E16V, MASK_VSSSEG7E16V, match_vd_neq_vm, INSN_DREF },
+{"vssseg7w.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VSSSEG7E32V, MASK_VSSSEG7E32V, match_vd_neq_vm, INSN_DREF|INSN_ALIAS },
+{"th.vssseg7w.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VSSSEG7E32V, MASK_VSSSEG7E32V, match_vd_neq_vm, INSN_DREF },
+{"vssseg7e.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VSSSEG7E64V, MASK_VSSSEG7E64V, match_vd_neq_vm, INSN_DREF|INSN_ALIAS },
+{"th.vssseg7e.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VSSSEG7E64V, MASK_VSSSEG7E64V, match_vd_neq_vm, INSN_DREF },
+{"vlsseg8b.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_TH_VLSSEG8BV, MASK_TH_VLSSEG8BV, match_vd_neq_vm, INSN_DREF|INSN_ALIAS },
+{"th.vlsseg8b.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_TH_VLSSEG8BV, MASK_TH_VLSSEG8BV, match_vd_neq_vm, INSN_DREF },
+{"vlsseg8h.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_TH_VLSSEG8HV, MASK_TH_VLSSEG8HV, match_vd_neq_vm, INSN_DREF|INSN_ALIAS },
+{"th.vlsseg8h.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_TH_VLSSEG8HV, MASK_TH_VLSSEG8HV, match_vd_neq_vm, INSN_DREF },
+{"vlsseg8w.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_TH_VLSSEG8WV, MASK_TH_VLSSEG8WV, match_vd_neq_vm, INSN_DREF|INSN_ALIAS },
+{"th.vlsseg8w.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_TH_VLSSEG8WV, MASK_TH_VLSSEG8WV, match_vd_neq_vm, INSN_DREF },
+{"vlsseg8bu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VLSSEG8E8V, MASK_VLSSEG8E8V, match_vd_neq_vm, INSN_DREF|INSN_ALIAS },
+{"th.vlsseg8bu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VLSSEG8E8V, MASK_VLSSEG8E8V, match_vd_neq_vm, INSN_DREF },
+{"vlsseg8hu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VLSSEG8E16V, MASK_VLSSEG8E16V, match_vd_neq_vm, INSN_DREF|INSN_ALIAS },
+{"th.vlsseg8hu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VLSSEG8E16V, MASK_VLSSEG8E16V, match_vd_neq_vm, INSN_DREF },
+{"vlsseg8wu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VLSSEG8E32V, MASK_VLSSEG8E32V, match_vd_neq_vm, INSN_DREF|INSN_ALIAS },
+{"th.vlsseg8wu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VLSSEG8E32V, MASK_VLSSEG8E32V, match_vd_neq_vm, INSN_DREF },
+{"vlsseg8e.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VLSSEG8E64V, MASK_VLSSEG8E64V, match_vd_neq_vm, INSN_DREF|INSN_ALIAS },
+{"th.vlsseg8e.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VLSSEG8E64V, MASK_VLSSEG8E64V, match_vd_neq_vm, INSN_DREF },
+{"vssseg8b.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VSSSEG8E8V, MASK_VSSSEG8E8V, match_vd_neq_vm, INSN_DREF|INSN_ALIAS },
+{"th.vssseg8b.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VSSSEG8E8V, MASK_VSSSEG8E8V, match_vd_neq_vm, INSN_DREF },
+{"vssseg8h.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VSSSEG8E16V, MASK_VSSSEG8E16V, match_vd_neq_vm, INSN_DREF|INSN_ALIAS },
+{"th.vssseg8h.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VSSSEG8E16V, MASK_VSSSEG8E16V, match_vd_neq_vm, INSN_DREF },
+{"vssseg8w.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VSSSEG8E32V, MASK_VSSSEG8E32V, match_vd_neq_vm, INSN_DREF|INSN_ALIAS },
+{"th.vssseg8w.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VSSSEG8E32V, MASK_VSSSEG8E32V, match_vd_neq_vm, INSN_DREF },
+{"vssseg8e.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VSSSEG8E64V, MASK_VSSSEG8E64V, match_vd_neq_vm, INSN_DREF|INSN_ALIAS },
+{"th.vssseg8e.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),tVm", MATCH_VSSSEG8E64V, MASK_VSSSEG8E64V, match_vd_neq_vm, INSN_DREF },
+{"vlxseg2b.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_TH_VLXSEG2BV, MASK_TH_VLXSEG2BV, match_vd_neq_vm_with_nf, INSN_DREF|INSN_ALIAS },
+{"th.vlxseg2b.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_TH_VLXSEG2BV, MASK_TH_VLXSEG2BV, match_vd_neq_vm_with_nf, INSN_DREF },
+{"vlxseg2h.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_TH_VLXSEG2HV, MASK_TH_VLXSEG2HV, match_vd_neq_vm_with_nf, INSN_DREF|INSN_ALIAS },
+{"th.vlxseg2h.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_TH_VLXSEG2HV, MASK_TH_VLXSEG2HV, match_vd_neq_vm_with_nf, INSN_DREF },
+{"vlxseg2w.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_TH_VLXSEG2WV, MASK_TH_VLXSEG2WV, match_vd_neq_vm_with_nf, INSN_DREF|INSN_ALIAS },
+{"th.vlxseg2w.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_TH_VLXSEG2WV, MASK_TH_VLXSEG2WV, match_vd_neq_vm_with_nf, INSN_DREF },
+{"vlxseg2bu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_VLOXSEG2EI8V, MASK_VLOXSEG2EI8V, match_vd_neq_vm_with_nf, INSN_DREF|INSN_ALIAS },
+{"th.vlxseg2bu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_VLOXSEG2EI8V, MASK_VLOXSEG2EI8V, match_vd_neq_vm_with_nf, INSN_DREF },
+{"vlxseg2hu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_VLOXSEG2EI16V, MASK_VLOXSEG2EI16V, match_vd_neq_vm_with_nf, INSN_DREF|INSN_ALIAS },
+{"th.vlxseg2hu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_VLOXSEG2EI16V, MASK_VLOXSEG2EI16V, match_vd_neq_vm_with_nf, INSN_DREF },
+{"vlxseg2wu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_VLOXSEG2EI32V, MASK_VLOXSEG2EI32V, match_vd_neq_vm_with_nf, INSN_DREF|INSN_ALIAS },
+{"th.vlxseg2wu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_VLOXSEG2EI32V, MASK_VLOXSEG2EI32V, match_vd_neq_vm_with_nf, INSN_DREF },
+{"vlxseg2e.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_VLOXSEG2EI64V, MASK_VLOXSEG2EI64V, match_vd_neq_vm_with_nf, INSN_DREF|INSN_ALIAS },
+{"th.vlxseg2e.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_VLOXSEG2EI64V, MASK_VLOXSEG2EI64V, match_vd_neq_vm_with_nf, INSN_DREF },
+{"vsxseg2b.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_VSOXSEG2EI8V, MASK_VSOXSEG2EI8V, match_vd_with_nf, INSN_DREF|INSN_ALIAS },
+{"th.vsxseg2b.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_VSOXSEG2EI8V, MASK_VSOXSEG2EI8V, match_vd_with_nf, INSN_DREF },
+{"vsxseg2h.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_VSOXSEG2EI16V, MASK_VSOXSEG2EI16V, match_vd_with_nf, INSN_DREF|INSN_ALIAS },
+{"th.vsxseg2h.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_VSOXSEG2EI16V, MASK_VSOXSEG2EI16V, match_vd_with_nf, INSN_DREF },
+{"vsxseg2w.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_VSOXSEG2EI32V, MASK_VSOXSEG2EI32V, match_vd_with_nf, INSN_DREF|INSN_ALIAS },
+{"th.vsxseg2w.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_VSOXSEG2EI32V, MASK_VSOXSEG2EI32V, match_vd_with_nf, INSN_DREF },
+{"vsxseg2e.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_VSOXSEG2EI64V, MASK_VSOXSEG2EI64V, match_vd_with_nf, INSN_DREF|INSN_ALIAS },
+{"th.vsxseg2e.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_VSOXSEG2EI64V, MASK_VSOXSEG2EI64V, match_vd_with_nf, INSN_DREF },
+{"vlxseg3b.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_TH_VLXSEG3BV, MASK_TH_VLXSEG3BV, match_vd_neq_vm_with_nf, INSN_DREF|INSN_ALIAS },
+{"th.vlxseg3b.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_TH_VLXSEG3BV, MASK_TH_VLXSEG3BV, match_vd_neq_vm_with_nf, INSN_DREF },
+{"vlxseg3h.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_TH_VLXSEG3HV, MASK_TH_VLXSEG3HV, match_vd_neq_vm_with_nf, INSN_DREF|INSN_ALIAS },
+{"th.vlxseg3h.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_TH_VLXSEG3HV, MASK_TH_VLXSEG3HV, match_vd_neq_vm_with_nf, INSN_DREF },
+{"vlxseg3w.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_TH_VLXSEG3WV, MASK_TH_VLXSEG3WV, match_vd_neq_vm_with_nf, INSN_DREF|INSN_ALIAS },
+{"th.vlxseg3w.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_TH_VLXSEG3WV, MASK_TH_VLXSEG3WV, match_vd_neq_vm_with_nf, INSN_DREF },
+{"vlxseg3bu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_VLOXSEG3EI8V, MASK_VLOXSEG3EI8V, match_vd_neq_vm_with_nf, INSN_DREF|INSN_ALIAS },
+{"th.vlxseg3bu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_VLOXSEG3EI8V, MASK_VLOXSEG3EI8V, match_vd_neq_vm_with_nf, INSN_DREF },
+{"vlxseg3hu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_VLOXSEG3EI16V, MASK_VLOXSEG3EI16V, match_vd_neq_vm_with_nf, INSN_DREF|INSN_ALIAS },
+{"th.vlxseg3hu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_VLOXSEG3EI16V, MASK_VLOXSEG3EI16V, match_vd_neq_vm_with_nf, INSN_DREF },
+{"vlxseg3wu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_VLOXSEG3EI32V, MASK_VLOXSEG3EI32V, match_vd_neq_vm_with_nf, INSN_DREF|INSN_ALIAS },
+{"th.vlxseg3wu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_VLOXSEG3EI32V, MASK_VLOXSEG3EI32V, match_vd_neq_vm_with_nf, INSN_DREF },
+{"vlxseg3e.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_VLOXSEG3EI64V, MASK_VLOXSEG3EI64V, match_vd_neq_vm_with_nf, INSN_DREF|INSN_ALIAS },
+{"th.vlxseg3e.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_VLOXSEG3EI64V, MASK_VLOXSEG3EI64V, match_vd_neq_vm_with_nf, INSN_DREF },
+{"vsxseg3b.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_VSOXSEG3EI8V, MASK_VSOXSEG3EI8V, match_vd_with_nf, INSN_DREF|INSN_ALIAS },
+{"th.vsxseg3b.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_VSOXSEG3EI8V, MASK_VSOXSEG3EI8V, match_vd_with_nf, INSN_DREF },
+{"vsxseg3h.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_VSOXSEG3EI16V, MASK_VSOXSEG3EI16V, match_vd_with_nf, INSN_DREF|INSN_ALIAS },
+{"th.vsxseg3h.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_VSOXSEG3EI16V, MASK_VSOXSEG3EI16V, match_vd_with_nf, INSN_DREF },
+{"vsxseg3w.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_VSOXSEG3EI32V, MASK_VSOXSEG3EI32V, match_vd_with_nf, INSN_DREF|INSN_ALIAS },
+{"th.vsxseg3w.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_VSOXSEG3EI32V, MASK_VSOXSEG3EI32V, match_vd_with_nf, INSN_DREF },
+{"vsxseg3e.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_VSOXSEG3EI64V, MASK_VSOXSEG3EI64V, match_vd_with_nf, INSN_DREF|INSN_ALIAS },
+{"th.vsxseg3e.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_VSOXSEG3EI64V, MASK_VSOXSEG3EI64V, match_vd_neq_vm, INSN_DREF },
+{"vlxseg4b.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_TH_VLXSEG4BV, MASK_TH_VLXSEG4BV, match_vd_neq_vm_with_nf, INSN_DREF|INSN_ALIAS },
+{"th.vlxseg4b.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_TH_VLXSEG4BV, MASK_TH_VLXSEG4BV, match_vd_neq_vm_with_nf, INSN_DREF },
+{"vlxseg4h.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_TH_VLXSEG4HV, MASK_TH_VLXSEG4HV, match_vd_neq_vm_with_nf, INSN_DREF|INSN_ALIAS },
+{"th.vlxseg4h.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_TH_VLXSEG4HV, MASK_TH_VLXSEG4HV, match_vd_neq_vm_with_nf, INSN_DREF },
+{"vlxseg4w.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_TH_VLXSEG4WV, MASK_TH_VLXSEG4WV, match_vd_neq_vm_with_nf, INSN_DREF|INSN_ALIAS },
+{"th.vlxseg4w.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_TH_VLXSEG4WV, MASK_TH_VLXSEG4WV, match_vd_neq_vm_with_nf, INSN_DREF },
+{"vlxseg4bu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_VLOXSEG4EI8V, MASK_VLOXSEG4EI8V, match_vd_neq_vm_with_nf, INSN_DREF|INSN_ALIAS },
+{"th.vlxseg4bu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_VLOXSEG4EI8V, MASK_VLOXSEG4EI8V, match_vd_neq_vm_with_nf, INSN_DREF },
+{"vlxseg4hu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_VLOXSEG4EI16V, MASK_VLOXSEG4EI16V, match_vd_neq_vm_with_nf, INSN_DREF|INSN_ALIAS },
+{"th.vlxseg4hu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_VLOXSEG4EI16V, MASK_VLOXSEG4EI16V, match_vd_neq_vm_with_nf, INSN_DREF },
+{"vlxseg4wu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_VLOXSEG4EI32V, MASK_VLOXSEG4EI32V, match_vd_neq_vm_with_nf, INSN_DREF|INSN_ALIAS },
+{"th.vlxseg4wu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_VLOXSEG4EI32V, MASK_VLOXSEG4EI32V, match_vd_neq_vm_with_nf, INSN_DREF },
+{"vlxseg4e.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_VLOXSEG4EI64V, MASK_VLOXSEG4EI64V, match_vd_neq_vm_with_nf, INSN_DREF|INSN_ALIAS },
+{"th.vlxseg4e.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_VLOXSEG4EI64V, MASK_VLOXSEG4EI64V, match_vd_neq_vm_with_nf, INSN_DREF },
+{"vsxseg4b.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_VSOXSEG4EI8V, MASK_VSOXSEG4EI8V, match_vd_with_nf, INSN_DREF|INSN_ALIAS },
+{"th.vsxseg4b.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_VSOXSEG4EI8V, MASK_VSOXSEG4EI8V, match_vd_with_nf, INSN_DREF },
+{"vsxseg4h.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_VSOXSEG4EI16V, MASK_VSOXSEG4EI16V, match_vd_with_nf, INSN_DREF|INSN_ALIAS },
+{"th.vsxseg4h.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_VSOXSEG4EI16V, MASK_VSOXSEG4EI16V, match_vd_with_nf, INSN_DREF },
+{"vsxseg4w.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_VSOXSEG4EI32V, MASK_VSOXSEG4EI32V, match_vd_with_nf, INSN_DREF|INSN_ALIAS },
+{"th.vsxseg4w.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_VSOXSEG4EI32V, MASK_VSOXSEG4EI32V, match_vd_with_nf, INSN_DREF },
+{"vsxseg4e.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_VSOXSEG4EI64V, MASK_VSOXSEG4EI64V, match_vd_with_nf, INSN_DREF|INSN_ALIAS },
+{"th.vsxseg4e.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_VSOXSEG4EI64V, MASK_VSOXSEG4EI64V, match_vd_with_nf, INSN_DREF },
+{"vlxseg5b.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_TH_VLXSEG5BV, MASK_TH_VLXSEG5BV, match_vd_neq_vm_with_nf, INSN_DREF|INSN_ALIAS },
+{"th.vlxseg5b.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_TH_VLXSEG5BV, MASK_TH_VLXSEG5BV, match_vd_neq_vm_with_nf, INSN_DREF },
+{"vlxseg5h.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_TH_VLXSEG5HV, MASK_TH_VLXSEG5HV, match_vd_neq_vm_with_nf, INSN_DREF|INSN_ALIAS },
+{"th.vlxseg5h.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_TH_VLXSEG5HV, MASK_TH_VLXSEG5HV, match_vd_neq_vm_with_nf, INSN_DREF },
+{"vlxseg5w.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_TH_VLXSEG5WV, MASK_TH_VLXSEG5WV, match_vd_neq_vm_with_nf, INSN_DREF|INSN_ALIAS },
+{"th.vlxseg5w.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_TH_VLXSEG5WV, MASK_TH_VLXSEG5WV, match_vd_neq_vm_with_nf, INSN_DREF },
+{"vlxseg5bu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_VLOXSEG5EI8V, MASK_VLOXSEG5EI8V, match_vd_neq_vm_with_nf, INSN_DREF|INSN_ALIAS },
+{"th.vlxseg5bu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_VLOXSEG5EI8V, MASK_VLOXSEG5EI8V, match_vd_neq_vm_with_nf, INSN_DREF },
+{"vlxseg5hu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_VLOXSEG5EI16V, MASK_VLOXSEG5EI16V, match_vd_neq_vm_with_nf, INSN_DREF|INSN_ALIAS },
+{"th.vlxseg5hu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_VLOXSEG5EI16V, MASK_VLOXSEG5EI16V, match_vd_neq_vm_with_nf, INSN_DREF },
+{"vlxseg5wu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_VLOXSEG5EI32V, MASK_VLOXSEG5EI32V, match_vd_neq_vm_with_nf, INSN_DREF|INSN_ALIAS },
+{"th.vlxseg5wu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_VLOXSEG5EI32V, MASK_VLOXSEG5EI32V, match_vd_neq_vm_with_nf, INSN_DREF },
+{"vlxseg5e.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_VLOXSEG5EI64V, MASK_VLOXSEG5EI64V, match_vd_neq_vm_with_nf, INSN_DREF|INSN_ALIAS },
+{"th.vlxseg5e.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_VLOXSEG5EI64V, MASK_VLOXSEG5EI64V, match_vd_neq_vm_with_nf, INSN_DREF },
+{"vsxseg5b.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_VSOXSEG5EI8V, MASK_VSOXSEG5EI8V, match_vd_with_nf, INSN_DREF|INSN_ALIAS },
+{"th.vsxseg5b.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_VSOXSEG5EI8V, MASK_VSOXSEG5EI8V, match_vd_with_nf, INSN_DREF },
+{"vsxseg5h.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_VSOXSEG5EI16V, MASK_VSOXSEG5EI16V, match_vd_with_nf, INSN_DREF|INSN_ALIAS },
+{"th.vsxseg5h.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_VSOXSEG5EI16V, MASK_VSOXSEG5EI16V, match_vd_with_nf, INSN_DREF },
+{"vsxseg5w.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_VSOXSEG5EI32V, MASK_VSOXSEG5EI32V, match_vd_with_nf, INSN_DREF|INSN_ALIAS },
+{"th.vsxseg5w.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_VSOXSEG5EI32V, MASK_VSOXSEG5EI32V, match_vd_with_nf, INSN_DREF },
+{"vsxseg5e.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_VSOXSEG5EI64V, MASK_VSOXSEG5EI64V, match_vd_with_nf, INSN_DREF|INSN_ALIAS },
+{"th.vsxseg5e.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_VSOXSEG5EI64V, MASK_VSOXSEG5EI64V, match_vd_neq_vm, INSN_DREF },
+{"vlxseg6b.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_TH_VLXSEG6BV, MASK_TH_VLXSEG6BV, match_vd_neq_vm_with_nf, INSN_DREF|INSN_ALIAS },
+{"th.vlxseg6b.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_TH_VLXSEG6BV, MASK_TH_VLXSEG6BV, match_vd_neq_vm_with_nf, INSN_DREF },
+{"vlxseg6h.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_TH_VLXSEG6HV, MASK_TH_VLXSEG6HV, match_vd_neq_vm_with_nf, INSN_DREF|INSN_ALIAS },
+{"th.vlxseg6h.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_TH_VLXSEG6HV, MASK_TH_VLXSEG6HV, match_vd_neq_vm_with_nf, INSN_DREF },
+{"vlxseg6w.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_TH_VLXSEG6WV, MASK_TH_VLXSEG6WV, match_vd_neq_vm_with_nf, INSN_DREF|INSN_ALIAS },
+{"th.vlxseg6w.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_TH_VLXSEG6WV, MASK_TH_VLXSEG6WV, match_vd_neq_vm_with_nf, INSN_DREF },
+{"vlxseg6bu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_VLOXSEG6EI8V, MASK_VLOXSEG6EI8V, match_vd_neq_vm_with_nf, INSN_DREF|INSN_ALIAS },
+{"th.vlxseg6bu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_VLOXSEG6EI8V, MASK_VLOXSEG6EI8V, match_vd_neq_vm_with_nf, INSN_DREF },
+{"vlxseg6hu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_VLOXSEG6EI16V, MASK_VLOXSEG6EI16V, match_vd_neq_vm_with_nf, INSN_DREF|INSN_ALIAS },
+{"th.vlxseg6hu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_VLOXSEG6EI16V, MASK_VLOXSEG6EI16V, match_vd_neq_vm_with_nf, INSN_DREF },
+{"vlxseg6wu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_VLOXSEG6EI32V, MASK_VLOXSEG6EI32V, match_vd_neq_vm_with_nf, INSN_DREF|INSN_ALIAS },
+{"th.vlxseg6wu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_VLOXSEG6EI32V, MASK_VLOXSEG6EI32V, match_vd_neq_vm_with_nf, INSN_DREF },
+{"vlxseg6e.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_VLOXSEG6EI64V, MASK_VLOXSEG6EI64V, match_vd_neq_vm_with_nf, INSN_DREF|INSN_ALIAS },
+{"th.vlxseg6e.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_VLOXSEG6EI64V, MASK_VLOXSEG6EI64V, match_vd_neq_vm_with_nf, INSN_DREF },
+{"vsxseg6b.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_VSOXSEG6EI8V, MASK_VSOXSEG6EI8V, match_vd_with_nf, INSN_DREF|INSN_ALIAS },
+{"th.vsxseg6b.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_VSOXSEG6EI8V, MASK_VSOXSEG6EI8V, match_vd_with_nf, INSN_DREF },
+{"vsxseg6h.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_VSOXSEG6EI16V, MASK_VSOXSEG6EI16V, match_vd_with_nf, INSN_DREF|INSN_ALIAS },
+{"th.vsxseg6h.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_VSOXSEG6EI16V, MASK_VSOXSEG6EI16V, match_vd_with_nf, INSN_DREF },
+{"vsxseg6w.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_VSOXSEG6EI32V, MASK_VSOXSEG6EI32V, match_vd_with_nf, INSN_DREF|INSN_ALIAS },
+{"th.vsxseg6w.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_VSOXSEG6EI32V, MASK_VSOXSEG6EI32V, match_vd_with_nf, INSN_DREF },
+{"vsxseg6e.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_VSOXSEG6EI64V, MASK_VSOXSEG6EI64V, match_vd_with_nf, INSN_DREF|INSN_ALIAS },
+{"th.vsxseg6e.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_VSOXSEG6EI64V, MASK_VSOXSEG6EI64V, match_vd_neq_vm, INSN_DREF },
+{"vlxseg7b.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_TH_VLXSEG7BV, MASK_TH_VLXSEG7BV, match_vd_neq_vm_with_nf, INSN_DREF|INSN_ALIAS },
+{"th.vlxseg7b.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_TH_VLXSEG7BV, MASK_TH_VLXSEG7BV, match_vd_neq_vm_with_nf, INSN_DREF },
+{"vlxseg7h.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_TH_VLXSEG7HV, MASK_TH_VLXSEG7HV, match_vd_neq_vm_with_nf, INSN_DREF|INSN_ALIAS },
+{"th.vlxseg7h.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_TH_VLXSEG7HV, MASK_TH_VLXSEG7HV, match_vd_neq_vm_with_nf, INSN_DREF },
+{"vlxseg7w.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_TH_VLXSEG7WV, MASK_TH_VLXSEG7WV, match_vd_neq_vm_with_nf, INSN_DREF|INSN_ALIAS },
+{"th.vlxseg7w.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_TH_VLXSEG7WV, MASK_TH_VLXSEG7WV, match_vd_neq_vm_with_nf, INSN_DREF },
+{"vlxseg7bu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_VLOXSEG7EI8V, MASK_VLOXSEG7EI8V, match_vd_neq_vm_with_nf, INSN_DREF|INSN_ALIAS },
+{"th.vlxseg7bu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_VLOXSEG7EI8V, MASK_VLOXSEG7EI8V, match_vd_neq_vm_with_nf, INSN_DREF },
+{"vlxseg7hu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_VLOXSEG7EI16V, MASK_VLOXSEG7EI16V, match_vd_neq_vm_with_nf, INSN_DREF|INSN_ALIAS },
+{"th.vlxseg7hu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_VLOXSEG7EI16V, MASK_VLOXSEG7EI16V, match_vd_neq_vm_with_nf, INSN_DREF },
+{"vlxseg7wu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_VLOXSEG7EI32V, MASK_VLOXSEG7EI32V, match_vd_neq_vm_with_nf, INSN_DREF|INSN_ALIAS },
+{"th.vlxseg7wu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_VLOXSEG7EI32V, MASK_VLOXSEG7EI32V, match_vd_neq_vm_with_nf, INSN_DREF },
+{"vlxseg7e.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_VLOXSEG7EI64V, MASK_VLOXSEG7EI64V, match_vd_neq_vm_with_nf, INSN_DREF|INSN_ALIAS },
+{"th.vlxseg7e.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_VLOXSEG7EI64V, MASK_VLOXSEG7EI64V, match_vd_neq_vm_with_nf, INSN_DREF },
+{"vsxseg7b.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_VSOXSEG7EI8V, MASK_VSOXSEG7EI8V, match_vd_with_nf, INSN_DREF|INSN_ALIAS },
+{"th.vsxseg7b.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_VSOXSEG7EI8V, MASK_VSOXSEG7EI8V, match_vd_with_nf, INSN_DREF },
+{"vsxseg7h.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_VSOXSEG7EI16V, MASK_VSOXSEG7EI16V, match_vd_with_nf, INSN_DREF|INSN_ALIAS },
+{"th.vsxseg7h.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_VSOXSEG7EI16V, MASK_VSOXSEG7EI16V, match_vd_with_nf, INSN_DREF },
+{"vsxseg7w.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_VSOXSEG7EI32V, MASK_VSOXSEG7EI32V, match_vd_with_nf, INSN_DREF|INSN_ALIAS },
+{"th.vsxseg7w.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_VSOXSEG7EI32V, MASK_VSOXSEG7EI32V, match_vd_with_nf, INSN_DREF },
+{"vsxseg7e.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_VSOXSEG7EI64V, MASK_VSOXSEG7EI64V, match_vd_with_nf, INSN_DREF|INSN_ALIAS },
+{"th.vsxseg7e.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_VSOXSEG7EI64V, MASK_VSOXSEG7EI64V, match_vd_neq_vm, INSN_DREF },
+{"vlxseg8b.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_TH_VLXSEG8BV, MASK_TH_VLXSEG8BV, match_vd_neq_vm_with_nf, INSN_DREF|INSN_ALIAS },
+{"th.vlxseg8b.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_TH_VLXSEG8BV, MASK_TH_VLXSEG8BV, match_vd_neq_vm_with_nf, INSN_DREF },
+{"vlxseg8h.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_TH_VLXSEG8HV, MASK_TH_VLXSEG8HV, match_vd_neq_vm_with_nf, INSN_DREF|INSN_ALIAS },
+{"th.vlxseg8h.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_TH_VLXSEG8HV, MASK_TH_VLXSEG8HV, match_vd_neq_vm_with_nf, INSN_DREF },
+{"vlxseg8w.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_TH_VLXSEG8WV, MASK_TH_VLXSEG8WV, match_vd_neq_vm_with_nf, INSN_DREF|INSN_ALIAS },
+{"th.vlxseg8w.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_TH_VLXSEG8WV, MASK_TH_VLXSEG8WV, match_vd_neq_vm_with_nf, INSN_DREF },
+{"vlxseg8bu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_VLOXSEG8EI8V, MASK_VLOXSEG8EI8V, match_vd_neq_vm_with_nf, INSN_DREF|INSN_ALIAS },
+{"th.vlxseg8bu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_VLOXSEG8EI8V, MASK_VLOXSEG8EI8V, match_vd_neq_vm_with_nf, INSN_DREF },
+{"vlxseg8hu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_VLOXSEG8EI16V, MASK_VLOXSEG8EI16V, match_vd_neq_vm_with_nf, INSN_DREF|INSN_ALIAS },
+{"th.vlxseg8hu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_VLOXSEG8EI16V, MASK_VLOXSEG8EI16V, match_vd_neq_vm_with_nf, INSN_DREF },
+{"vlxseg8wu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_VLOXSEG8EI32V, MASK_VLOXSEG8EI32V, match_vd_neq_vm_with_nf, INSN_DREF|INSN_ALIAS },
+{"th.vlxseg8wu.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_VLOXSEG8EI32V, MASK_VLOXSEG8EI32V, match_vd_neq_vm_with_nf, INSN_DREF },
+{"vlxseg8e.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_VLOXSEG8EI64V, MASK_VLOXSEG8EI64V, match_vd_neq_vm_with_nf, INSN_DREF|INSN_ALIAS },
+{"th.vlxseg8e.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_VLOXSEG8EI64V, MASK_VLOXSEG8EI64V, match_vd_neq_vm_with_nf, INSN_DREF },
+{"vsxseg8b.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_VSOXSEG8EI8V, MASK_VSOXSEG8EI8V, match_vd_with_nf, INSN_DREF|INSN_ALIAS },
+{"th.vsxseg8b.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_VSOXSEG8EI8V, MASK_VSOXSEG8EI8V, match_vd_with_nf, INSN_DREF },
+{"vsxseg8h.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_VSOXSEG8EI16V, MASK_VSOXSEG8EI16V, match_vd_with_nf, INSN_DREF|INSN_ALIAS },
+{"th.vsxseg8h.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_VSOXSEG8EI16V, MASK_VSOXSEG8EI16V, match_vd_with_nf, INSN_DREF },
+{"vsxseg8w.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_VSOXSEG8EI32V, MASK_VSOXSEG8EI32V, match_vd_with_nf, INSN_DREF|INSN_ALIAS },
+{"th.vsxseg8w.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_VSOXSEG8EI32V, MASK_VSOXSEG8EI32V, match_vd_with_nf, INSN_DREF },
+{"vsxseg8e.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_VSOXSEG8EI64V, MASK_VSOXSEG8EI64V, match_vd_with_nf, INSN_DREF|INSN_ALIAS },
+{"th.vsxseg8e.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s),VtVm", MATCH_VSOXSEG8EI64V, MASK_VSOXSEG8EI64V, match_vd_with_nf, INSN_DREF },
+{"vlseg2bff.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_TH_VLSEG2BFFV, MASK_TH_VLSEG2BFFV, match_vd_neq_vm_with_nf, INSN_DREF|INSN_ALIAS },
+{"th.vlseg2bff.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_TH_VLSEG2BFFV, MASK_TH_VLSEG2BFFV, match_vd_neq_vm_with_nf, INSN_DREF },
+{"vlseg2hff.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_TH_VLSEG2HFFV, MASK_TH_VLSEG2HFFV, match_vd_neq_vm_with_nf, INSN_DREF|INSN_ALIAS },
+{"th.vlseg2hff.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_TH_VLSEG2HFFV, MASK_TH_VLSEG2HFFV, match_vd_neq_vm_with_nf, INSN_DREF },
+{"vlseg2wff.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_TH_VLSEG2WFFV, MASK_TH_VLSEG2WFFV, match_vd_neq_vm_with_nf, INSN_DREF|INSN_ALIAS },
+{"th.vlseg2wff.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_TH_VLSEG2WFFV, MASK_TH_VLSEG2WFFV, match_vd_neq_vm_with_nf, INSN_DREF },
+{"vlseg2buff.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLSEG2E8FFV, MASK_VLSEG2E8FFV, match_vd_neq_vm_with_nf, INSN_DREF|INSN_ALIAS },
+{"th.vlseg2buff.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLSEG2E8FFV, MASK_VLSEG2E8FFV, match_vd_neq_vm_with_nf, INSN_DREF },
+{"vlseg2huff.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLSEG2E16FFV, MASK_VLSEG2E16FFV, match_vd_neq_vm_with_nf, INSN_DREF|INSN_ALIAS },
+{"th.vlseg2huff.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLSEG2E16FFV, MASK_VLSEG2E16FFV, match_vd_neq_vm_with_nf, INSN_DREF },
+{"vlseg2wuff.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLSEG2E32FFV, MASK_VLSEG2E32FFV, match_vd_neq_vm_with_nf, INSN_DREF|INSN_ALIAS },
+{"th.vlseg2wuff.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLSEG2E32FFV, MASK_VLSEG2E32FFV, match_vd_neq_vm_with_nf, INSN_DREF },
+{"vlseg2eff.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLSEG2E64FFV, MASK_VLSEG2E64FFV, match_vd_neq_vm_with_nf, INSN_DREF|INSN_ALIAS },
+{"th.vlseg2eff.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLSEG2E64FFV, MASK_VLSEG2E64FFV, match_vd_neq_vm_with_nf, INSN_DREF },
+{"vlseg3bff.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_TH_VLSEG3BFFV, MASK_TH_VLSEG3BFFV, match_vd_neq_vm_with_nf, INSN_DREF|INSN_ALIAS },
+{"th.vlseg3bff.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_TH_VLSEG3BFFV, MASK_TH_VLSEG3BFFV, match_vd_neq_vm_with_nf, INSN_DREF },
+{"vlseg3hff.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_TH_VLSEG3HFFV, MASK_TH_VLSEG3HFFV, match_vd_neq_vm_with_nf, INSN_DREF|INSN_ALIAS },
+{"th.vlseg3hff.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_TH_VLSEG3HFFV, MASK_TH_VLSEG3HFFV, match_vd_neq_vm_with_nf, INSN_DREF },
+{"vlseg3wff.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_TH_VLSEG3WFFV, MASK_TH_VLSEG3WFFV, match_vd_neq_vm_with_nf, INSN_DREF|INSN_ALIAS },
+{"th.vlseg3wff.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_TH_VLSEG3WFFV, MASK_TH_VLSEG3WFFV, match_vd_neq_vm_with_nf, INSN_DREF },
+{"vlseg3buff.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLSEG3E8FFV, MASK_VLSEG3E8FFV, match_vd_neq_vm_with_nf, INSN_DREF|INSN_ALIAS },
+{"th.vlseg3buff.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLSEG3E8FFV, MASK_VLSEG3E8FFV, match_vd_neq_vm_with_nf, INSN_DREF },
+{"vlseg3huff.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLSEG3E16FFV, MASK_VLSEG3E16FFV, match_vd_neq_vm_with_nf, INSN_DREF|INSN_ALIAS },
+{"th.vlseg3huff.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLSEG3E16FFV, MASK_VLSEG3E16FFV, match_vd_neq_vm_with_nf, INSN_DREF },
+{"vlseg3wuff.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLSEG3E32FFV, MASK_VLSEG3E32FFV, match_vd_neq_vm_with_nf, INSN_DREF|INSN_ALIAS },
+{"th.vlseg3wuff.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLSEG3E32FFV, MASK_VLSEG3E32FFV, match_vd_neq_vm_with_nf, INSN_DREF },
+{"vlseg3eff.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLSEG3E64FFV, MASK_VLSEG3E64FFV, match_vd_neq_vm_with_nf, INSN_DREF|INSN_ALIAS },
+{"th.vlseg3eff.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLSEG3E64FFV, MASK_VLSEG3E64FFV, match_vd_neq_vm_with_nf, INSN_DREF },
+{"vlseg4bff.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_TH_VLSEG4BFFV, MASK_TH_VLSEG4BFFV, match_vd_neq_vm_with_nf, INSN_DREF|INSN_ALIAS },
+{"th.vlseg4bff.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_TH_VLSEG4BFFV, MASK_TH_VLSEG4BFFV, match_vd_neq_vm_with_nf, INSN_DREF },
+{"vlseg4hff.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_TH_VLSEG4HFFV, MASK_TH_VLSEG4HFFV, match_vd_neq_vm_with_nf, INSN_DREF|INSN_ALIAS },
+{"th.vlseg4hff.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_TH_VLSEG4HFFV, MASK_TH_VLSEG4HFFV, match_vd_neq_vm_with_nf, INSN_DREF },
+{"vlseg4wff.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_TH_VLSEG4WFFV, MASK_TH_VLSEG4WFFV, match_vd_neq_vm_with_nf, INSN_DREF|INSN_ALIAS },
+{"th.vlseg4wff.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_TH_VLSEG4WFFV, MASK_TH_VLSEG4WFFV, match_vd_neq_vm_with_nf, INSN_DREF },
+{"vlseg4buff.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLSEG4E8FFV, MASK_VLSEG4E8FFV, match_vd_neq_vm_with_nf, INSN_DREF|INSN_ALIAS },
+{"th.vlseg4buff.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLSEG4E8FFV, MASK_VLSEG4E8FFV, match_vd_neq_vm_with_nf, INSN_DREF },
+{"vlseg4huff.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLSEG4E16FFV, MASK_VLSEG4E16FFV, match_vd_neq_vm_with_nf, INSN_DREF|INSN_ALIAS },
+{"th.vlseg4huff.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLSEG4E16FFV, MASK_VLSEG4E16FFV, match_vd_neq_vm_with_nf, INSN_DREF },
+{"vlseg4wuff.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLSEG4E32FFV, MASK_VLSEG4E32FFV, match_vd_neq_vm_with_nf, INSN_DREF|INSN_ALIAS },
+{"th.vlseg4wuff.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLSEG4E32FFV, MASK_VLSEG4E32FFV, match_vd_neq_vm_with_nf, INSN_DREF },
+{"vlseg4eff.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLSEG4E64FFV, MASK_VLSEG4E64FFV, match_vd_neq_vm_with_nf, INSN_DREF|INSN_ALIAS },
+{"th.vlseg4eff.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLSEG4E64FFV, MASK_VLSEG4E64FFV, match_vd_neq_vm_with_nf, INSN_DREF },
+{"vlseg5bff.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_TH_VLSEG5BFFV, MASK_TH_VLSEG5BFFV, match_vd_neq_vm_with_nf, INSN_DREF|INSN_ALIAS },
+{"th.vlseg5bff.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_TH_VLSEG5BFFV, MASK_TH_VLSEG5BFFV, match_vd_neq_vm_with_nf, INSN_DREF },
+{"vlseg5hff.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_TH_VLSEG5HFFV, MASK_TH_VLSEG5HFFV, match_vd_neq_vm_with_nf, INSN_DREF|INSN_ALIAS },
+{"th.vlseg5hff.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_TH_VLSEG5HFFV, MASK_TH_VLSEG5HFFV, match_vd_neq_vm_with_nf, INSN_DREF },
+{"vlseg5wff.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_TH_VLSEG5WFFV, MASK_TH_VLSEG5WFFV, match_vd_neq_vm_with_nf, INSN_DREF|INSN_ALIAS },
+{"th.vlseg5wff.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_TH_VLSEG5WFFV, MASK_TH_VLSEG5WFFV, match_vd_neq_vm_with_nf, INSN_DREF },
+{"vlseg5buff.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLSEG5E8FFV, MASK_VLSEG5E8FFV, match_vd_neq_vm_with_nf, INSN_DREF|INSN_ALIAS },
+{"th.vlseg5buff.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLSEG5E8FFV, MASK_VLSEG5E8FFV, match_vd_neq_vm_with_nf, INSN_DREF },
+{"vlseg5huff.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLSEG5E16FFV, MASK_VLSEG5E16FFV, match_vd_neq_vm_with_nf, INSN_DREF|INSN_ALIAS },
+{"th.vlseg5huff.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLSEG5E16FFV, MASK_VLSEG5E16FFV, match_vd_neq_vm_with_nf, INSN_DREF },
+{"vlseg5wuff.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLSEG5E32FFV, MASK_VLSEG5E32FFV, match_vd_neq_vm_with_nf, INSN_DREF|INSN_ALIAS },
+{"th.vlseg5wuff.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLSEG5E32FFV, MASK_VLSEG5E32FFV, match_vd_neq_vm_with_nf, INSN_DREF },
+{"vlseg5eff.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLSEG5E64FFV, MASK_VLSEG5E64FFV, match_vd_neq_vm_with_nf, INSN_DREF|INSN_ALIAS },
+{"th.vlseg5eff.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLSEG5E64FFV, MASK_VLSEG5E64FFV, match_vd_neq_vm_with_nf, INSN_DREF },
+{"vlseg6bff.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_TH_VLSEG6BFFV, MASK_TH_VLSEG6BFFV, match_vd_neq_vm_with_nf, INSN_DREF|INSN_ALIAS },
+{"th.vlseg6bff.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_TH_VLSEG6BFFV, MASK_TH_VLSEG6BFFV, match_vd_neq_vm_with_nf, INSN_DREF },
+{"vlseg6hff.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_TH_VLSEG6HFFV, MASK_TH_VLSEG6HFFV, match_vd_neq_vm_with_nf, INSN_DREF|INSN_ALIAS },
+{"th.vlseg6hff.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_TH_VLSEG6HFFV, MASK_TH_VLSEG6HFFV, match_vd_neq_vm_with_nf, INSN_DREF },
+{"vlseg6wff.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_TH_VLSEG6WFFV, MASK_TH_VLSEG6WFFV, match_vd_neq_vm_with_nf, INSN_DREF|INSN_ALIAS },
+{"th.vlseg6wff.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_TH_VLSEG6WFFV, MASK_TH_VLSEG6WFFV, match_vd_neq_vm_with_nf, INSN_DREF },
+{"vlseg6buff.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLSEG6E8FFV, MASK_VLSEG6E8FFV, match_vd_neq_vm_with_nf, INSN_DREF|INSN_ALIAS },
+{"th.vlseg6buff.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLSEG6E8FFV, MASK_VLSEG6E8FFV, match_vd_neq_vm_with_nf, INSN_DREF },
+{"vlseg6huff.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLSEG6E16FFV, MASK_VLSEG6E16FFV, match_vd_neq_vm_with_nf, INSN_DREF|INSN_ALIAS },
+{"th.vlseg6huff.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLSEG6E16FFV, MASK_VLSEG6E16FFV, match_vd_neq_vm_with_nf, INSN_DREF },
+{"vlseg6wuff.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLSEG6E32FFV, MASK_VLSEG6E32FFV, match_vd_neq_vm_with_nf, INSN_DREF|INSN_ALIAS },
+{"th.vlseg6wuff.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLSEG6E32FFV, MASK_VLSEG6E32FFV, match_vd_neq_vm_with_nf, INSN_DREF },
+{"vlseg6eff.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLSEG6E64FFV, MASK_VLSEG6E64FFV, match_vd_neq_vm_with_nf, INSN_DREF|INSN_ALIAS },
+{"th.vlseg6eff.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLSEG6E64FFV, MASK_VLSEG6E64FFV, match_vd_neq_vm_with_nf, INSN_DREF },
+{"vlseg7bff.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_TH_VLSEG7BFFV, MASK_TH_VLSEG7BFFV, match_vd_neq_vm_with_nf, INSN_DREF|INSN_ALIAS },
+{"th.vlseg7bff.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_TH_VLSEG7BFFV, MASK_TH_VLSEG7BFFV, match_vd_neq_vm_with_nf, INSN_DREF },
+{"vlseg7hff.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_TH_VLSEG7HFFV, MASK_TH_VLSEG7HFFV, match_vd_neq_vm_with_nf, INSN_DREF|INSN_ALIAS },
+{"th.vlseg7hff.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_TH_VLSEG7HFFV, MASK_TH_VLSEG7HFFV, match_vd_neq_vm_with_nf, INSN_DREF },
+{"vlseg7wff.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_TH_VLSEG7WFFV, MASK_TH_VLSEG7WFFV, match_vd_neq_vm_with_nf, INSN_DREF|INSN_ALIAS },
+{"th.vlseg7wff.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_TH_VLSEG7WFFV, MASK_TH_VLSEG7WFFV, match_vd_neq_vm_with_nf, INSN_DREF },
+{"vlseg7buff.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLSEG7E8FFV, MASK_VLSEG7E8FFV, match_vd_neq_vm_with_nf, INSN_DREF|INSN_ALIAS },
+{"th.vlseg7buff.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLSEG7E8FFV, MASK_VLSEG7E8FFV, match_vd_neq_vm_with_nf, INSN_DREF },
+{"vlseg7huff.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLSEG7E16FFV, MASK_VLSEG7E16FFV, match_vd_neq_vm_with_nf, INSN_DREF|INSN_ALIAS },
+{"th.vlseg7huff.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLSEG7E16FFV, MASK_VLSEG7E16FFV, match_vd_neq_vm_with_nf, INSN_DREF },
+{"vlseg7wuff.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLSEG7E32FFV, MASK_VLSEG7E32FFV, match_vd_neq_vm_with_nf, INSN_DREF|INSN_ALIAS },
+{"th.vlseg7wuff.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLSEG7E32FFV, MASK_VLSEG7E32FFV, match_vd_neq_vm_with_nf, INSN_DREF },
+{"vlseg7eff.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLSEG7E64FFV, MASK_VLSEG7E64FFV, match_vd_neq_vm_with_nf, INSN_DREF|INSN_ALIAS },
+{"th.vlseg7eff.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLSEG7E64FFV, MASK_VLSEG7E64FFV, match_vd_neq_vm_with_nf, INSN_DREF },
+{"vlseg8bff.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_TH_VLSEG8BFFV, MASK_TH_VLSEG8BFFV, match_vd_neq_vm_with_nf, INSN_DREF|INSN_ALIAS },
+{"th.vlseg8bff.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_TH_VLSEG8BFFV, MASK_TH_VLSEG8BFFV, match_vd_neq_vm_with_nf, INSN_DREF },
+{"vlseg8hff.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_TH_VLSEG8HFFV, MASK_TH_VLSEG8HFFV, match_vd_neq_vm_with_nf, INSN_DREF|INSN_ALIAS },
+{"th.vlseg8hff.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_TH_VLSEG8HFFV, MASK_TH_VLSEG8HFFV, match_vd_neq_vm_with_nf, INSN_DREF },
+{"vlseg8wff.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_TH_VLSEG8WFFV, MASK_TH_VLSEG8WFFV, match_vd_neq_vm_with_nf, INSN_DREF|INSN_ALIAS },
+{"th.vlseg8wff.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_TH_VLSEG8WFFV, MASK_TH_VLSEG8WFFV, match_vd_neq_vm_with_nf, INSN_DREF },
+{"vlseg8buff.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLSEG8E8FFV, MASK_VLSEG8E8FFV, match_vd_neq_vm_with_nf, INSN_DREF|INSN_ALIAS },
+{"th.vlseg8buff.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLSEG8E8FFV, MASK_VLSEG8E8FFV, match_vd_neq_vm_with_nf, INSN_DREF },
+{"vlseg8huff.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLSEG8E16FFV, MASK_VLSEG8E16FFV, match_vd_neq_vm_with_nf, INSN_DREF|INSN_ALIAS },
+{"th.vlseg8huff.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLSEG8E16FFV, MASK_VLSEG8E16FFV, match_vd_neq_vm_with_nf, INSN_DREF },
+{"vlseg8wuff.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLSEG8E32FFV, MASK_VLSEG8E32FFV, match_vd_neq_vm_with_nf, INSN_DREF|INSN_ALIAS },
+{"th.vlseg8wuff.v", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLSEG8E32FFV, MASK_VLSEG8E32FFV, match_vd_neq_vm_with_nf, INSN_DREF },
+{"vlseg8eff.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLSEG8E64FFV, MASK_VLSEG8E64FFV, match_vd_neq_vm_with_nf, INSN_DREF|INSN_ALIAS },
+{"th.vlseg8eff.v",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,0(s)Vm", MATCH_VLSEG8E64FFV, MASK_VLSEG8E64FFV, match_vd_neq_vm_with_nf, INSN_DREF },
 {"th.vamoaddw.v",   0, INSN_CLASS_XTHEADZVAMO,  "Ve,Vt,(s),VfVm", MATCH_TH_VAMOADDWV, MASK_TH_VAMOADDWV, match_opcode, INSN_DREF},
 {"vamoaddw.v",   0, INSN_CLASS_XTHEADZVAMO,  "Ve,Vt,(s),VfVm", MATCH_TH_VAMOADDWV, MASK_TH_VAMOADDWV, match_opcode, INSN_DREF|INSN_ALIAS},
 {"th.vamoaddd.v",   0, INSN_CLASS_XTHEADZVAMO,  "Ve,Vt,(s),VfVm", MATCH_TH_VAMOADDDV, MASK_TH_VAMOADDDV, match_opcode, INSN_DREF},
@@ -3645,32 +4038,32 @@ const struct riscv_opcode riscv_opcodes[] =
 {"vamomaxuw.v",  0, INSN_CLASS_XTHEADZVAMO,  "Ve,Vt,(s),VfVm", MATCH_TH_VAMOMAXUWV, MASK_TH_VAMOMAXUWV, match_opcode, INSN_DREF|INSN_ALIAS},
 {"th.vamomaxud.v",  0, INSN_CLASS_XTHEADZVAMO,  "Ve,Vt,(s),VfVm", MATCH_TH_VAMOMAXUDV, MASK_TH_VAMOMAXUDV, match_opcode, INSN_DREF},
 {"vamomaxud.v",  0, INSN_CLASS_XTHEADZVAMO,  "Ve,Vt,(s),VfVm", MATCH_TH_VAMOMAXUDV, MASK_TH_VAMOMAXUDV, match_opcode, INSN_DREF|INSN_ALIAS},
-{"th.vneg.v",     0, INSN_CLASS_XTHEADVECTOR,  "Vd,VtVm",  MATCH_VRSUBVX, MASK_VRSUBVX | MASK_RS1, match_opcode, INSN_ALIAS },
-{"th.vadd.vv",    0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,VsVm", MATCH_VADDVV, MASK_VADDVV, match_opcode, 0 },
-{"th.vadd.vx",    0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,sVm", MATCH_VADDVX, MASK_VADDVX, match_opcode, 0 },
-{"th.vadd.vi",    0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,ViVm", MATCH_VADDVI, MASK_VADDVI, match_opcode, 0 },
-{"th.vsub.vv",    0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,VsVm", MATCH_VSUBVV, MASK_VSUBVV, match_opcode, 0 },
-{"th.vsub.vx",    0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,sVm", MATCH_VSUBVX, MASK_VSUBVX, match_opcode, 0 },
-{"th.vrsub.vx",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,sVm", MATCH_VRSUBVX, MASK_VRSUBVX, match_opcode, 0 },
-{"th.vrsub.vi",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,ViVm", MATCH_VRSUBVI, MASK_VRSUBVI, match_opcode, 0 },
-{"th.vwcvt.x.x.v",0, INSN_CLASS_XTHEADVECTOR,  "Vd,VtVm", MATCH_VWCVTXXV, MASK_VWCVTXXV, match_opcode, INSN_ALIAS },
-{"th.vwcvtu.x.x.v",0,INSN_CLASS_XTHEADVECTOR,  "Vd,VtVm", MATCH_VWCVTUXXV, MASK_VWCVTUXXV, match_opcode, INSN_ALIAS },
-{"th.vwaddu.vv",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,VsVm", MATCH_VWADDUVV, MASK_VWADDUVV, match_opcode, 0 },
-{"th.vwaddu.vx",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,sVm", MATCH_VWADDUVX, MASK_VWADDUVX, match_opcode, 0 },
-{"th.vwsubu.vv",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,VsVm", MATCH_VWSUBUVV, MASK_VWSUBUVV, match_opcode, 0 },
-{"th.vwsubu.vx",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,sVm", MATCH_VWSUBUVX, MASK_VWSUBUVX, match_opcode, 0 },
-{"th.vwadd.vv",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,VsVm", MATCH_VWADDVV, MASK_VWADDVV, match_opcode, 0 },
-{"th.vwadd.vx",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,sVm", MATCH_VWADDVX, MASK_VWADDVX, match_opcode, 0 },
-{"th.vwsub.vv",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,VsVm", MATCH_VWSUBVV, MASK_VWSUBVV, match_opcode, 0 },
-{"th.vwsub.vx",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,sVm", MATCH_VWSUBVX, MASK_VWSUBVX, match_opcode, 0 },
-{"th.vwaddu.wv",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,VsVm", MATCH_VWADDUWV, MASK_VWADDUWV, match_opcode, 0 },
-{"th.vwaddu.wx",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,sVm", MATCH_VWADDUWX, MASK_VWADDUWX, match_opcode, 0 },
-{"th.vwsubu.wv",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,VsVm", MATCH_VWSUBUWV, MASK_VWSUBUWV, match_opcode, 0 },
-{"th.vwsubu.wx",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,sVm", MATCH_VWSUBUWX, MASK_VWSUBUWX, match_opcode, 0 },
-{"th.vwadd.wv",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,VsVm", MATCH_VWADDWV, MASK_VWADDWV, match_opcode, 0 },
-{"th.vwadd.wx",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,sVm", MATCH_VWADDWX, MASK_VWADDWX, match_opcode, 0 },
-{"th.vwsub.wv",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,VsVm", MATCH_VWSUBWV, MASK_VWSUBWV, match_opcode, 0 },
-{"th.vwsub.wx",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,sVm", MATCH_VWSUBWX, MASK_VWSUBWX, match_opcode, 0 },
+{"th.vneg.v",     0, INSN_CLASS_XTHEADVECTOR,  "Vd,VtVm",  MATCH_VRSUBVX, MASK_VRSUBVX | MASK_RS1, match_vd_neq_vm, INSN_ALIAS },
+{"th.vadd.vv",    0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,VsVm", MATCH_VADDVV, MASK_VADDVV, match_vd_neq_vm, 0 },
+{"th.vadd.vx",    0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,sVm", MATCH_VADDVX, MASK_VADDVX, match_vd_neq_vm, 0 },
+{"th.vadd.vi",    0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,ViVm", MATCH_VADDVI, MASK_VADDVI, match_vd_neq_vm, 0 },
+{"th.vsub.vv",    0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,VsVm", MATCH_VSUBVV, MASK_VSUBVV, match_vd_neq_vm, 0 },
+{"th.vsub.vx",    0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,sVm", MATCH_VSUBVX, MASK_VSUBVX, match_vd_neq_vm, 0 },
+{"th.vrsub.vx",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,sVm", MATCH_VRSUBVX, MASK_VRSUBVX, match_vd_neq_vm, 0 },
+{"th.vrsub.vi",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,ViVm", MATCH_VRSUBVI, MASK_VRSUBVI, match_vd_neq_vm, 0 },
+{"th.vwcvt.x.x.v",0, INSN_CLASS_XTHEADVECTOR,  "Vd,VtVm", MATCH_VWCVTXXV, MASK_VWCVTXXV, match_vd_neq_vm_and_vd_neq_vs2, INSN_ALIAS },
+{"th.vwcvtu.x.x.v",0,INSN_CLASS_XTHEADVECTOR,  "Vd,VtVm", MATCH_VWCVTUXXV, MASK_VWCVTUXXV, match_vd_neq_vm_and_vd_neq_vs2, INSN_ALIAS },
+{"th.vwaddu.vv",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,VsVm", MATCH_VWADDUVV, MASK_VWADDUVV, match_vd_neq_vm_and_vd_neq_vs1_vs2, 0 },
+{"th.vwaddu.vx",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,sVm", MATCH_VWADDUVX, MASK_VWADDUVX, match_vd_neq_vm_and_vd_neq_vs2, 0 },
+{"th.vwsubu.vv",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,VsVm", MATCH_VWSUBUVV, MASK_VWSUBUVV, match_vd_neq_vm_and_vd_neq_vs1_vs2, 0 },
+{"th.vwsubu.vx",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,sVm", MATCH_VWSUBUVX, MASK_VWSUBUVX, match_vd_neq_vm_and_vd_neq_vs2, 0 },
+{"th.vwadd.vv",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,VsVm", MATCH_VWADDVV, MASK_VWADDVV, match_vd_neq_vm_and_vd_neq_vs1_vs2, 0 },
+{"th.vwadd.vx",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,sVm", MATCH_VWADDVX, MASK_VWADDVX, match_vd_neq_vm_and_vd_neq_vs2, 0 },
+{"th.vwsub.vv",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,VsVm", MATCH_VWSUBVV, MASK_VWSUBVV, match_vd_neq_vm_and_vd_neq_vs1_vs2, 0 },
+{"th.vwsub.vx",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,sVm", MATCH_VWSUBVX, MASK_VWSUBVX, match_vd_neq_vm_and_vd_neq_vs2, 0 },
+{"th.vwaddu.wv",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,VsVm", MATCH_VWADDUWV, MASK_VWADDUWV, match_vd_neq_vm_and_vd_neq_vs1, 0 },
+{"th.vwaddu.wx",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,sVm", MATCH_VWADDUWX, MASK_VWADDUWX, match_vd_neq_vm, 0 },
+{"th.vwsubu.wv",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,VsVm", MATCH_VWSUBUWV, MASK_VWSUBUWV, match_vd_neq_vm_and_vd_neq_vs1, 0 },
+{"th.vwsubu.wx",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,sVm", MATCH_VWSUBUWX, MASK_VWSUBUWX, match_vd_neq_vm, 0 },
+{"th.vwadd.wv",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,VsVm", MATCH_VWADDWV, MASK_VWADDWV, match_vd_neq_vm_and_vd_neq_vs1, 0 },
+{"th.vwadd.wx",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,sVm", MATCH_VWADDWX, MASK_VWADDWX, match_vd_neq_vm, 0 },
+{"th.vwsub.wv",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,VsVm", MATCH_VWSUBWV, MASK_VWSUBWV, match_vd_neq_vm_and_vd_neq_vs1, 0 },
+{"th.vwsub.wx",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,sVm", MATCH_VWSUBWX, MASK_VWSUBWX, match_vd_neq_vm, 0 },
 {"th.vadc.vvm",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,Vs,V0", MATCH_TH_VADCVVM, MASK_TH_VADCVVM, match_opcode, 0 },
 {"th.vadc.vxm",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,s,V0", MATCH_TH_VADCVXM, MASK_TH_VADCVXM, match_opcode, 0 },
 {"th.vadc.vim",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,Vi,V0", MATCH_TH_VADCVIM, MASK_TH_VADCVIM, match_opcode, 0 },
@@ -3681,32 +4074,32 @@ const struct riscv_opcode riscv_opcodes[] =
 {"th.vsbc.vxm",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,s,V0", MATCH_TH_VSBCVXM, MASK_TH_VSBCVXM, match_opcode, 0 },
 {"th.vmsbc.vvm",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,Vs,V0", MATCH_VMSBCVV, MASK_VMSBCVV, match_opcode, 0 },
 {"th.vmsbc.vxm",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,s,V0", MATCH_VMSBCVX, MASK_VMSBCVX, match_opcode, 0 },
-{"th.vnot.v",     0, INSN_CLASS_XTHEADVECTOR,  "Vd,VtVm", MATCH_VNOTV, MASK_VNOTV, match_opcode, INSN_ALIAS },
-{"th.vand.vv",    0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,VsVm", MATCH_VANDVV, MASK_VANDVV, match_opcode, 0 },
-{"th.vand.vx",    0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,sVm", MATCH_VANDVX, MASK_VANDVX, match_opcode, 0 },
-{"th.vand.vi",    0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,ViVm", MATCH_VANDVI, MASK_VANDVI, match_opcode, 0 },
-{"th.vor.vv",     0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,VsVm", MATCH_VORVV, MASK_VORVV, match_opcode, 0 },
-{"th.vor.vx",     0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,sVm", MATCH_VORVX, MASK_VORVX, match_opcode, 0 },
-{"th.vor.vi",     0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,ViVm", MATCH_VORVI, MASK_VORVI, match_opcode, 0 },
-{"th.vxor.vv",    0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,VsVm", MATCH_VXORVV, MASK_VXORVV, match_opcode, 0 },
-{"th.vxor.vx",    0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,sVm", MATCH_VXORVX, MASK_VXORVX, match_opcode, 0 },
-{"th.vxor.vi",    0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,ViVm", MATCH_VXORVI, MASK_VXORVI, match_opcode, 0 },
-{"th.vsll.vv",    0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,VsVm", MATCH_VSLLVV, MASK_VSLLVV, match_opcode, 0 },
-{"th.vsll.vx",    0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,sVm", MATCH_VSLLVX, MASK_VSLLVX, match_opcode, 0 },
-{"th.vsll.vi",    0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,VjVm", MATCH_VSLLVI, MASK_VSLLVI, match_opcode, 0 },
-{"th.vsrl.vv",    0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,VsVm", MATCH_VSRLVV, MASK_VSRLVV, match_opcode, 0 },
-{"th.vsrl.vx",    0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,sVm", MATCH_VSRLVX, MASK_VSRLVX, match_opcode, 0 },
-{"th.vsrl.vi",    0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,VjVm", MATCH_VSRLVI, MASK_VSRLVI, match_opcode, 0 },
-{"th.vsra.vv",    0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,VsVm", MATCH_VSRAVV, MASK_VSRAVV, match_opcode, 0 },
-{"th.vsra.vx",    0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,sVm", MATCH_VSRAVX, MASK_VSRAVX, match_opcode, 0 },
-{"th.vsra.vi",    0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,VjVm", MATCH_VSRAVI, MASK_VSRAVI, match_opcode, 0 },
-{"th.vncvt.x.x.v",0, INSN_CLASS_XTHEADVECTOR,  "Vd,VtVm", MATCH_VNCVTXXW, MASK_VNCVTXXW, match_opcode, INSN_ALIAS },
-{"th.vnsrl.vv",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,VsVm", MATCH_VNSRLWV, MASK_VNSRLWV, match_opcode, 0 },
-{"th.vnsrl.vx",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,sVm", MATCH_VNSRLWX, MASK_VNSRLWX, match_opcode, 0 },
-{"th.vnsrl.vi",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,VjVm", MATCH_VNSRLWI, MASK_VNSRLWI, match_opcode, 0 },
-{"th.vnsra.vv",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,VsVm", MATCH_VNSRAWV, MASK_VNSRAWV, match_opcode, 0 },
-{"th.vnsra.vx",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,sVm", MATCH_VNSRAWX, MASK_VNSRAWX, match_opcode, 0 },
-{"th.vnsra.vi",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,VjVm", MATCH_VNSRAWI, MASK_VNSRAWI, match_opcode, 0 },
+{"th.vnot.v",     0, INSN_CLASS_XTHEADVECTOR,  "Vd,VtVm", MATCH_VNOTV, MASK_VNOTV, match_vd_neq_vm, INSN_ALIAS },
+{"th.vand.vv",    0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,VsVm", MATCH_VANDVV, MASK_VANDVV, match_vd_neq_vm, 0 },
+{"th.vand.vx",    0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,sVm", MATCH_VANDVX, MASK_VANDVX, match_vd_neq_vm, 0 },
+{"th.vand.vi",    0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,ViVm", MATCH_VANDVI, MASK_VANDVI, match_vd_neq_vm, 0 },
+{"th.vor.vv",     0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,VsVm", MATCH_VORVV, MASK_VORVV, match_vd_neq_vm, 0 },
+{"th.vor.vx",     0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,sVm", MATCH_VORVX, MASK_VORVX, match_vd_neq_vm, 0 },
+{"th.vor.vi",     0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,ViVm", MATCH_VORVI, MASK_VORVI, match_vd_neq_vm, 0 },
+{"th.vxor.vv",    0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,VsVm", MATCH_VXORVV, MASK_VXORVV, match_vd_neq_vm, 0 },
+{"th.vxor.vx",    0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,sVm", MATCH_VXORVX, MASK_VXORVX, match_vd_neq_vm, 0 },
+{"th.vxor.vi",    0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,ViVm", MATCH_VXORVI, MASK_VXORVI, match_vd_neq_vm, 0 },
+{"th.vsll.vv",    0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,VsVm", MATCH_VSLLVV, MASK_VSLLVV, match_vd_neq_vm, 0 },
+{"th.vsll.vx",    0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,sVm", MATCH_VSLLVX, MASK_VSLLVX, match_vd_neq_vm, 0 },
+{"th.vsll.vi",    0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,VjVm", MATCH_VSLLVI, MASK_VSLLVI, match_vd_neq_vm, 0 },
+{"th.vsrl.vv",    0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,VsVm", MATCH_VSRLVV, MASK_VSRLVV, match_vd_neq_vm, 0 },
+{"th.vsrl.vx",    0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,sVm", MATCH_VSRLVX, MASK_VSRLVX, match_vd_neq_vm, 0 },
+{"th.vsrl.vi",    0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,VjVm", MATCH_VSRLVI, MASK_VSRLVI, match_vd_neq_vm, 0 },
+{"th.vsra.vv",    0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,VsVm", MATCH_VSRAVV, MASK_VSRAVV, match_vd_neq_vm, 0 },
+{"th.vsra.vx",    0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,sVm", MATCH_VSRAVX, MASK_VSRAVX, match_vd_neq_vm, 0 },
+{"th.vsra.vi",    0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,VjVm", MATCH_VSRAVI, MASK_VSRAVI, match_vd_neq_vm, 0 },
+{"th.vncvt.x.x.v",0, INSN_CLASS_XTHEADVECTOR,  "Vd,VtVm", MATCH_VNCVTXXW, MASK_VNCVTXXW, match_vd_neq_vm, INSN_ALIAS },
+{"th.vnsrl.vv",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,VsVm", MATCH_VNSRLWV, MASK_VNSRLWV, match_vd_neq_vm, 0 },
+{"th.vnsrl.vx",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,sVm", MATCH_VNSRLWX, MASK_VNSRLWX, match_vd_neq_vm, 0 },
+{"th.vnsrl.vi",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,VjVm", MATCH_VNSRLWI, MASK_VNSRLWI, match_vd_neq_vm, 0 },
+{"th.vnsra.vv",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,VsVm", MATCH_VNSRAWV, MASK_VNSRAWV, match_vd_neq_vm, 0 },
+{"th.vnsra.vx",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,sVm", MATCH_VNSRAWX, MASK_VNSRAWX, match_vd_neq_vm, 0 },
+{"th.vnsra.vi",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,VjVm", MATCH_VNSRAWI, MASK_VNSRAWI, match_vd_neq_vm, 0 },
 {"th.vmseq.vv",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,VsVm", MATCH_VMSEQVV, MASK_VMSEQVV, match_opcode, 0 },
 {"th.vmseq.vx",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,sVm", MATCH_VMSEQVX, MASK_VMSEQVX, match_opcode, 0 },
 {"th.vmseq.vi",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,ViVm", MATCH_VMSEQVI, MASK_VMSEQVI, match_opcode, 0 },
@@ -3739,158 +4132,157 @@ const struct riscv_opcode riscv_opcodes[] =
 {"th.vmsge.vx",   0, INSN_CLASS_XTHEADVECTOR, "Vd,Vt,s,VM,VT", 0, (int) M_VMSGE, NULL, INSN_MACRO },
 {"th.vmsgeu.vx",  0, INSN_CLASS_XTHEADVECTOR, "Vd,Vt,sVm", 1, (int) M_VMSGE, NULL, INSN_MACRO },
 {"th.vmsgeu.vx",  0, INSN_CLASS_XTHEADVECTOR, "Vd,Vt,s,VM,VT", 1, (int) M_VMSGE, NULL, INSN_MACRO },
-{"th.vminu.vv",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,VsVm", MATCH_VMINUVV, MASK_VMINUVV, match_opcode, 0},
-{"th.vminu.vx",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,sVm", MATCH_VMINUVX, MASK_VMINUVX, match_opcode, 0},
-{"th.vmin.vv",    0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,VsVm", MATCH_VMINVV, MASK_VMINVV, match_opcode, 0},
-{"th.vmin.vx",    0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,sVm", MATCH_VMINVX, MASK_VMINVX, match_opcode, 0},
-{"th.vmaxu.vv",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,VsVm", MATCH_VMAXUVV, MASK_VMAXUVV, match_opcode, 0},
-{"th.vmaxu.vx",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,sVm", MATCH_VMAXUVX, MASK_VMAXUVX, match_opcode, 0},
-{"th.vmax.vv",    0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,VsVm", MATCH_VMAXVV, MASK_VMAXVV, match_opcode, 0},
-{"th.vmax.vx",    0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,sVm", MATCH_VMAXVX, MASK_VMAXVX, match_opcode, 0},
-{"th.vmul.vv",    0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,VsVm", MATCH_VMULVV, MASK_VMULVV, match_opcode, 0 },
-{"th.vmul.vx",    0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,sVm", MATCH_VMULVX, MASK_VMULVX, match_opcode, 0 },
-{"th.vmulh.vv",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,VsVm", MATCH_VMULHVV, MASK_VMULHVV, match_opcode, 0 },
-{"th.vmulh.vx",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,sVm", MATCH_VMULHVX, MASK_VMULHVX, match_opcode, 0 },
-{"th.vmulhu.vv",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,VsVm", MATCH_VMULHUVV, MASK_VMULHUVV, match_opcode, 0 },
-{"th.vmulhu.vx",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,sVm", MATCH_VMULHUVX, MASK_VMULHUVX, match_opcode, 0 },
-{"th.vmulhsu.vv", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,VsVm", MATCH_VMULHSUVV, MASK_VMULHSUVV, match_opcode, 0 },
-{"th.vmulhsu.vx", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,sVm", MATCH_VMULHSUVX, MASK_VMULHSUVX, match_opcode, 0 },
-{"th.vwmul.vv",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,VsVm", MATCH_VWMULVV, MASK_VWMULVV, match_opcode, 0 },
-{"th.vwmul.vx",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,sVm", MATCH_VWMULVX, MASK_VWMULVX, match_opcode, 0 },
-{"th.vwmulu.vv",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,VsVm", MATCH_VWMULUVV, MASK_VWMULUVV, match_opcode, 0 },
-{"th.vwmulu.vx",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,sVm", MATCH_VWMULUVX, MASK_VWMULUVX, match_opcode, 0 },
-{"th.vwmulsu.vv", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,VsVm", MATCH_VWMULSUVV, MASK_VWMULSUVV, match_opcode, 0 },
-{"th.vwmulsu.vx", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,sVm", MATCH_VWMULSUVX, MASK_VWMULSUVX, match_opcode, 0 },
-{"th.vmacc.vv",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vs,VtVm", MATCH_VMACCVV, MASK_VMACCVV, match_opcode, 0},
-{"th.vmacc.vx",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,s,VtVm", MATCH_VMACCVX, MASK_VMACCVX, match_opcode, 0},
-{"th.vnmsac.vv",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vs,VtVm", MATCH_VNMSACVV, MASK_VNMSACVV, match_opcode, 0},
-{"th.vnmsac.vx",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,s,VtVm", MATCH_VNMSACVX, MASK_VNMSACVX, match_opcode, 0},
-{"th.vmadd.vv",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vs,VtVm", MATCH_VMADDVV, MASK_VMADDVV, match_opcode, 0},
-{"th.vmadd.vx",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,s,VtVm", MATCH_VMADDVX, MASK_VMADDVX, match_opcode, 0},
-{"th.vnmsub.vv",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vs,VtVm", MATCH_VNMSUBVV, MASK_VNMSUBVV, match_opcode, 0},
-{"th.vnmsub.vx",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,s,VtVm", MATCH_VNMSUBVX, MASK_VNMSUBVX, match_opcode, 0},
-{"th.vwmaccu.vv",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vs,VtVm", MATCH_VWMACCUVV, MASK_VWMACCUVV, match_opcode, 0},
-{"th.vwmaccu.vx",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,s,VtVm", MATCH_VWMACCUVX, MASK_VWMACCUVX, match_opcode, 0},
-{"th.vwmacc.vv",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vs,VtVm", MATCH_VWMACCVV, MASK_VWMACCVV, match_opcode, 0},
-{"th.vwmacc.vx",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,s,VtVm", MATCH_VWMACCVX, MASK_VWMACCVX, match_opcode, 0},
-{"th.vwmaccsu.vv", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vs,VtVm", MATCH_TH_VWMACCSUVV, MASK_TH_VWMACCSUVV, match_opcode, 0},
-{"th.vwmaccsu.vx", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,s,VtVm", MATCH_VWMACCUSVX, MASK_VWMACCUSVX, match_opcode, 0},
-{"th.vwmaccus.vx", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,s,VtVm", MATCH_VWMACCSUVX, MASK_VWMACCSUVX, match_opcode, 0},
-{"th.vdivu.vv",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,VsVm", MATCH_VDIVUVV, MASK_VDIVUVV, match_opcode, 0 },
-{"th.vdivu.vx",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,sVm", MATCH_VDIVUVX, MASK_VDIVUVX, match_opcode, 0 },
-{"th.vdiv.vv",    0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,VsVm", MATCH_VDIVVV, MASK_VDIVVV, match_opcode, 0 },
-{"th.vdiv.vx",    0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,sVm", MATCH_VDIVVX, MASK_VDIVVX, match_opcode, 0 },
-{"th.vremu.vv",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,VsVm", MATCH_VREMUVV, MASK_VREMUVV, match_opcode, 0 },
-{"th.vremu.vx",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,sVm", MATCH_VREMUVX, MASK_VREMUVX, match_opcode, 0 },
-{"th.vrem.vv",    0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,VsVm", MATCH_VREMVV, MASK_VREMVV, match_opcode, 0 },
-{"th.vrem.vx",    0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,sVm", MATCH_VREMVX, MASK_VREMVX, match_opcode, 0 },
-{"th.vmerge.vvm", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,Vs,V0", MATCH_VMERGEVVM, MASK_VMERGEVVM, match_opcode, 0 },
-{"th.vmerge.vxm", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,s,V0", MATCH_VMERGEVXM, MASK_VMERGEVXM, match_opcode, 0 },
-{"th.vmerge.vim", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,Vi,V0", MATCH_VMERGEVIM, MASK_VMERGEVIM, match_opcode, 0 },
+{"th.vminu.vv",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,VsVm", MATCH_VMINUVV, MASK_VMINUVV, match_vd_neq_vm, 0},
+{"th.vminu.vx",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,sVm", MATCH_VMINUVX, MASK_VMINUVX, match_vd_neq_vm, 0},
+{"th.vmin.vv",    0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,VsVm", MATCH_VMINVV, MASK_VMINVV, match_vd_neq_vm, 0},
+{"th.vmin.vx",    0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,sVm", MATCH_VMINVX, MASK_VMINVX, match_vd_neq_vm, 0},
+{"th.vmaxu.vv",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,VsVm", MATCH_VMAXUVV, MASK_VMAXUVV, match_vd_neq_vm, 0},
+{"th.vmaxu.vx",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,sVm", MATCH_VMAXUVX, MASK_VMAXUVX, match_vd_neq_vm, 0},
+{"th.vmax.vv",    0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,VsVm", MATCH_VMAXVV, MASK_VMAXVV, match_vd_neq_vm, 0},
+{"th.vmax.vx",    0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,sVm", MATCH_VMAXVX, MASK_VMAXVX, match_vd_neq_vm, 0},
+{"th.vmul.vv",    0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,VsVm", MATCH_VMULVV, MASK_VMULVV, match_vd_neq_vm, 0 },
+{"th.vmul.vx",    0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,sVm", MATCH_VMULVX, MASK_VMULVX, match_vd_neq_vm, 0 },
+{"th.vmulh.vv",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,VsVm", MATCH_VMULHVV, MASK_VMULHVV, match_vd_neq_vm, 0 },
+{"th.vmulh.vx",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,sVm", MATCH_VMULHVX, MASK_VMULHVX, match_vd_neq_vm, 0 },
+{"th.vmulhu.vv",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,VsVm", MATCH_VMULHUVV, MASK_VMULHUVV, match_vd_neq_vm, 0 },
+{"th.vmulhu.vx",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,sVm", MATCH_VMULHUVX, MASK_VMULHUVX, match_vd_neq_vm, 0 },
+{"th.vmulhsu.vv", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,VsVm", MATCH_VMULHSUVV, MASK_VMULHSUVV, match_vd_neq_vm, 0 },
+{"th.vmulhsu.vx", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,sVm", MATCH_VMULHSUVX, MASK_VMULHSUVX, match_vd_neq_vm, 0 },
+{"th.vwmul.vv",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,VsVm", MATCH_VWMULVV, MASK_VWMULVV, match_vd_neq_vm_and_vd_neq_vs1_vs2, 0 },
+{"th.vwmul.vx",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,sVm", MATCH_VWMULVX, MASK_VWMULVX, match_vd_neq_vm_and_vd_neq_vs2, 0 },
+{"th.vwmulu.vv",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,VsVm", MATCH_VWMULUVV, MASK_VWMULUVV, match_vd_neq_vm_and_vd_neq_vs1_vs2, 0 },
+{"th.vwmulu.vx",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,sVm", MATCH_VWMULUVX, MASK_VWMULUVX, match_vd_neq_vm_and_vd_neq_vs2, 0 },
+{"th.vwmulsu.vv", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,VsVm", MATCH_VWMULSUVV, MASK_VWMULSUVV, match_vd_neq_vm_and_vd_neq_vs1_vs2, 0 },
+{"th.vwmulsu.vx", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,sVm", MATCH_VWMULSUVX, MASK_VWMULSUVX, match_vd_neq_vm_and_vd_neq_vs2, 0 },
+{"th.vmacc.vv",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vs,VtVm", MATCH_VMACCVV, MASK_VMACCVV, match_vd_neq_vm, 0},
+{"th.vmacc.vx",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,s,VtVm", MATCH_VMACCVX, MASK_VMACCVX, match_vd_neq_vm, 0},
+{"th.vnmsac.vv",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vs,VtVm", MATCH_VNMSACVV, MASK_VNMSACVV, match_vd_neq_vm, 0},
+{"th.vnmsac.vx",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,s,VtVm", MATCH_VNMSACVX, MASK_VNMSACVX, match_vd_neq_vm, 0},
+{"th.vmadd.vv",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vs,VtVm", MATCH_VMADDVV, MASK_VMADDVV, match_vd_neq_vm, 0},
+{"th.vmadd.vx",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,s,VtVm", MATCH_VMADDVX, MASK_VMADDVX, match_vd_neq_vm, 0},
+{"th.vnmsub.vv",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vs,VtVm", MATCH_VNMSUBVV, MASK_VNMSUBVV, match_vd_neq_vm, 0},
+{"th.vnmsub.vx",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,s,VtVm", MATCH_VNMSUBVX, MASK_VNMSUBVX, match_vd_neq_vm, 0},
+{"th.vwmaccu.vv",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vs,VtVm", MATCH_VWMACCUVV, MASK_VWMACCUVV, match_vd_neq_vm_and_vd_neq_vs1_vs2, 0},
+{"th.vwmaccu.vx",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,s,VtVm", MATCH_VWMACCUVX, MASK_VWMACCUVX, match_vd_neq_vm_and_vd_neq_vs2, 0},
+{"th.vwmacc.vv",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vs,VtVm", MATCH_VWMACCVV, MASK_VWMACCVV, match_vd_neq_vm_and_vd_neq_vs1_vs2, 0},
+{"th.vwmacc.vx",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,s,VtVm", MATCH_VWMACCVX, MASK_VWMACCVX, match_vd_neq_vm_and_vd_neq_vs2, 0},
+{"th.vwmaccsu.vv", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vs,VtVm", MATCH_TH_VWMACCSUVV, MASK_TH_VWMACCSUVV, match_vd_neq_vm_and_vd_neq_vs1_vs2, 0},
+{"th.vwmaccsu.vx", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,s,VtVm", MATCH_VWMACCUSVX, MASK_VWMACCUSVX, match_vd_neq_vm_and_vd_neq_vs2, 0},
+{"th.vwmaccus.vx", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,s,VtVm", MATCH_VWMACCSUVX, MASK_VWMACCSUVX, match_vd_neq_vm_and_vd_neq_vs2, 0},
+{"th.vdivu.vv",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,VsVm", MATCH_VDIVUVV, MASK_VDIVUVV, match_vd_neq_vm, 0 },
+{"th.vdivu.vx",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,sVm", MATCH_VDIVUVX, MASK_VDIVUVX, match_vd_neq_vm, 0 },
+{"th.vdiv.vv",    0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,VsVm", MATCH_VDIVVV, MASK_VDIVVV, match_vd_neq_vm, 0 },
+{"th.vdiv.vx",    0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,sVm", MATCH_VDIVVX, MASK_VDIVVX, match_vd_neq_vm, 0 },
+{"th.vremu.vv",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,VsVm", MATCH_VREMUVV, MASK_VREMUVV, match_vd_neq_vm, 0 },
+{"th.vremu.vx",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,sVm", MATCH_VREMUVX, MASK_VREMUVX, match_vd_neq_vm, 0 },
+{"th.vrem.vv",    0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,VsVm", MATCH_VREMVV, MASK_VREMVV, match_vd_neq_vm, 0 },
+{"th.vrem.vx",    0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,sVm", MATCH_VREMVX, MASK_VREMVX, match_vd_neq_vm, 0 },
+{"th.vmerge.vvm", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,Vs,V0", MATCH_VMERGEVVM, MASK_VMERGEVVM, match_vd_neq_vm, 0 },
+{"th.vmerge.vxm", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,s,V0", MATCH_VMERGEVXM, MASK_VMERGEVXM, match_vd_neq_vm, 0 },
+{"th.vmerge.vim", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,Vi,V0", MATCH_VMERGEVIM, MASK_VMERGEVIM, match_vd_neq_vm, 0 },
 {"th.vmv.v.v",    0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vs", MATCH_VMVVV, MASK_VMVVV, match_opcode, 0 },
 {"th.vmv.v.x",    0, INSN_CLASS_XTHEADVECTOR,  "Vd,s", MATCH_VMVVX, MASK_VMVVX, match_opcode, 0 },
 {"th.vmv.v.i",    0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vi", MATCH_VMVVI, MASK_VMVVI, match_opcode, 0 },
-{"th.vsaddu.vv",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,VsVm", MATCH_VSADDUVV, MASK_VSADDUVV, match_opcode, 0 },
-{"th.vsaddu.vx",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,sVm", MATCH_VSADDUVX, MASK_VSADDUVX, match_opcode, 0 },
-{"th.vsaddu.vi",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,ViVm", MATCH_VSADDUVI, MASK_VSADDUVI, match_opcode, 0 },
-{"th.vsadd.vv",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,VsVm", MATCH_VSADDVV, MASK_VSADDVV, match_opcode, 0 },
-{"th.vsadd.vx",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,sVm", MATCH_VSADDVX, MASK_VSADDVX, match_opcode, 0 },
-{"th.vsadd.vi",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,ViVm", MATCH_VSADDVI, MASK_VSADDVI, match_opcode, 0 },
-{"th.vssubu.vv",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,VsVm", MATCH_VSSUBUVV, MASK_VSSUBUVV, match_opcode, 0 },
-{"th.vssubu.vx",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,sVm", MATCH_VSSUBUVX, MASK_VSSUBUVX, match_opcode, 0 },
-{"th.vssub.vv",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,VsVm", MATCH_VSSUBVV, MASK_VSSUBVV, match_opcode, 0 },
-{"th.vssub.vx",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,sVm", MATCH_VSSUBVX, MASK_VSSUBVX, match_opcode, 0 },
-{"th.vaadd.vv",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,VsVm", MATCH_TH_VAADDVV, MASK_TH_VAADDVV, match_opcode, 0 },
-{"th.vaadd.vx",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,sVm", MATCH_TH_VAADDVX, MASK_TH_VAADDVX, match_opcode, 0 },
-{"vaadd.vi",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,ViVm", MATCH_TH_VAADDVI, MASK_TH_VAADDVI, match_opcode, INSN_ALIAS },
-{"th.vaadd.vi",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,ViVm", MATCH_TH_VAADDVI, MASK_TH_VAADDVI, match_opcode, 0 },
-{"th.vasub.vv",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,VsVm", MATCH_TH_VASUBVV, MASK_TH_VASUBVV, match_opcode, 0 },
-{"th.vasub.vx",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,sVm", MATCH_TH_VASUBVX, MASK_TH_VASUBVX, match_opcode, 0 },
-{"th.vsmul.vv",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,VsVm", MATCH_VSMULVV, MASK_VSMULVV, match_opcode, 0 },
-{"th.vsmul.vx",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,sVm", MATCH_VSMULVX, MASK_VSMULVX, match_opcode, 0 },
-{"vwsmaccu.vv", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vs,VtVm", MATCH_VQMACCUVV, MASK_VQMACCUVV, match_opcode, INSN_ALIAS },
-{"th.vwsmaccu.vv", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vs,VtVm", MATCH_VQMACCUVV, MASK_VQMACCUVV, match_opcode, 0 },
-{"vwsmaccu.vx", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,s,VtVm", MATCH_VQMACCUVX, MASK_VQMACCUVX, match_opcode, INSN_ALIAS },
-{"th.vwsmaccu.vx", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,s,VtVm", MATCH_VQMACCUVX, MASK_VQMACCUVX, match_opcode, 0 },
-{"vwsmacc.vv",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vs,VtVm", MATCH_VQMACCVV, MASK_VQMACCVV, match_opcode, INSN_ALIAS },
-{"th.vwsmacc.vv",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vs,VtVm", MATCH_VQMACCVV, MASK_VQMACCVV, match_opcode, 0 },
-{"vwsmacc.vx",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,s,VtVm", MATCH_VQMACCVX, MASK_VQMACCVX, match_opcode, INSN_ALIAS },
-{"th.vwsmacc.vx",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,s,VtVm", MATCH_VQMACCVX, MASK_VQMACCVX, match_opcode, 0 },
-{"vwsmaccsu.vv",0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vs,VtVm", MATCH_TH_VWSMACCSUVV, MASK_TH_VWSMACCSUVV, match_opcode, INSN_ALIAS },
-{"th.vwsmaccsu.vv",0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vs,VtVm", MATCH_TH_VWSMACCSUVV, MASK_TH_VWSMACCSUVV, match_opcode, 0 },
-{"vwsmaccsu.vx",0, INSN_CLASS_XTHEADVECTOR,  "Vd,s,VtVm", MATCH_VQMACCUSVX, MASK_VQMACCUSVX, match_opcode, INSN_ALIAS },
-{"th.vwsmaccsu.vx",0, INSN_CLASS_XTHEADVECTOR,  "Vd,s,VtVm", MATCH_VQMACCUSVX, MASK_VQMACCUSVX, match_opcode, 0 },
-{"vwsmaccus.vx",0, INSN_CLASS_XTHEADVECTOR,  "Vd,s,VtVm", MATCH_VQMACCSUVX, MASK_VQMACCSUVX, match_opcode, INSN_ALIAS },
-{"th.vwsmaccus.vx",0, INSN_CLASS_XTHEADVECTOR,  "Vd,s,VtVm", MATCH_VQMACCSUVX, MASK_VQMACCSUVX, match_opcode, 0 },
-{"th.vssrl.vv",    0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,VsVm", MATCH_VSSRLVV, MASK_VSSRLVV, match_opcode, 0 },
-{"th.vssrl.vx",    0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,sVm", MATCH_VSSRLVX, MASK_VSSRLVX, match_opcode, 0 },
-{"th.vssrl.vi",    0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,VjVm", MATCH_VSSRLVI, MASK_VSSRLVI, match_opcode, 0 },
-{"th.vssra.vv",    0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,VsVm", MATCH_VSSRAVV, MASK_VSSRAVV, match_opcode, 0 },
-{"th.vssra.vx",    0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,sVm", MATCH_VSSRAVX, MASK_VSSRAVX, match_opcode, 0 },
-{"th.vssra.vi",    0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,VjVm", MATCH_VSSRAVI, MASK_VSSRAVI, match_opcode, 0 },
-{"th.vnclipu.vv",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,VsVm", MATCH_VNCLIPUWV, MASK_VNCLIPUWV, match_opcode, 0 },
-{"th.vnclipu.vx",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,sVm", MATCH_VNCLIPUWX, MASK_VNCLIPUWX, match_opcode, 0 },
-{"th.vnclipu.vi",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,VjVm", MATCH_VNCLIPUWI, MASK_VNCLIPUWI, match_opcode, 0 },
-{"th.vnclip.vv",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,VsVm", MATCH_VNCLIPWV, MASK_VNCLIPWV, match_opcode, 0 },
-{"th.vnclip.vx",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,sVm", MATCH_VNCLIPWX, MASK_VNCLIPWX, match_opcode, 0 },
-{"th.vnclip.vi",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,VjVm", MATCH_VNCLIPWI, MASK_VNCLIPWI, match_opcode, 0 },
-{"th.vfadd.vv",   0, INSN_CLASS_XTHEADVECTOR, "Vd,Vt,VsVm", MATCH_VFADDVV, MASK_VFADDVV, match_opcode, 0},
-{"th.vfadd.vf",   0, INSN_CLASS_XTHEADVECTOR, "Vd,Vt,SVm", MATCH_VFADDVF, MASK_VFADDVF, match_opcode, 0},
-{"th.vfsub.vv",   0, INSN_CLASS_XTHEADVECTOR, "Vd,Vt,VsVm", MATCH_VFSUBVV, MASK_VFSUBVV, match_opcode, 0},
-{"th.vfsub.vf",   0, INSN_CLASS_XTHEADVECTOR, "Vd,Vt,SVm", MATCH_VFSUBVF, MASK_VFSUBVF, match_opcode, 0},
-{"th.vfrsub.vf",  0, INSN_CLASS_XTHEADVECTOR, "Vd,Vt,SVm", MATCH_VFRSUBVF, MASK_VFRSUBVF, match_opcode, 0},
-{"th.vfwadd.vv",   0, INSN_CLASS_XTHEADVECTOR, "Vd,Vt,VsVm", MATCH_VFWADDVV, MASK_VFWADDVV, match_opcode, 0},
-{"th.vfwadd.vf",   0, INSN_CLASS_XTHEADVECTOR, "Vd,Vt,SVm", MATCH_VFWADDVF, MASK_VFWADDVF, match_opcode, 0},
-{"th.vfwsub.vv",   0, INSN_CLASS_XTHEADVECTOR, "Vd,Vt,VsVm", MATCH_VFWSUBVV, MASK_VFWSUBVV, match_opcode, 0},
-{"th.vfwsub.vf",   0, INSN_CLASS_XTHEADVECTOR, "Vd,Vt,SVm", MATCH_VFWSUBVF, MASK_VFWSUBVF, match_opcode, 0},
-{"th.vfwadd.wv",   0, INSN_CLASS_XTHEADVECTOR, "Vd,Vt,VsVm", MATCH_VFWADDWV, MASK_VFWADDWV, match_opcode, 0},
-{"th.vfwsub.wv",   0, INSN_CLASS_XTHEADVECTOR, "Vd,Vt,VsVm", MATCH_VFWSUBWV, MASK_VFWSUBWV, match_opcode, 0},
-{"th.vfwadd.wf",   0, INSN_CLASS_XTHEADVECTOR, "Vd,Vt,SVm", MATCH_VFWADDWF, MASK_VFWADDWF, match_opcode, 0 },
-{"th.vfwsub.wf",   0, INSN_CLASS_XTHEADVECTOR, "Vd,Vt,SVm", MATCH_VFWSUBWF, MASK_VFWSUBWF, match_opcode, 0 },
-{"th.vfmul.vv",   0, INSN_CLASS_XTHEADVECTOR, "Vd,Vt,VsVm", MATCH_VFMULVV, MASK_VFMULVV, match_opcode, 0},
-{"th.vfmul.vf",   0, INSN_CLASS_XTHEADVECTOR, "Vd,Vt,SVm", MATCH_VFMULVF, MASK_VFMULVF, match_opcode, 0},
-{"th.vfdiv.vv",   0, INSN_CLASS_XTHEADVECTOR, "Vd,Vt,VsVm", MATCH_VFDIVVV, MASK_VFDIVVV, match_opcode, 0},
-{"th.vfdiv.vf",   0, INSN_CLASS_XTHEADVECTOR, "Vd,Vt,SVm", MATCH_VFDIVVF, MASK_VFDIVVF, match_opcode, 0},
-{"th.vfrdiv.vf",  0, INSN_CLASS_XTHEADVECTOR, "Vd,Vt,SVm", MATCH_VFRDIVVF, MASK_VFRDIVVF, match_opcode, 0},
-{"th.vfwmul.vv",  0, INSN_CLASS_XTHEADVECTOR, "Vd,Vt,VsVm", MATCH_VFWMULVV, MASK_VFWMULVV, match_opcode, 0},
-{"th.vfwmul.vf",  0, INSN_CLASS_XTHEADVECTOR, "Vd,Vt,SVm", MATCH_VFWMULVF, MASK_VFWMULVF, match_opcode, 0},
-{"th.vfmadd.vv",  0, INSN_CLASS_XTHEADVECTOR, "Vd,Vs,VtVm", MATCH_VFMADDVV, MASK_VFMADDVV, match_opcode, 0},
-{"th.vfmadd.vf",  0, INSN_CLASS_XTHEADVECTOR, "Vd,S,VtVm", MATCH_VFMADDVF, MASK_VFMADDVF, match_opcode, 0},
-{"th.vfnmadd.vv", 0, INSN_CLASS_XTHEADVECTOR, "Vd,Vs,VtVm", MATCH_VFNMADDVV, MASK_VFNMADDVV, match_opcode, 0},
-{"th.vfnmadd.vf", 0, INSN_CLASS_XTHEADVECTOR, "Vd,S,VtVm", MATCH_VFNMADDVF, MASK_VFNMADDVF, match_opcode, 0},
-{"th.vfmsub.vv",  0, INSN_CLASS_XTHEADVECTOR, "Vd,Vs,VtVm", MATCH_VFMSUBVV, MASK_VFMSUBVV, match_opcode, 0},
-{"th.vfmsub.vf",  0, INSN_CLASS_XTHEADVECTOR, "Vd,S,VtVm", MATCH_VFMSUBVF, MASK_VFMSUBVF, match_opcode, 0},
-{"th.vfnmsub.vv", 0, INSN_CLASS_XTHEADVECTOR, "Vd,Vs,VtVm", MATCH_VFNMSUBVV, MASK_VFNMSUBVV, match_opcode, 0},
-{"th.vfnmsub.vf", 0, INSN_CLASS_XTHEADVECTOR, "Vd,S,VtVm", MATCH_VFNMSUBVF, MASK_VFNMSUBVF, match_opcode, 0},
-{"th.vfmacc.vv",  0, INSN_CLASS_XTHEADVECTOR, "Vd,Vs,VtVm", MATCH_VFMACCVV, MASK_VFMACCVV, match_opcode, 0},
-{"th.vfmacc.vf",  0, INSN_CLASS_XTHEADVECTOR, "Vd,S,VtVm", MATCH_VFMACCVF, MASK_VFMACCVF, match_opcode, 0},
-{"th.vfnmacc.vv", 0, INSN_CLASS_XTHEADVECTOR, "Vd,Vs,VtVm", MATCH_VFNMACCVV, MASK_VFNMACCVV, match_opcode, 0},
-{"th.vfnmacc.vf", 0, INSN_CLASS_XTHEADVECTOR, "Vd,S,VtVm", MATCH_VFNMACCVF, MASK_VFNMACCVF, match_opcode, 0},
-{"th.vfmsac.vv",  0, INSN_CLASS_XTHEADVECTOR, "Vd,Vs,VtVm", MATCH_VFMSACVV, MASK_VFMSACVV, match_opcode, 0},
-{"th.vfmsac.vf",  0, INSN_CLASS_XTHEADVECTOR, "Vd,S,VtVm", MATCH_VFMSACVF, MASK_VFMSACVF, match_opcode, 0},
-{"th.vfnmsac.vv", 0, INSN_CLASS_XTHEADVECTOR, "Vd,Vs,VtVm", MATCH_VFNMSACVV, MASK_VFNMSACVV, match_opcode, 0},
-{"th.vfnmsac.vf", 0, INSN_CLASS_XTHEADVECTOR, "Vd,S,VtVm", MATCH_VFNMSACVF, MASK_VFNMSACVF, match_opcode, 0},
-{"th.vfwmacc.vv",  0, INSN_CLASS_XTHEADVECTOR, "Vd,Vs,VtVm", MATCH_VFWMACCVV, MASK_VFWMACCVV, match_opcode, 0},
-{"th.vfwmacc.vf",  0, INSN_CLASS_XTHEADVECTOR, "Vd,S,VtVm", MATCH_VFWMACCVF, MASK_VFWMACCVF, match_opcode, 0},
-{"th.vfwnmacc.vv", 0, INSN_CLASS_XTHEADVECTOR, "Vd,Vs,VtVm", MATCH_VFWNMACCVV, MASK_VFWNMACCVV, match_opcode, 0},
-{"th.vfwnmacc.vf", 0, INSN_CLASS_XTHEADVECTOR, "Vd,S,VtVm", MATCH_VFWNMACCVF, MASK_VFWNMACCVF, match_opcode, 0},
-{"th.vfwmsac.vv",  0, INSN_CLASS_XTHEADVECTOR, "Vd,Vs,VtVm", MATCH_VFWMSACVV, MASK_VFWMSACVV, match_opcode, 0},
-{"th.vfwmsac.vf",  0, INSN_CLASS_XTHEADVECTOR, "Vd,S,VtVm", MATCH_VFWMSACVF, MASK_VFWMSACVF, match_opcode, 0},
-{"th.vfwnmsac.vv", 0, INSN_CLASS_XTHEADVECTOR, "Vd,Vs,VtVm", MATCH_VFWNMSACVV, MASK_VFWNMSACVV, match_opcode, 0},
-{"th.vfwnmsac.vf", 0, INSN_CLASS_XTHEADVECTOR, "Vd,S,VtVm", MATCH_VFWNMSACVF, MASK_VFWNMSACVF, match_opcode, 0},
-{"th.vfsqrt.v",   0, INSN_CLASS_XTHEADVECTOR, "Vd,VtVm", MATCH_TH_VFSQRTV, MASK_TH_VFSQRTV, match_opcode, 0},
-{"th.vfmin.vv",   0, INSN_CLASS_XTHEADVECTOR, "Vd,Vt,VsVm", MATCH_VFMINVV, MASK_VFMINVV, match_opcode, 0},
-{"th.vfmin.vf",   0, INSN_CLASS_XTHEADVECTOR, "Vd,Vt,SVm", MATCH_VFMINVF, MASK_VFMINVF, match_opcode, 0},
-{"th.vfmax.vv",   0, INSN_CLASS_XTHEADVECTOR, "Vd,Vt,VsVm", MATCH_VFMAXVV, MASK_VFMAXVV, match_opcode, 0},
-{"th.vfmax.vf",   0, INSN_CLASS_XTHEADVECTOR, "Vd,Vt,SVm", MATCH_VFMAXVF, MASK_VFMAXVF, match_opcode, 0},
-{"th.vfneg.v",    0, INSN_CLASS_XTHEADVECTOR, "Vd,VuVm", MATCH_VFSGNJNVV, MASK_VFSGNJNVV, match_vs1_eq_vs2, INSN_ALIAS },
-{"th.vfabs.v",    0, INSN_CLASS_XTHEADVECTOR, "Vd,VuVm", MATCH_VFSGNJXVV, MASK_VFSGNJXVV, match_vs1_eq_vs2, INSN_ALIAS },
-{"th.vfsgnj.vv",  0, INSN_CLASS_XTHEADVECTOR, "Vd,Vt,VsVm", MATCH_VFSGNJVV, MASK_VFSGNJVV, match_opcode, 0},
-{"th.vfsgnj.vf",  0, INSN_CLASS_XTHEADVECTOR, "Vd,Vt,SVm", MATCH_VFSGNJVF, MASK_VFSGNJVF, match_opcode, 0},
-{"th.vfsgnjn.vv", 0, INSN_CLASS_XTHEADVECTOR, "Vd,Vt,VsVm", MATCH_VFSGNJNVV, MASK_VFSGNJNVV, match_opcode, 0},
-{"th.vfsgnjn.vf", 0, INSN_CLASS_XTHEADVECTOR, "Vd,Vt,SVm", MATCH_VFSGNJNVF, MASK_VFSGNJNVF, match_opcode, 0},
-{"th.vfsgnjx.vv", 0, INSN_CLASS_XTHEADVECTOR, "Vd,Vt,VsVm", MATCH_VFSGNJXVV, MASK_VFSGNJXVV, match_opcode, 0},
-{"th.vfsgnjx.vf", 0, INSN_CLASS_XTHEADVECTOR, "Vd,Vt,SVm", MATCH_VFSGNJXVF, MASK_VFSGNJXVF, match_opcode, 0},
+{"th.vsaddu.vv",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,VsVm", MATCH_VSADDUVV, MASK_VSADDUVV, match_vd_neq_vm, 0 },
+{"th.vsaddu.vx",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,sVm", MATCH_VSADDUVX, MASK_VSADDUVX, match_vd_neq_vm, 0 },
+{"th.vsaddu.vi",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,ViVm", MATCH_VSADDUVI, MASK_VSADDUVI, match_vd_neq_vm, 0 },
+{"th.vsadd.vv",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,VsVm", MATCH_VSADDVV, MASK_VSADDVV, match_vd_neq_vm, 0 },
+{"th.vsadd.vx",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,sVm", MATCH_VSADDVX, MASK_VSADDVX, match_vd_neq_vm, 0 },
+{"th.vsadd.vi",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,ViVm", MATCH_VSADDVI, MASK_VSADDVI, match_vd_neq_vm, 0 },
+{"th.vssubu.vv",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,VsVm", MATCH_VSSUBUVV, MASK_VSSUBUVV, match_vd_neq_vm, 0 },
+{"th.vssubu.vx",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,sVm", MATCH_VSSUBUVX, MASK_VSSUBUVX, match_vd_neq_vm, 0 },
+{"th.vssub.vv",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,VsVm", MATCH_VSSUBVV, MASK_VSSUBVV, match_vd_neq_vm, 0 },
+{"th.vssub.vx",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,sVm", MATCH_VSSUBVX, MASK_VSSUBVX, match_vd_neq_vm, 0 },
+{"th.vaadd.vv",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,VsVm", MATCH_TH_VAADDVV, MASK_TH_VAADDVV, match_vd_neq_vm, 0 },
+{"th.vaadd.vx",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,sVm", MATCH_TH_VAADDVX, MASK_TH_VAADDVX, match_vd_neq_vm, 0 },
+{"vaadd.vi",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,ViVm", MATCH_TH_VAADDVI, MASK_TH_VAADDVI, match_vd_neq_vm, INSN_ALIAS },
+{"th.vaadd.vi",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,ViVm", MATCH_TH_VAADDVI, MASK_TH_VAADDVI, match_vd_neq_vm, 0 },
+{"th.vasub.vv",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,VsVm", MATCH_TH_VASUBVV, MASK_TH_VASUBVV, match_vd_neq_vm, 0 },
+{"th.vasub.vx",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,sVm", MATCH_TH_VASUBVX, MASK_TH_VASUBVX, match_vd_neq_vm, 0 },
+{"th.vsmul.vv",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,VsVm", MATCH_VSMULVV, MASK_VSMULVV, match_vd_neq_vm, 0 },
+{"th.vsmul.vx",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,sVm", MATCH_VSMULVX, MASK_VSMULVX, match_vd_neq_vm, 0 },
+{"vwsmaccu.vv", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vs,VtVm", MATCH_VQMACCUVV, MASK_VQMACCUVV, match_vd_neq_vm_and_vd_neq_vs1_vs2, INSN_ALIAS },
+{"th.vwsmaccu.vv", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vs,VtVm", MATCH_VQMACCUVV, MASK_VQMACCUVV, match_vd_neq_vm_and_vd_neq_vs1_vs2, 0 },
+{"vwsmaccu.vx", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,s,VtVm", MATCH_VQMACCUVX, MASK_VQMACCUVX, match_vd_neq_vm_and_vd_neq_vs2, INSN_ALIAS },
+{"th.vwsmaccu.vx", 0, INSN_CLASS_XTHEADVECTOR,  "Vd,s,VtVm", MATCH_VQMACCUVX, MASK_VQMACCUVX, match_vd_neq_vm_and_vd_neq_vs2, 0 },
+{"vwsmacc.vv",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vs,VtVm", MATCH_VQMACCVV, MASK_VQMACCVV, match_vd_neq_vm_and_vd_neq_vs1_vs2, INSN_ALIAS },
+{"th.vwsmacc.vv",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vs,VtVm", MATCH_VQMACCVV, MASK_VQMACCVV, match_vd_neq_vm_and_vd_neq_vs1_vs2, 0 },
+{"vwsmacc.vx",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,s,VtVm", MATCH_VQMACCVX, MASK_VQMACCVX, match_vd_neq_vm_and_vd_neq_vs2, INSN_ALIAS },
+{"th.vwsmacc.vx",  0, INSN_CLASS_XTHEADVECTOR,  "Vd,s,VtVm", MATCH_VQMACCVX, MASK_VQMACCVX, match_vd_neq_vm_and_vd_neq_vs2, 0 },
+{"vwsmaccsu.vv",0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vs,VtVm", MATCH_TH_VWSMACCSUVV, MASK_TH_VWSMACCSUVV, match_vd_neq_vm_and_vd_neq_vs1_vs2, INSN_ALIAS },
+{"th.vwsmaccsu.vv",0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vs,VtVm", MATCH_TH_VWSMACCSUVV, MASK_TH_VWSMACCSUVV, match_vd_neq_vm_and_vd_neq_vs1_vs2, 0 },
+{"vwsmaccsu.vx",0, INSN_CLASS_XTHEADVECTOR,  "Vd,s,VtVm", MATCH_VQMACCUSVX, MASK_VQMACCUSVX, match_vd_neq_vm_and_vd_neq_vs2, INSN_ALIAS },
+{"th.vwsmaccsu.vx",0, INSN_CLASS_XTHEADVECTOR,  "Vd,s,VtVm", MATCH_VQMACCUSVX, MASK_VQMACCUSVX, match_vd_neq_vm_and_vd_neq_vs2, 0 },
+{"vwsmaccus.vx",0, INSN_CLASS_XTHEADVECTOR,  "Vd,s,VtVm", MATCH_VQMACCSUVX, MASK_VQMACCSUVX, match_vd_neq_vm_and_vd_neq_vs2, INSN_ALIAS },
+{"th.vwsmaccus.vx",0, INSN_CLASS_XTHEADVECTOR,  "Vd,s,VtVm", MATCH_VQMACCSUVX, MASK_VQMACCSUVX, match_vd_neq_vm_and_vd_neq_vs2, 0 },
+{"th.vssrl.vv",    0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,VsVm", MATCH_VSSRLVV, MASK_VSSRLVV, match_vd_neq_vm, 0 },
+{"th.vssrl.vx",    0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,sVm", MATCH_VSSRLVX, MASK_VSSRLVX, match_vd_neq_vm, 0 },
+{"th.vssrl.vi",    0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,VjVm", MATCH_VSSRLVI, MASK_VSSRLVI, match_vd_neq_vm, 0 },
+{"th.vssra.vv",    0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,VsVm", MATCH_VSSRAVV, MASK_VSSRAVV, match_vd_neq_vm, 0 },
+{"th.vssra.vx",    0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,sVm", MATCH_VSSRAVX, MASK_VSSRAVX, match_vd_neq_vm, 0 },
+{"th.vssra.vi",    0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,VjVm", MATCH_VSSRAVI, MASK_VSSRAVI, match_vd_neq_vm, 0 },
+{"th.vnclipu.vv",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,VsVm", MATCH_VNCLIPUWV, MASK_VNCLIPUWV, match_vd_neq_vm, 0 },
+{"th.vnclipu.vx",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,sVm", MATCH_VNCLIPUWX, MASK_VNCLIPUWX, match_vd_neq_vm, 0 },
+{"th.vnclipu.vi",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,VjVm", MATCH_VNCLIPUWI, MASK_VNCLIPUWI, match_vd_neq_vm, 0 },
+{"th.vnclip.vv",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,VsVm", MATCH_VNCLIPWV, MASK_VNCLIPWV, match_vd_neq_vm, 0 },
+{"th.vnclip.vx",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,sVm", MATCH_VNCLIPWX, MASK_VNCLIPWX, match_vd_neq_vm, 0 },
+{"th.vnclip.vi",   0, INSN_CLASS_XTHEADVECTOR,  "Vd,Vt,VjVm", MATCH_VNCLIPWI, MASK_VNCLIPWI, match_vd_neq_vm, 0 },
+{"th.vfadd.vv",   0, INSN_CLASS_XTHEADVECTOR, "Vd,Vt,VsVm", MATCH_VFADDVV, MASK_VFADDVV, match_vd_neq_vm, 0},
+{"th.vfadd.vf",   0, INSN_CLASS_XTHEADVECTOR, "Vd,Vt,SVm", MATCH_VFADDVF, MASK_VFADDVF, match_vd_neq_vm, 0},
+{"th.vfsub.vv",   0, INSN_CLASS_XTHEADVECTOR, "Vd,Vt,VsVm", MATCH_VFSUBVV, MASK_VFSUBVV, match_vd_neq_vm, 0},
+{"th.vfsub.vf",   0, INSN_CLASS_XTHEADVECTOR, "Vd,Vt,SVm", MATCH_VFSUBVF, MASK_VFSUBVF, match_vd_neq_vm, 0},
+{"th.vfrsub.vf",  0, INSN_CLASS_XTHEADVECTOR, "Vd,Vt,SVm", MATCH_VFRSUBVF, MASK_VFRSUBVF, match_vd_neq_vm, 0},
+{"th.vfwadd.vv",   0, INSN_CLASS_XTHEADVECTOR, "Vd,Vt,VsVm", MATCH_VFWADDVV, MASK_VFWADDVV, match_vd_neq_vm_and_vd_neq_vs1_vs2, 0},
+{"th.vfwadd.vf",   0, INSN_CLASS_XTHEADVECTOR, "Vd,Vt,SVm", MATCH_VFWADDVF, MASK_VFWADDVF, match_vd_neq_vm_and_vd_neq_vs2, 0},
+{"th.vfwsub.vv",   0, INSN_CLASS_XTHEADVECTOR, "Vd,Vt,VsVm", MATCH_VFWSUBVV, MASK_VFWSUBVV, match_vd_neq_vm_and_vd_neq_vs1_vs2, 0},
+{"th.vfwsub.vf",   0, INSN_CLASS_XTHEADVECTOR, "Vd,Vt,SVm", MATCH_VFWSUBVF, MASK_VFWSUBVF, match_vd_neq_vm_and_vd_neq_vs2, 0},
+{"th.vfwadd.wv",   0, INSN_CLASS_XTHEADVECTOR, "Vd,Vt,VsVm", MATCH_VFWADDWV, MASK_VFWADDWV, match_vd_neq_vm_and_vd_neq_vs1, 0},
+{"th.vfwsub.wv",   0, INSN_CLASS_XTHEADVECTOR, "Vd,Vt,VsVm", MATCH_VFWSUBWV, MASK_VFWSUBWV, match_vd_neq_vm_and_vd_neq_vs1, 0},
+{"th.vfwadd.wf",   0, INSN_CLASS_XTHEADVECTOR, "Vd,Vt,SVm", MATCH_VFWADDWF, MASK_VFWADDWF, match_vd_neq_vm, 0 },
+{"th.vfwsub.wf",   0, INSN_CLASS_XTHEADVECTOR, "Vd,Vt,SVm", MATCH_VFWSUBWF, MASK_VFWSUBWF, match_vd_neq_vm, 0 },
+{"th.vfmul.vv",   0, INSN_CLASS_XTHEADVECTOR, "Vd,Vt,VsVm", MATCH_VFMULVV, MASK_VFMULVV, match_vd_neq_vm, 0},
+{"th.vfmul.vf",   0, INSN_CLASS_XTHEADVECTOR, "Vd,Vt,SVm", MATCH_VFMULVF, MASK_VFMULVF, match_vd_neq_vm, 0},
+{"th.vfdiv.vv",   0, INSN_CLASS_XTHEADVECTOR, "Vd,Vt,VsVm", MATCH_VFDIVVV, MASK_VFDIVVV, match_vd_neq_vm, 0},
+{"th.vfdiv.vf",   0, INSN_CLASS_XTHEADVECTOR, "Vd,Vt,SVm", MATCH_VFDIVVF, MASK_VFDIVVF, match_vd_neq_vm, 0},
+{"th.vfrdiv.vf",  0, INSN_CLASS_XTHEADVECTOR, "Vd,Vt,SVm", MATCH_VFRDIVVF, MASK_VFRDIVVF, match_vd_neq_vm, 0},
+{"th.vfwmul.vv",  0, INSN_CLASS_XTHEADVECTOR, "Vd,Vt,VsVm", MATCH_VFWMULVV, MASK_VFWMULVV, match_vd_neq_vm_and_vd_neq_vs1_vs2, 0},
+{"th.vfwmul.vf",  0, INSN_CLASS_XTHEADVECTOR, "Vd,Vt,SVm", MATCH_VFWMULVF, MASK_VFWMULVF, match_vd_neq_vm_and_vd_neq_vs2, 0},
+{"th.vfmadd.vv",  0, INSN_CLASS_XTHEADVECTOR, "Vd,Vs,VtVm", MATCH_VFMADDVV, MASK_VFMADDVV, match_vd_neq_vm, 0},
+{"th.vfmadd.vf",  0, INSN_CLASS_XTHEADVECTOR, "Vd,S,VtVm", MATCH_VFMADDVF, MASK_VFMADDVF, match_vd_neq_vm, 0},
+{"th.vfnmadd.vv", 0, INSN_CLASS_XTHEADVECTOR, "Vd,Vs,VtVm", MATCH_VFNMADDVV, MASK_VFNMADDVV, match_vd_neq_vm, 0},
+{"th.vfnmadd.vf", 0, INSN_CLASS_XTHEADVECTOR, "Vd,S,VtVm", MATCH_VFNMADDVF, MASK_VFNMADDVF, match_vd_neq_vm, 0},
+{"th.vfmsub.vv",  0, INSN_CLASS_XTHEADVECTOR, "Vd,Vs,VtVm", MATCH_VFMSUBVV, MASK_VFMSUBVV, match_vd_neq_vm, 0},
+{"th.vfmsub.vf",  0, INSN_CLASS_XTHEADVECTOR, "Vd,S,VtVm", MATCH_VFMSUBVF, MASK_VFMSUBVF, match_vd_neq_vm, 0},
+{"th.vfnmsub.vv", 0, INSN_CLASS_XTHEADVECTOR, "Vd,Vs,VtVm", MATCH_VFNMSUBVV, MASK_VFNMSUBVV, match_vd_neq_vm, 0},
+{"th.vfnmsub.vf", 0, INSN_CLASS_XTHEADVECTOR, "Vd,S,VtVm", MATCH_VFNMSUBVF, MASK_VFNMSUBVF, match_vd_neq_vm, 0},
+{"th.vfmacc.vv",  0, INSN_CLASS_XTHEADVECTOR, "Vd,Vs,VtVm", MATCH_VFMACCVV, MASK_VFMACCVV, match_vd_neq_vm, 0},
+{"th.vfmacc.vf",  0, INSN_CLASS_XTHEADVECTOR, "Vd,S,VtVm", MATCH_VFMACCVF, MASK_VFMACCVF, match_vd_neq_vm, 0},
+{"th.vfnmacc.vv", 0, INSN_CLASS_XTHEADVECTOR, "Vd,Vs,VtVm", MATCH_VFNMACCVV, MASK_VFNMACCVV, match_vd_neq_vm, 0},
+{"th.vfnmacc.vf", 0, INSN_CLASS_XTHEADVECTOR, "Vd,S,VtVm", MATCH_VFNMACCVF, MASK_VFNMACCVF, match_vd_neq_vm, 0},
+{"th.vfmsac.vv",  0, INSN_CLASS_XTHEADVECTOR, "Vd,Vs,VtVm", MATCH_VFMSACVV, MASK_VFMSACVV, match_vd_neq_vm, 0},
+{"th.vfmsac.vf",  0, INSN_CLASS_XTHEADVECTOR, "Vd,S,VtVm", MATCH_VFMSACVF, MASK_VFMSACVF, match_vd_neq_vm, 0},
+{"th.vfnmsac.vv", 0, INSN_CLASS_XTHEADVECTOR, "Vd,Vs,VtVm", MATCH_VFNMSACVV, MASK_VFNMSACVV, match_vd_neq_vm, 0},
+{"th.vfnmsac.vf", 0, INSN_CLASS_XTHEADVECTOR, "Vd,S,VtVm", MATCH_VFNMSACVF, MASK_VFNMSACVF, match_vd_neq_vm, 0},
+{"th.vfwmacc.vv",  0, INSN_CLASS_XTHEADVECTOR, "Vd,Vs,VtVm", MATCH_VFWMACCVV, MASK_VFWMACCVV, match_vd_neq_vm, 0},
+{"th.vfwmacc.vf",  0, INSN_CLASS_XTHEADVECTOR, "Vd,S,VtVm", MATCH_VFWMACCVF, MASK_VFWMACCVF, match_vd_neq_vm_and_vd_neq_vs2, 0},
+{"th.vfwnmacc.vv", 0, INSN_CLASS_XTHEADVECTOR, "Vd,Vs,VtVm", MATCH_VFWNMACCVV, MASK_VFWNMACCVV, match_vd_neq_vm_and_vd_neq_vs1_vs2, 0},
+{"th.vfwnmacc.vf", 0, INSN_CLASS_XTHEADVECTOR, "Vd,S,VtVm", MATCH_VFWNMACCVF, MASK_VFWNMACCVF, match_vd_neq_vm_and_vd_neq_vs2, 0},
+{"th.vfwmsac.vv",  0, INSN_CLASS_XTHEADVECTOR, "Vd,Vs,VtVm", MATCH_VFWMSACVV, MASK_VFWMSACVV, match_vd_neq_vm_and_vd_neq_vs1_vs2, 0},
+{"th.vfwmsac.vf",  0, INSN_CLASS_XTHEADVECTOR, "Vd,S,VtVm", MATCH_VFWMSACVF, MASK_VFWMSACVF, match_vd_neq_vm_and_vd_neq_vs2, 0},
+{"th.vfwnmsac.vv", 0, INSN_CLASS_XTHEADVECTOR, "Vd,Vs,VtVm", MATCH_VFWNMSACVV, MASK_VFWNMSACVV, match_vd_neq_vm_and_vd_neq_vs1_vs2, 0},
+{"th.vfwnmsac.vf", 0, INSN_CLASS_XTHEADVECTOR, "Vd,S,VtVm", MATCH_VFWNMSACVF, MASK_VFWNMSACVF, match_vd_neq_vm_and_vd_neq_vs2, 0},
+{"th.vfmin.vv",   0, INSN_CLASS_XTHEADVECTOR, "Vd,Vt,VsVm", MATCH_VFMINVV, MASK_VFMINVV, match_vd_neq_vm, 0},
+{"th.vfmin.vf",   0, INSN_CLASS_XTHEADVECTOR, "Vd,Vt,SVm", MATCH_VFMINVF, MASK_VFMINVF, match_vd_neq_vm, 0},
+{"th.vfmax.vv",   0, INSN_CLASS_XTHEADVECTOR, "Vd,Vt,VsVm", MATCH_VFMAXVV, MASK_VFMAXVV, match_vd_neq_vm, 0},
+{"th.vfmax.vf",   0, INSN_CLASS_XTHEADVECTOR, "Vd,Vt,SVm", MATCH_VFMAXVF, MASK_VFMAXVF, match_vd_neq_vm, 0},
+{"th.vfneg.v",    0, INSN_CLASS_XTHEADVECTOR, "Vd,VuVm", MATCH_VFSGNJNVV, MASK_VFSGNJNVV, match_vd_neq_vm_and_vs1_eq_vs2, INSN_ALIAS },
+{"th.vfabs.v",    0, INSN_CLASS_XTHEADVECTOR, "Vd,VuVm", MATCH_VFSGNJXVV, MASK_VFSGNJXVV, match_vd_neq_vm_and_vs1_eq_vs2, INSN_ALIAS },
+{"th.vfsgnj.vv",  0, INSN_CLASS_XTHEADVECTOR, "Vd,Vt,VsVm", MATCH_VFSGNJVV, MASK_VFSGNJVV, match_vd_neq_vm, 0},
+{"th.vfsgnj.vf",  0, INSN_CLASS_XTHEADVECTOR, "Vd,Vt,SVm", MATCH_VFSGNJVF, MASK_VFSGNJVF, match_vd_neq_vm, 0},
+{"th.vfsgnjn.vv", 0, INSN_CLASS_XTHEADVECTOR, "Vd,Vt,VsVm", MATCH_VFSGNJNVV, MASK_VFSGNJNVV, match_vd_neq_vm, 0},
+{"th.vfsgnjn.vf", 0, INSN_CLASS_XTHEADVECTOR, "Vd,Vt,SVm", MATCH_VFSGNJNVF, MASK_VFSGNJNVF, match_vd_neq_vm, 0},
+{"th.vfsgnjx.vv", 0, INSN_CLASS_XTHEADVECTOR, "Vd,Vt,VsVm", MATCH_VFSGNJXVV, MASK_VFSGNJXVV, match_vd_neq_vm, 0},
+{"th.vfsgnjx.vf", 0, INSN_CLASS_XTHEADVECTOR, "Vd,Vt,SVm", MATCH_VFSGNJXVF, MASK_VFSGNJXVF, match_vd_neq_vm, 0},
 {"th.vmfeq.vv",   0, INSN_CLASS_XTHEADVECTOR, "Vd,Vt,VsVm", MATCH_VMFEQVV, MASK_VMFEQVV, match_opcode, 0},
 {"th.vmfeq.vf",   0, INSN_CLASS_XTHEADVECTOR, "Vd,Vt,SVm", MATCH_VMFEQVF, MASK_VMFEQVF, match_opcode, 0},
 {"th.vmfne.vv",   0, INSN_CLASS_XTHEADVECTOR, "Vd,Vt,VsVm", MATCH_VMFNEVV, MASK_VMFNEVV, match_opcode, 0},
@@ -3903,32 +4295,32 @@ const struct riscv_opcode riscv_opcodes[] =
 {"th.vmfge.vf",   0, INSN_CLASS_XTHEADVECTOR, "Vd,Vt,SVm", MATCH_VMFGEVF, MASK_VMFGEVF, match_opcode, 0},
 {"th.vmfgt.vv",   0, INSN_CLASS_XTHEADVECTOR, "Vd,Vs,VtVm", MATCH_VMFLTVV, MASK_VMFLTVV, match_opcode, INSN_ALIAS},
 {"th.vmfge.vv",   0, INSN_CLASS_XTHEADVECTOR, "Vd,Vs,VtVm", MATCH_VMFLEVV, MASK_VMFLEVV, match_opcode, INSN_ALIAS},
-{"vmford.vv",  0, INSN_CLASS_XTHEADVECTOR, "Vd,Vt,VsVm", MATCH_TH_VMFORDVV, MASK_TH_VMFORDVV, match_opcode, INSN_ALIAS},
-{"th.vmford.vv",  0, INSN_CLASS_XTHEADVECTOR, "Vd,Vt,VsVm", MATCH_TH_VMFORDVV, MASK_TH_VMFORDVV, match_opcode, 0},
-{"vmford.vf",  0, INSN_CLASS_XTHEADVECTOR, "Vd,Vt,SVm", MATCH_TH_VMFORDVF, MASK_TH_VMFORDVF, match_opcode, INSN_ALIAS},
-{"th.vmford.vf",  0, INSN_CLASS_XTHEADVECTOR, "Vd,Vt,SVm", MATCH_TH_VMFORDVF, MASK_TH_VMFORDVF, match_opcode, 0},
-{"th.vfclass.v",  0, INSN_CLASS_XTHEADVECTOR, "Vd,VtVm", MATCH_TH_VFCLASSV, MASK_TH_VFCLASSV, match_opcode, 0},
+{"vmford.vv",  0, INSN_CLASS_XTHEADVECTOR, "Vd,Vt,VsVm", MATCH_TH_VMFORDVV, MASK_TH_VMFORDVV, match_vd_neq_vm, INSN_ALIAS},
+{"th.vmford.vv",  0, INSN_CLASS_XTHEADVECTOR, "Vd,Vt,VsVm", MATCH_TH_VMFORDVV, MASK_TH_VMFORDVV, match_vd_neq_vm, 0},
+{"vmford.vf",  0, INSN_CLASS_XTHEADVECTOR, "Vd,Vt,SVm", MATCH_TH_VMFORDVF, MASK_TH_VMFORDVF, match_vd_neq_vm, INSN_ALIAS},
+{"th.vmford.vf",  0, INSN_CLASS_XTHEADVECTOR, "Vd,Vt,SVm", MATCH_TH_VMFORDVF, MASK_TH_VMFORDVF, match_vd_neq_vm, 0},
+{"th.vfclass.v",  0, INSN_CLASS_XTHEADVECTOR, "Vd,VtVm", MATCH_TH_VFCLASSV, MASK_TH_VFCLASSV, match_vd_neq_vm, 0},
 {"th.vfmerge.vfm",0, INSN_CLASS_XTHEADVECTOR, "Vd,Vt,S,V0", MATCH_VFMERGEVFM, MASK_VFMERGEVFM, match_opcode, 0},
 {"th.vfmv.v.f",   0, INSN_CLASS_XTHEADVECTOR, "Vd,S", MATCH_VFMVVF, MASK_VFMVVF, match_opcode, 0 },
-{"th.vfcvt.xu.f.v",0, INSN_CLASS_XTHEADVECTOR, "Vd,VtVm", MATCH_TH_VFCVTXUFV, MASK_TH_VFCVTXUFV, match_opcode, 0},
-{"th.vfcvt.x.f.v", 0, INSN_CLASS_XTHEADVECTOR, "Vd,VtVm", MATCH_TH_VFCVTXFV, MASK_TH_VFCVTXFV, match_opcode, 0},
-{"th.vfcvt.f.xu.v",0, INSN_CLASS_XTHEADVECTOR, "Vd,VtVm", MATCH_TH_VFCVTFXUV, MASK_TH_VFCVTFXUV, match_opcode, 0},
-{"th.vfcvt.f.x.v", 0, INSN_CLASS_XTHEADVECTOR, "Vd,VtVm", MATCH_TH_VFCVTFXV, MASK_TH_VFCVTFXV, match_opcode, 0},
-{"th.vfwcvt.xu.f.v",0,INSN_CLASS_XTHEADVECTOR, "Vd,VtVm", MATCH_TH_VFWCVTXUFV, MASK_TH_VFWCVTXUFV, match_opcode, 0},
-{"th.vfwcvt.x.f.v",0, INSN_CLASS_XTHEADVECTOR, "Vd,VtVm", MATCH_TH_VFWCVTXFV, MASK_TH_VFWCVTXFV, match_opcode, 0},
-{"th.vfwcvt.f.xu.v",0,INSN_CLASS_XTHEADVECTOR, "Vd,VtVm", MATCH_TH_VFWCVTFXUV, MASK_TH_VFWCVTFXUV, match_opcode, 0},
-{"th.vfwcvt.f.x.v",0, INSN_CLASS_XTHEADVECTOR, "Vd,VtVm", MATCH_TH_VFWCVTFXV, MASK_TH_VFWCVTFXV, match_opcode, 0},
-{"th.vfwcvt.f.f.v",0, INSN_CLASS_XTHEADVECTOR, "Vd,VtVm", MATCH_TH_VFWCVTFFV, MASK_TH_VFWCVTFFV, match_opcode, 0},
-{"vfncvt.xu.f.v",0,INSN_CLASS_XTHEADVECTOR, "Vd,VtVm", MATCH_TH_VFNCVTXUFV, MASK_TH_VFNCVTXUFV, match_opcode, INSN_ALIAS},
-{"th.vfncvt.xu.f.v",0,INSN_CLASS_XTHEADVECTOR, "Vd,VtVm", MATCH_TH_VFNCVTXUFV, MASK_TH_VFNCVTXUFV, match_opcode, 0},
-{"vfncvt.x.f.v",0, INSN_CLASS_XTHEADVECTOR, "Vd,VtVm", MATCH_TH_VFNCVTXFV, MASK_TH_VFNCVTXFV, match_opcode, INSN_ALIAS},
-{"th.vfncvt.x.f.v",0, INSN_CLASS_XTHEADVECTOR, "Vd,VtVm", MATCH_TH_VFNCVTXFV, MASK_TH_VFNCVTXFV, match_opcode, 0},
-{"vfncvt.f.xu.v",0,INSN_CLASS_XTHEADVECTOR, "Vd,VtVm", MATCH_TH_VFNCVTFXUV, MASK_TH_VFNCVTFXUV, match_opcode, INSN_ALIAS},
-{"th.vfncvt.f.xu.v",0,INSN_CLASS_XTHEADVECTOR, "Vd,VtVm", MATCH_TH_VFNCVTFXUV, MASK_TH_VFNCVTFXUV, match_opcode, 0},
-{"vfncvt.f.x.v",0, INSN_CLASS_XTHEADVECTOR, "Vd,VtVm", MATCH_TH_VFNCVTFXV, MASK_TH_VFNCVTFXV, match_opcode, INSN_ALIAS},
-{"th.vfncvt.f.x.v",0, INSN_CLASS_XTHEADVECTOR, "Vd,VtVm", MATCH_TH_VFNCVTFXV, MASK_TH_VFNCVTFXV, match_opcode, 0},
-{"vfncvt.f.f.v",0, INSN_CLASS_XTHEADVECTOR, "Vd,VtVm", MATCH_TH_VFNCVTFFV, MASK_TH_VFNCVTFFV, match_opcode, INSN_ALIAS},
-{"th.vfncvt.f.f.v",0, INSN_CLASS_XTHEADVECTOR, "Vd,VtVm", MATCH_TH_VFNCVTFFV, MASK_TH_VFNCVTFFV, match_opcode, 0},
+{"th.vfcvt.xu.f.v",0, INSN_CLASS_XTHEADVECTOR, "Vd,VtVm", MATCH_TH_VFCVTXUFV, MASK_TH_VFCVTXUFV, match_vd_neq_vm, 0},
+{"th.vfcvt.x.f.v", 0, INSN_CLASS_XTHEADVECTOR, "Vd,VtVm", MATCH_TH_VFCVTXFV, MASK_TH_VFCVTXFV, match_vd_neq_vm, 0},
+{"th.vfcvt.f.xu.v",0, INSN_CLASS_XTHEADVECTOR, "Vd,VtVm", MATCH_TH_VFCVTFXUV, MASK_TH_VFCVTFXUV, match_vd_neq_vm, 0},
+{"th.vfcvt.f.x.v", 0, INSN_CLASS_XTHEADVECTOR, "Vd,VtVm", MATCH_TH_VFCVTFXV, MASK_TH_VFCVTFXV, match_vd_neq_vm, 0},
+{"th.vfwcvt.xu.f.v",0,INSN_CLASS_XTHEADVECTOR, "Vd,VtVm", MATCH_TH_VFWCVTXUFV, MASK_TH_VFWCVTXUFV, match_vd_neq_vm_and_vd_neq_vs2, 0},
+{"th.vfwcvt.x.f.v",0, INSN_CLASS_XTHEADVECTOR, "Vd,VtVm", MATCH_TH_VFWCVTXFV, MASK_TH_VFWCVTXFV, match_vd_neq_vm_and_vd_neq_vs2, 0},
+{"th.vfwcvt.f.xu.v",0,INSN_CLASS_XTHEADVECTOR, "Vd,VtVm", MATCH_TH_VFWCVTFXUV, MASK_TH_VFWCVTFXUV, match_vd_neq_vm_and_vd_neq_vs2, 0},
+{"th.vfwcvt.f.x.v",0, INSN_CLASS_XTHEADVECTOR, "Vd,VtVm", MATCH_TH_VFWCVTFXV, MASK_TH_VFWCVTFXV, match_vd_neq_vm_and_vd_neq_vs2, 0},
+{"th.vfwcvt.f.f.v",0, INSN_CLASS_XTHEADVECTOR, "Vd,VtVm", MATCH_TH_VFWCVTFFV, MASK_TH_VFWCVTFFV, match_vd_neq_vm_and_vd_neq_vs2, 0},
+{"vfncvt.xu.f.v",0,INSN_CLASS_XTHEADVECTOR, "Vd,VtVm", MATCH_TH_VFNCVTXUFV, MASK_TH_VFNCVTXUFV, match_vd_neq_vm, INSN_ALIAS},
+{"th.vfncvt.xu.f.v",0,INSN_CLASS_XTHEADVECTOR, "Vd,VtVm", MATCH_TH_VFNCVTXUFV, MASK_TH_VFNCVTXUFV, match_vd_neq_vm, 0},
+{"vfncvt.x.f.v",0, INSN_CLASS_XTHEADVECTOR, "Vd,VtVm", MATCH_TH_VFNCVTXFV, MASK_TH_VFNCVTXFV, match_vd_neq_vm, INSN_ALIAS},
+{"th.vfncvt.x.f.v",0, INSN_CLASS_XTHEADVECTOR, "Vd,VtVm", MATCH_TH_VFNCVTXFV, MASK_TH_VFNCVTXFV, match_vd_neq_vm, 0},
+{"vfncvt.f.xu.v",0,INSN_CLASS_XTHEADVECTOR, "Vd,VtVm", MATCH_TH_VFNCVTFXUV, MASK_TH_VFNCVTFXUV, match_vd_neq_vm, INSN_ALIAS},
+{"th.vfncvt.f.xu.v",0,INSN_CLASS_XTHEADVECTOR, "Vd,VtVm", MATCH_TH_VFNCVTFXUV, MASK_TH_VFNCVTFXUV, match_vd_neq_vm, 0},
+{"vfncvt.f.x.v",0, INSN_CLASS_XTHEADVECTOR, "Vd,VtVm", MATCH_TH_VFNCVTFXV, MASK_TH_VFNCVTFXV, match_vd_neq_vm, INSN_ALIAS},
+{"th.vfncvt.f.x.v",0, INSN_CLASS_XTHEADVECTOR, "Vd,VtVm", MATCH_TH_VFNCVTFXV, MASK_TH_VFNCVTFXV, match_vd_neq_vm, 0},
+{"vfncvt.f.f.v",0, INSN_CLASS_XTHEADVECTOR, "Vd,VtVm", MATCH_TH_VFNCVTFFV, MASK_TH_VFNCVTFFV, match_vd_neq_vm, INSN_ALIAS},
+{"th.vfncvt.f.f.v",0, INSN_CLASS_XTHEADVECTOR, "Vd,VtVm", MATCH_TH_VFNCVTFFV, MASK_TH_VFNCVTFFV, match_vd_neq_vm, 0},
 {"th.vredsum.vs", 0, INSN_CLASS_XTHEADVECTOR, "Vd,Vt,VsVm", MATCH_VREDSUMVS, MASK_VREDSUMVS, match_opcode, 0},
 {"th.vredmaxu.vs",0, INSN_CLASS_XTHEADVECTOR, "Vd,Vt,VsVm", MATCH_VREDMAXUVS, MASK_VREDMAXUVS, match_opcode, 0},
 {"th.vredmax.vs", 0, INSN_CLASS_XTHEADVECTOR, "Vd,Vt,VsVm", MATCH_VREDMAXVS, MASK_VREDMAXVS, match_opcode, 0},
@@ -3961,56 +4353,56 @@ const struct riscv_opcode riscv_opcodes[] =
 {"th.vmorn.mm",   0, INSN_CLASS_XTHEADVECTOR, "Vd,Vt,Vs", MATCH_VMORNMM, MASK_VMORNMM, match_opcode, INSN_ALIAS},
 {"th.vmxnor.mm",  0, INSN_CLASS_XTHEADVECTOR, "Vd,Vt,Vs", MATCH_VMXNORMM, MASK_VMXNORMM, match_opcode, 0},
 {"vmpopc.m",   0, INSN_CLASS_XTHEADVECTOR, "d,VtVm", MATCH_TH_VMPOPCM, MASK_TH_VMPOPCM, match_opcode, INSN_ALIAS},
-{"th.vmpopc.m",   0, INSN_CLASS_XTHEADVECTOR, "d,VtVm", MATCH_TH_VMPOPCM, MASK_TH_VMPOPCM, match_opcode, 0 },
+{"th.vmpopc.m",   0, INSN_CLASS_XTHEADVECTOR, "d,VtVm", MATCH_TH_VMPOPCM, MASK_TH_VMPOPCM, match_opcode, 0},
 {"vmfirst.m",  0, INSN_CLASS_XTHEADVECTOR, "d,VtVm", MATCH_TH_VMFIRSTM, MASK_TH_VMFIRSTM, match_opcode, INSN_ALIAS},
 {"th.vmfirst.m",  0, INSN_CLASS_XTHEADVECTOR, "d,VtVm", MATCH_TH_VMFIRSTM, MASK_TH_VMFIRSTM, match_opcode, 0},
-{"th.vmsbf.m",    0, INSN_CLASS_XTHEADVECTOR, "Vd,VtVm", MATCH_TH_VMSBFM, MASK_TH_VMSBFM, match_opcode, 0},
-{"th.vmsif.m",    0, INSN_CLASS_XTHEADVECTOR, "Vd,VtVm", MATCH_TH_VMSIFM, MASK_TH_VMSIFM, match_opcode, 0},
-{"th.vmsof.m",    0, INSN_CLASS_XTHEADVECTOR, "Vd,VtVm", MATCH_TH_VMSOFM, MASK_TH_VMSOFM, match_opcode, 0},
-{"th.viota.m",    0, INSN_CLASS_XTHEADVECTOR, "Vd,VtVm", MATCH_TH_VIOTAM, MASK_TH_VIOTAM, match_opcode, 0},
-{"th.vid.v",      0, INSN_CLASS_XTHEADVECTOR, "VdVm", MATCH_TH_VIDV, MASK_TH_VIDV, match_opcode, 0},
+{"th.vmsbf.m",    0, INSN_CLASS_XTHEADVECTOR, "Vd,VtVm", MATCH_TH_VMSBFM, MASK_TH_VMSBFM, match_vd_neq_vm, 0},
+{"th.vmsif.m",    0, INSN_CLASS_XTHEADVECTOR, "Vd,VtVm", MATCH_TH_VMSIFM, MASK_TH_VMSIFM, match_vd_neq_vm, 0},
+{"th.vmsof.m",    0, INSN_CLASS_XTHEADVECTOR, "Vd,VtVm", MATCH_TH_VMSOFM, MASK_TH_VMSOFM, match_vd_neq_vm, 0},
+{"th.viota.m",    0, INSN_CLASS_XTHEADVECTOR, "Vd,VtVm", MATCH_TH_VIOTAM, MASK_TH_VIOTAM, match_vd_neq_vm_and_vd_neq_vs2, 0},
+{"th.vid.v",      0, INSN_CLASS_XTHEADVECTOR, "VdVm", MATCH_TH_VIDV, MASK_TH_VIDV, match_vd_neq_vm, 0},
 {"th.vmv.x.s",    0, INSN_CLASS_XTHEADVECTOR, "d,Vt", MATCH_TH_VMVXS, MASK_TH_VMVXS, match_opcode, INSN_ALIAS},
 {"vext.x.v",   0, INSN_CLASS_XTHEADVECTOR, "d,Vt,s", MATCH_TH_VEXTXV, MASK_TH_VEXTXV, match_opcode, INSN_ALIAS},
 {"th.vext.x.v",   0, INSN_CLASS_XTHEADVECTOR, "d,Vt,s", MATCH_TH_VEXTXV, MASK_TH_VEXTXV, match_opcode, 0},
 {"th.vmv.s.x",    0, INSN_CLASS_XTHEADVECTOR, "Vd,s", MATCH_TH_VMVSX, MASK_TH_VMVSX, match_opcode, 0},
 {"th.vfmv.f.s",   0, INSN_CLASS_XTHEADVECTOR, "D,Vt", MATCH_TH_VFMVFS, MASK_TH_VFMVFS, match_opcode, 0},
 {"th.vfmv.s.f",   0, INSN_CLASS_XTHEADVECTOR, "Vd,S", MATCH_TH_VFMVSF, MASK_TH_VFMVSF, match_opcode, 0},
-{"th.vslideup.vx",0, INSN_CLASS_XTHEADVECTOR, "Vd,Vt,sVm", MATCH_VSLIDEUPVX, MASK_VSLIDEUPVX, match_opcode, 0},
-{"th.vslideup.vi",0, INSN_CLASS_XTHEADVECTOR, "Vd,Vt,VjVm", MATCH_VSLIDEUPVI, MASK_VSLIDEUPVI, match_opcode, 0},
-{"th.vslidedown.vx",0,INSN_CLASS_XTHEADVECTOR, "Vd,Vt,sVm", MATCH_VSLIDEDOWNVX, MASK_VSLIDEDOWNVX, match_opcode, 0},
-{"th.vslidedown.vi",0,INSN_CLASS_XTHEADVECTOR, "Vd,Vt,VjVm", MATCH_VSLIDEDOWNVI, MASK_VSLIDEDOWNVI, match_opcode, 0},
-{"th.vslide1up.vx",0 ,INSN_CLASS_XTHEADVECTOR, "Vd,Vt,sVm", MATCH_VSLIDE1UPVX, MASK_VSLIDE1UPVX, match_opcode, 0},
-{"th.vslide1down.vx",0,INSN_CLASS_XTHEADVECTOR, "Vd,Vt,sVm", MATCH_VSLIDE1DOWNVX, MASK_VSLIDE1DOWNVX, match_opcode, 0},
-{"th.vrgather.vv",0, INSN_CLASS_XTHEADVECTOR, "Vd,Vt,VsVm", MATCH_VRGATHERVV, MASK_VRGATHERVV, match_opcode, 0},
-{"th.vrgather.vx",0, INSN_CLASS_XTHEADVECTOR, "Vd,Vt,sVm", MATCH_VRGATHERVX, MASK_VRGATHERVX, match_opcode, 0},
-{"th.vrgather.vi",0, INSN_CLASS_XTHEADVECTOR, "Vd,Vt,VjVm", MATCH_VRGATHERVI, MASK_VRGATHERVI, match_opcode, 0},
-{"th.vcompress.vm",0, INSN_CLASS_XTHEADVECTOR, "Vd,Vt,Vs", MATCH_VCOMPRESSVM, MASK_VCOMPRESSVM, match_opcode, 0},
+{"th.vslideup.vx",0, INSN_CLASS_XTHEADVECTOR, "Vd,Vt,sVm", MATCH_VSLIDEUPVX, MASK_VSLIDEUPVX, match_vd_neq_vm_and_vd_neq_vs2, 0},
+{"th.vslideup.vi",0, INSN_CLASS_XTHEADVECTOR, "Vd,Vt,VjVm", MATCH_VSLIDEUPVI, MASK_VSLIDEUPVI, match_vd_neq_vm_and_vd_neq_vs2, 0},
+{"th.vslidedown.vx",0,INSN_CLASS_XTHEADVECTOR, "Vd,Vt,sVm", MATCH_VSLIDEDOWNVX, MASK_VSLIDEDOWNVX, match_vd_neq_vm, 0},
+{"th.vslidedown.vi",0,INSN_CLASS_XTHEADVECTOR, "Vd,Vt,VjVm", MATCH_VSLIDEDOWNVI, MASK_VSLIDEDOWNVI, match_vd_neq_vm, 0},
+{"th.vslide1up.vx",0 ,INSN_CLASS_XTHEADVECTOR, "Vd,Vt,sVm", MATCH_VSLIDE1UPVX, MASK_VSLIDE1UPVX, match_vd_neq_vm_and_vd_neq_vs2, 0},
+{"th.vslide1down.vx",0,INSN_CLASS_XTHEADVECTOR, "Vd,Vt,sVm", MATCH_VSLIDE1DOWNVX, MASK_VSLIDE1DOWNVX, match_vd_neq_vm, 0},
+{"th.vrgather.vv",0, INSN_CLASS_XTHEADVECTOR, "Vd,Vt,VsVm", MATCH_VRGATHERVV, MASK_VRGATHERVV, match_vd_neq_vm, 0},
+{"th.vrgather.vx",0, INSN_CLASS_XTHEADVECTOR, "Vd,Vt,sVm", MATCH_VRGATHERVX, MASK_VRGATHERVX, match_vd_neq_vm_and_vd_neq_vs2, 0},
+{"th.vrgather.vi",0, INSN_CLASS_XTHEADVECTOR, "Vd,Vt,VjVm", MATCH_VRGATHERVI, MASK_VRGATHERVI, match_vd_neq_vm_and_vd_neq_vs2, 0},
+{"th.vcompress.vm",0, INSN_CLASS_XTHEADVECTOR, "Vd,Vt,Vs", MATCH_VCOMPRESSVM, MASK_VCOMPRESSVM, match_vd_neq_vm_and_vd_neq_vs1_vs2, 0},
 
 /* Vendor-specific (T-Head) XTheadVdot instructions.  */
-{"th.vmaqa.vv",        0, INSN_CLASS_XTHEADVDOT,  "Vd,Vs,VtVm",  MATCH_TH_VMAQA_VV, MASK_TH_VMAQA_VV, match_opcode, 0},
-{"th.vmaqau.vv",       0, INSN_CLASS_XTHEADVDOT,  "Vd,Vs,VtVm",  MATCH_TH_VMAQAU_VV, MASK_TH_VMAQAU_VV, match_opcode, 0},
-{"th.vmaqasu.vv",      0, INSN_CLASS_XTHEADVDOT,  "Vd,Vs,VtVm",  MATCH_TH_VMAQASU_VV, MASK_TH_VMAQASU_VV, match_opcode, 0},
-{"th.vmaqa.vx",        0, INSN_CLASS_XTHEADVDOT,  "Vd,s,VtVm",  MATCH_TH_VMAQA_VX, MASK_TH_VMAQA_VX, match_opcode, 0},
-{"th.vmaqau.vx",       0, INSN_CLASS_XTHEADVDOT,  "Vd,s,VtVm",  MATCH_TH_VMAQAU_VX, MASK_TH_VMAQAU_VX, match_opcode, 0},
-{"th.vmaqasu.vx",      0, INSN_CLASS_XTHEADVDOT,  "Vd,s,VtVm",  MATCH_TH_VMAQASU_VX, MASK_TH_VMAQASU_VX, match_opcode, 0},
-{"th.vmaqaus.vx",      0, INSN_CLASS_XTHEADVDOT,  "Vd,s,VtVm",  MATCH_TH_VMAQAUS_VX, MASK_TH_VMAQAUS_VX, match_opcode, 0},
-{"th.vpmaqa.vv",       0, INSN_CLASS_XTHEADVDOT,  "Vd,Vs,VtVm",  MATCH_TH_VPMAQA_VV, MASK_TH_VPMAQA_VV, match_opcode, 0},
-{"th.vpmaqau.vv",      0, INSN_CLASS_XTHEADVDOT,  "Vd,Vs,VtVm",  MATCH_TH_VPMAQAU_VV, MASK_TH_VPMAQAU_VV, match_opcode, 0},
-{"th.vpmaqasu.vv",     0, INSN_CLASS_XTHEADVDOT,  "Vd,Vs,VtVm",  MATCH_TH_VPMAQASU_VV, MASK_TH_VPMAQASU_VV, match_opcode, 0},
-{"th.vpmaqa.vx",       0, INSN_CLASS_XTHEADVDOT,  "Vd,s,VtVm",  MATCH_TH_VPMAQA_VX, MASK_TH_VPMAQA_VX, match_opcode, 0},
-{"th.vpmaqau.vx",      0, INSN_CLASS_XTHEADVDOT,  "Vd,s,VtVm",  MATCH_TH_VPMAQAU_VX, MASK_TH_VPMAQAU_VX, match_opcode, 0},
-{"th.vpmaqasu.vx",     0, INSN_CLASS_XTHEADVDOT,  "Vd,s,VtVm",  MATCH_TH_VPMAQASU_VX, MASK_TH_VPMAQASU_VX, match_opcode, 0},
-{"th.vpmaqaus.vx",     0, INSN_CLASS_XTHEADVDOT,  "Vd,s,VtVm",  MATCH_TH_VPMAQAUS_VX, MASK_TH_VPMAQAUS_VX, match_opcode, 0},
-{"th.vpnclip.wv",      0, INSN_CLASS_XTHEADVDOT,  "Vd,Vt,VsVm",  MATCH_TH_VPNCLIP_WV, MASK_TH_VPNCLIP_WV, match_opcode, 0},
-{"th.vpnclipu.wv",     0, INSN_CLASS_XTHEADVDOT,  "Vd,Vt,VsVm",  MATCH_TH_VPNCLIPU_WV, MASK_TH_VPNCLIPU_WV, match_opcode, 0},
-{"th.vpnclip.wx",      0, INSN_CLASS_XTHEADVDOT,  "Vd,Vt,sVm",  MATCH_TH_VPNCLIP_WX, MASK_TH_VPNCLIP_WX, match_opcode, 0},
-{"th.vpnclipu.wx",     0, INSN_CLASS_XTHEADVDOT,  "Vd,Vt,sVm",  MATCH_TH_VPNCLIPU_WX, MASK_TH_VPNCLIPU_WX, match_opcode, 0},
-{"th.vpwadd.vv",       0, INSN_CLASS_XTHEADVDOT,  "Vd,Vt,VsVm",  MATCH_TH_VPWADD_VV, MASK_TH_VPWADD_VV, match_opcode, 0},
-{"th.vpwaddu.vv",      0, INSN_CLASS_XTHEADVDOT,  "Vd,Vt,VsVm",  MATCH_TH_VPWADDU_VV, MASK_TH_VPWADDU_VV, match_opcode, 0},
-{"th.vpwadd.vx",       0, INSN_CLASS_XTHEADVDOT,  "Vd,Vt,sVm",  MATCH_TH_VPWADD_VX, MASK_TH_VPWADD_VX, match_opcode, 0},
-{"th.vpwaddu.vx",      0, INSN_CLASS_XTHEADVDOT,  "Vd,Vt,sVm",  MATCH_TH_VPWADDU_VX, MASK_TH_VPWADDU_VX, match_opcode, 0},
+{"th.vmaqa.vv",        0, INSN_CLASS_XTHEADVDOT,  "Vd,Vs,VtVm",  MATCH_TH_VMAQA_VV, MASK_TH_VMAQA_VV, match_vd_neq_vm, 0},
+{"th.vmaqau.vv",       0, INSN_CLASS_XTHEADVDOT,  "Vd,Vs,VtVm",  MATCH_TH_VMAQAU_VV, MASK_TH_VMAQAU_VV, match_vd_neq_vm, 0},
+{"th.vmaqasu.vv",      0, INSN_CLASS_XTHEADVDOT,  "Vd,Vs,VtVm",  MATCH_TH_VMAQASU_VV, MASK_TH_VMAQASU_VV, match_vd_neq_vm, 0},
+{"th.vmaqa.vx",        0, INSN_CLASS_XTHEADVDOT,  "Vd,s,VtVm",  MATCH_TH_VMAQA_VX, MASK_TH_VMAQA_VX, match_vd_neq_vm, 0},
+{"th.vmaqau.vx",       0, INSN_CLASS_XTHEADVDOT,  "Vd,s,VtVm",  MATCH_TH_VMAQAU_VX, MASK_TH_VMAQAU_VX, match_vd_neq_vm, 0},
+{"th.vmaqasu.vx",      0, INSN_CLASS_XTHEADVDOT,  "Vd,s,VtVm",  MATCH_TH_VMAQASU_VX, MASK_TH_VMAQASU_VX, match_vd_neq_vm, 0},
+{"th.vmaqaus.vx",      0, INSN_CLASS_XTHEADVDOT,  "Vd,s,VtVm",  MATCH_TH_VMAQAUS_VX, MASK_TH_VMAQAUS_VX, match_vd_neq_vm, 0},
+{"th.vpmaqa.vv",       0, INSN_CLASS_XTHEADVDOT,  "Vd,Vs,VtVm",  MATCH_TH_VPMAQA_VV, MASK_TH_VPMAQA_VV, match_vd_neq_vm, 0},
+{"th.vpmaqau.vv",      0, INSN_CLASS_XTHEADVDOT,  "Vd,Vs,VtVm",  MATCH_TH_VPMAQAU_VV, MASK_TH_VPMAQAU_VV, match_vd_neq_vm, 0},
+{"th.vpmaqasu.vv",     0, INSN_CLASS_XTHEADVDOT,  "Vd,Vs,VtVm",  MATCH_TH_VPMAQASU_VV, MASK_TH_VPMAQASU_VV, match_vd_neq_vm, 0},
+{"th.vpmaqa.vx",       0, INSN_CLASS_XTHEADVDOT,  "Vd,s,VtVm",  MATCH_TH_VPMAQA_VX, MASK_TH_VPMAQA_VX, match_vd_neq_vm, 0},
+{"th.vpmaqau.vx",      0, INSN_CLASS_XTHEADVDOT,  "Vd,s,VtVm",  MATCH_TH_VPMAQAU_VX, MASK_TH_VPMAQAU_VX, match_vd_neq_vm, 0},
+{"th.vpmaqasu.vx",     0, INSN_CLASS_XTHEADVDOT,  "Vd,s,VtVm",  MATCH_TH_VPMAQASU_VX, MASK_TH_VPMAQASU_VX, match_vd_neq_vm, 0},
+{"th.vpmaqaus.vx",     0, INSN_CLASS_XTHEADVDOT,  "Vd,s,VtVm",  MATCH_TH_VPMAQAUS_VX, MASK_TH_VPMAQAUS_VX, match_vd_neq_vm, 0},
+{"th.vpnclip.wv",      0, INSN_CLASS_XTHEADVDOT,  "Vd,Vt,VsVm",  MATCH_TH_VPNCLIP_WV, MASK_TH_VPNCLIP_WV, match_vd_neq_vm, 0},
+{"th.vpnclipu.wv",     0, INSN_CLASS_XTHEADVDOT,  "Vd,Vt,VsVm",  MATCH_TH_VPNCLIPU_WV, MASK_TH_VPNCLIPU_WV, match_vd_neq_vm, 0},
+{"th.vpnclip.wx",      0, INSN_CLASS_XTHEADVDOT,  "Vd,Vt,sVm",  MATCH_TH_VPNCLIP_WX, MASK_TH_VPNCLIP_WX, match_vd_neq_vm, 0},
+{"th.vpnclipu.wx",     0, INSN_CLASS_XTHEADVDOT,  "Vd,Vt,sVm",  MATCH_TH_VPNCLIPU_WX, MASK_TH_VPNCLIPU_WX, match_vd_neq_vm, 0},
+{"th.vpwadd.vv",       0, INSN_CLASS_XTHEADVDOT,  "Vd,Vt,VsVm",  MATCH_TH_VPWADD_VV, MASK_TH_VPWADD_VV, match_vd_neq_vm, 0},
+{"th.vpwaddu.vv",      0, INSN_CLASS_XTHEADVDOT,  "Vd,Vt,VsVm",  MATCH_TH_VPWADDU_VV, MASK_TH_VPWADDU_VV, match_vd_neq_vm, 0},
+{"th.vpwadd.vx",       0, INSN_CLASS_XTHEADVDOT,  "Vd,Vt,sVm",  MATCH_TH_VPWADD_VX, MASK_TH_VPWADD_VX, match_vd_neq_vm, 0},
+{"th.vpwaddu.vx",      0, INSN_CLASS_XTHEADVDOT,  "Vd,Vt,sVm",  MATCH_TH_VPWADDU_VX, MASK_TH_VPWADDU_VX, match_vd_neq_vm, 0},
 
-#include "riscv-opc-xt.def"
+	XUANTIE_INSN_LIST
 /* Vendor-specific (Ventana Microsystems) XVentanaCondOps instructions */
 {"vt.maskc",   64, INSN_CLASS_XVENTANACONDOPS, "d,s,t", MATCH_VT_MASKC, MASK_VT_MASKC, match_opcode, 0 },
 {"vt.maskcn",  64, INSN_CLASS_XVENTANACONDOPS, "d,s,t", MATCH_VT_MASKCN, MASK_VT_MASKCN, match_opcode, 0 },
